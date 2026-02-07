@@ -1,0 +1,196 @@
+---
+# Source: capm3-standalone-cp/templates/cluster.yaml
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: release-name
+  namespace: kcm-system
+spec:
+  clusterNetwork:
+    apiServerPort: 6443
+    pods:
+      cidrBlocks:
+      - 10.243.0.0/16
+    services:
+      cidrBlocks:
+      - 10.95.0.0/16
+  controlPlaneEndpoint:
+    host: 10.11.0.250
+    port: 6443
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: K0sControlPlane
+    name: release-name-cp-templ
+    namespace: kcm-system
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: Metal3Cluster
+    name: release-name
+    namespace: kcm-system
+---
+# Source: capm3-standalone-cp/templates/k0scontrolplane.yaml
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: K0sControlPlane
+metadata:
+  name: release-name-cp-templ
+  namespace: kcm-system
+spec:
+  version: v1.34.3+k0s.0
+  replicas: 1
+  updateStrategy: InPlace
+  k0sConfigSpec:
+    args:
+      - --enable-worker
+      - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
+      - --labels="metal3.io/uuid={{ ds.meta_data.uuid }}"
+      - --force=false
+    preStartCommands:
+      - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+      - sudo mkdir -vp /home/rescue/.ssh/
+    k0s:
+      apiVersion: k0s.k0sproject.io/v1beta1
+      kind: ClusterConfig
+      metadata:
+        name: k0s
+      spec:
+        telemetry:
+          enabled: false
+        network:
+          podCIDR: 10.243.0.0/16
+          serviceCIDR: 10.95.0.0/16
+          provider: calico
+          clusterDomain: cluster.local
+          controlPlaneLoadBalancing:
+            enabled: true
+            type: Keepalived
+            keepalived:
+              vrrpInstances:
+                - virtualIPs: ["10.11.0.250/24"]
+                  authPass: password
+              virtualServers:
+                - ipAddress: "10.11.0.250"
+        storage:
+          type: etcd
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: Metal3MachineTemplate
+      name: release-name-cp-mt
+      namespace: kcm-system
+---
+# Source: capm3-standalone-cp/templates/k0sworkerconfigtemplate.yaml
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: K0sWorkerConfigTemplate
+metadata:
+  name: release-name-machine-config
+  namespace: kcm-system
+spec:
+  template:
+    spec:
+      version: v1.34.3+k0s.0
+      args:
+        - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
+        - --labels="metal3.io/uuid={{ ds.meta_data.uuid }}"
+        - --force=false
+      preStartCommands:
+        - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+        - sudo mkdir -vp /home/rescue/.ssh/
+---
+# Source: capm3-standalone-cp/templates/machinedeployment.yaml
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: release-name-md
+  namespace: kcm-system
+spec:
+  clusterName: release-name
+  replicas: 1
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: release-name
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: release-name
+    spec:
+      version: v1.34.3+k0s.0
+      clusterName: release-name
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: K0sWorkerConfigTemplate
+          name: release-name-machine-config
+          namespace: kcm-system
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: Metal3MachineTemplate
+        name: release-name-worker-mt
+        namespace: kcm-system
+---
+# Source: capm3-standalone-cp/templates/metal3clustertemplate.yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: Metal3Cluster
+metadata:
+  name: release-name
+  namespace: kcm-system
+spec:
+  controlPlaneEndpoint:
+    host: 10.11.0.250
+    port: 6443
+  noCloudProvider: true
+---
+# Source: capm3-standalone-cp/templates/metal3datatemplate.yaml
+#apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+#kind: Metal3DataTemplate
+#metadata:
+#  name: release-name-dt
+#  namespace: kcm-system
+#spec:
+#  clusterName: release-name
+#  metaData:
+#    ipAddressesFromIPPool: []
+#    objectNames: []
+#    prefixesFromIPPool: []
+#  networkData:
+#    networks: {}
+#    services: {}
+---
+# Source: capm3-standalone-cp/templates/metal3machinetemplate-controlplane.yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: Metal3MachineTemplate
+metadata:
+  name: release-name-cp-mt
+  namespace: kcm-system
+spec:
+  nodeReuse: false
+  template:
+    spec:
+      automatedCleaningMode: metadata
+      dataTemplate:
+#        name: release-name-dt
+        name: dogs
+      image:
+        url: http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
+        format: qcow2
+        checksum: 00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
+        checksumType: sha256
+---
+# Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: Metal3MachineTemplate
+metadata:
+  name: release-name-worker-mt
+  namespace: kcm-system
+spec:
+  nodeReuse: false
+  template:
+    spec:
+      automatedCleaningMode: metadata
+      dataTemplate:
+#        name: release-name-dt
+        name: dogs
+      image:
+        url:  http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
+        format: qcow2
+        checksum:  00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
+        checksumType: sha256

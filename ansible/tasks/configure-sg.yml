@@ -1,0 +1,53 @@
+---
+- name: Ensure temporary configdrive directory exists
+  ansible.builtin.file:
+    path: "/etc/network/interfaces.d/"
+    state: directory
+    mode: "0755"
+
+- name: Apply network configuration
+  ansible.builtin.copy:
+    dest: "/etc/network/interfaces.d/enp1s0"
+    content: |
+      auto enp1s0
+      iface enp1s0
+          address {{ mgmt_ip }}/{{ br_mgmt_netmask }}
+          gateway {{ management_gateway_sg }}
+          dns-namesrvers {{ management_dns_server }}
+
+- name: Check if sg enrolled
+  ansible.builtin.stat:
+    path: /opt/netris/installer.lock
+  register: lock_file
+
+- name: Download netris installator
+  ansible.builtin.shell: |
+    curl -f -L -o /tmp/get-netris.sh https://get.netris.io; chmod 755 /tmp/get-netris.sh
+  args:
+    creates: /tmp/get-netris.sh
+  when: not lock_file.stat.exists
+
+- name: Enroll switch to netris
+  when: not lock_file.stat.exists
+  args:
+    executable: /bin/sh
+  become: true
+  environment:
+    PATH: "/usr/bin:/bin:/usr/cumulus/bin:/sbin:/usr/sbin"
+  shell: |
+
+    /tmp/get-netris.sh --lo {{ loopback_ip }} --controller {{ netris_controller_ip }} --ctl-version 4.6.0-003 --hostname {{ sg_name }} --auth {{ netris_auth_token }} --node-type softgate_hs --debug --apt-repo dev
+  register: enroll_cmd
+  ignore_errors: True
+
+- name: Failed to register
+  fail:
+    msg: "Failed to enroll switch {{ switch_name }} with stdout: {{ enroll_cmd.stdout }} \n error: {{ enroll_cmd.stderr }}"
+  when: not lock_file.stat.exists and enroll_cmd.rc != 0
+
+
+- name: Reboot sg to apply netris agent config
+  become: true
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+  when: not lock_file.stat.exists and enroll_cmd.rc == 0

@@ -1,0 +1,38 @@
+global:
+  dockerBaseUrl: mirantis.azurecr.io
+  helmBaseUrl: https://binary.mirantis.com
+common:
+  namespace: osh-system
+classes:
+- name: lvp-fake-root
+  hostDir: /mnt/local-volume-provisioner
+  mountDir: /mnt/local-volume-provisioner
+  volumeMode: Filesystem
+  storageClass:
+    isDefaultClass: true
+  bindMounts:
+  - srcRoot: /var/lib/local-volume-provisioner
+    mounts:
+    - vol1
+    - vol2
+    - vol3
+    - vol4
+    - vol5
+    - vol6
+    - vol7
+    - vol8
+    - vol9
+    - vol10
+    - vol11
+    - vol12
+    - vol13
+    - vol14
+    - vol15
+daemonset:
+  nodeSelector:
+    local-volume-provisioner: enabled
+  initBindMounts: true
+init:
+  image:
+    name: openstack-controller
+    tag: 0.1.1

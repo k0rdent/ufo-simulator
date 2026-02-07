@@ -1,0 +1,82 @@
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - bridge-utils
+      - python3-netaddr
+    state: present
+    update_cache: false
+
+- name: Create PXE bridge configuration with Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/10-br-pxe.yaml
+    owner: root
+    group: root
+    mode: "0600"  # Netplan files are often 0600 for security
+    content: |
+      network:
+        version: 2
+        renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
+        bridges:
+          {{ br_pxe_name }}:
+            addresses:
+              - {{ br_pxe_ip }}/{{ br_pxe_netmask }}
+            parameters:
+              stp: false
+              forward-delay: 0
+              hello-time: 2
+              max-age: 20
+            # No interfaces: [] needed — omitting it creates an empty bridge (ports: none)
+
+- name: Create MGMT bridge configuration with Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/10-br-mgmt.yaml
+    owner: root
+    group: root
+    mode: "0600"  # Netplan files are often 0600 for security
+    content: |
+      network:
+        version: 2
+        renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
+        bridges:
+          {{ br_mgmt_name }}:
+            addresses:
+              - {{ management_gateway_sg }}/24
+              - {{ management_gateway_server }}/24
+              - {{ management_gateway_switch }}/24
+            parameters:
+              stp: false
+              forward-delay: 0
+              hello-time: 2
+              max-age: 20
+
+- name: Create EXT bridge configuration with Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/10-br-ext.yaml
+    owner: root
+    group: root
+    mode: "0600"  # Netplan files are often 0600 for security
+    content: |
+      network:
+        version: 2
+        renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
+        bridges:
+          {{ br_ext_name }}:
+            addresses:
+              - {{ ext_base_gateway_sg }}/{{ ext_sg_netmask }}
+              - {{ ext_base_gateway_switch }}/{{ ext_sg_netmask }}
+            parameters:
+              stp: false
+              forward-delay: 0
+              hello-time: 2
+              max-age: 20
+
+- name: Apply netplan configuration
+  ansible.builtin.command: netplan apply
+  become: true
+
+- name: Set bridge interface up
+  ansible.builtin.command: ip link set {{ item }} up
+  with_items:
+    - "{{ br_pxe_name }}"
+    - "{{ br_mgmt_name }}"
+    - "{{ br_ext_name }}"

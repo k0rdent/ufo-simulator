@@ -1,0 +1,100 @@
+apiVersion: k0rdent.mirantis.com/v1beta1
+kind: Management
+metadata:
+  labels:
+    k0rdent.mirantis.com/component: kcm
+  name: kcm
+spec:
+  core:
+    capi: {}
+    kcm:
+      config:
+        regional:
+          telemetry:
+            mode: disabled
+          velero:
+            enabled: false
+  providers:
+  - name: cluster-api-provider-k0sproject-k0smotron
+  - name: cluster-api-provider-azure
+  - name: cluster-api-provider-vsphere
+  - name: cluster-api-provider-aws
+  - name: cluster-api-provider-openstack
+  - name: cluster-api-provider-docker
+  - name: cluster-api-provider-gcp
+  - name: cluster-api-provider-ipam
+  - name: cluster-api-provider-infoblox
+  - name: projectsveltos
+  - config:
+      baremetal-operator:
+        images:
+          bm_operator:
+            fullName: jumpojoy/baremetal-operator:v0.12.0-infiniband-02
+      config:
+        ENABLE_BMH_NAME_BASED_PREALLOCATION: true
+      global:
+        ironic:
+          enabled: true
+      ironic:
+        dynamicIpxe:
+          cmdline:
+          {%- raw %}
+          - ipa-global-request-id=req-${req_uuid}
+          - selinux=0
+          - syslog-server={{ .Values.networking.ipAddress }}
+          - ntp-server={{ .Values.networking.ipAddress }}
+          - ipa-api-url=https://{{ .Values.networking.ipAddress }}:{{ .Values.apiPort
+            }}
+          - ipa-insecure=1
+          - troubleshoot=0
+          - text
+          - systemd.journald.forward_to_console=no
+          - ipa-collect-lldp=0
+          - ipa-inspection-collectors=default,logs,pci-devices,dmi-decode,numa-topology
+          - console=ttyS1,115200n8
+          - console=tty1
+        {% endraw %}
+
+        images_ipa:
+        # Images with Infinibald client_id support
+        - checksum: 0976c8cd270093a94b990823772fe66ebf2240f5d60b16acf18a5ef469073381
+          name: ironic-python-agent_x86_64.initramfs
+          url: https://get.mirantis.com/k0rdent-enterprise/bare-metal/ipa/ipa-centos9-stream-2026-01-27-14-05-26-amd64.initramfs
+        - checksum: 0537a168cd6ff36253f5db40c4b8ed5daa541bad262f4ec8a99357ae24cb2c25
+          name: ironic-python-agent_x86_64.kernel
+          url: https://get.mirantis.com/k0rdent-enterprise/bare-metal/ipa/ipa-centos9-stream-2026-01-27-14-05-26-amd64.kernel
+        images_target:
+        - checksum: 85743244cc8f2f47384480c81dbb677585d20ed693127667dbfb116f1682f793
+          name: ubuntu-noble-server-cloudimg-amd64-20251026.qcow2
+          url: https://cloud-images.ubuntu.com/noble/20251026/noble-server-cloudimg-amd64.img
+        - checksum: 2674494736319bbd367ef05c37c5dbb764fa7c90661d104ac93243ee84129ca9
+          name: ubuntu-noble-server-cloudimg-arm64-20251026.qcow2
+          url: https://cloud-images.ubuntu.com/noble/20251026/noble-server-cloudimg-arm64.img
+        ironic:
+          env:
+#            DEPLOY_KERNEL_BY_ARCH: x86_64:file:///shared/html/images/ironic-python-agent.x86_64.kernel,aarch64:file:///shared/html/images/ironic-python-agent.arm64.kernel
+#            DEPLOY_KERNEL_URL: "file:///shared/html/images/ironic-python-agent.x86_64.kernel"
+#            DEPLOY_RAMDISK_BY_ARCH: x86_64:file:///shared/html/images/ironic-python-agent.x86_64.initramfs,aarch64:file:///shared/html/images/ironic-python-agent.arm64.initramfs
+#            DEPLOY_RAMDISK_URL: "file:///shared/html/images/ironic-python-agent.x86_64.initramfs"
+            HTTPD_SERVE_NODE_IMAGES: "true"
+            IRONIC_EXTERNAL_HTTP_URL: http://{{ br_mgmt_ip }}
+            IRONIC_KERNEL_PARAMS: console=ttyS0
+            IRONIC_REVERSE_PROXY_SETUP: "true"
+            RESTART_CONTAINER_CERTIFICATE_UPDATED: "true"
+            USE_IRONIC_INSPECTOR: "false"
+        keepalived:
+          enabled: false
+        networking:
+          dhcp:
+            netmask: 255.255.255.0
+            options:
+            - option:router,{{ br_mgmt_ip }}
+            - option:dns-server,{{ br_mgmt_ip }}
+            - option:ntp-server,{{ br_mgmt_ip }}
+            rangeBegin: 172.16.81.100
+            rangeEnd: 172.16.81.200
+          interface: br-mgmt
+          ipAddress: {{ br_mgmt_ip }}
+    name: cluster-api-provider-metal3
+    template: cluster-api-provider-metal3-0.4.0
+  release: kcm-1-5-0

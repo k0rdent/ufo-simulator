@@ -1,0 +1,115 @@
+---
+# Configure Cumulus switches after boot
+# Run this after the VMs have fully booted (give them ~2-3 minutes)
+
+- name: Configure Cumulus Switches
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+  tasks:
+    - name: Set netris_auth_token
+      ansible.builtin.include_tasks: tasks/netris_get_auth_token.yml
+
+    - name: Install required packages
+      apt:
+        name:
+          - sshpass
+        state: present
+      become: true
+
+    - name: Add a new host to inventory
+      add_host:
+        name: "{{ item.0.name }}"
+        hostname: "{{ item.0.name }}"
+        groups: all_switches
+        ansible_user: cumulus  # Optional vars
+        ansible_port: "{{ mgmt_ssh_base_port + idx }}"
+        ansible_password: "{{ cumulus_new_password }}"
+        ansible_host: 127.0.0.1
+        switch_name: "{{ item.0.name }}"
+        switch_ssh_port: "{{ mgmt_ssh_base_port + idx }}"
+        switch_type: "{{ 'spine' if item.0.name.startswith('spine') else 'leaf' }}"
+        switch_id: "{{ idx }}"
+        ansible_become_password: "{{ cumulus_new_password }}"
+        netris_auth_token: "{{ netris_auth_token }}"
+        netris_controller_ip: "{{ netris_controller_ip }}"
+
+      loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}"
+        index_var: idx
+
+    - name: Wait for switches to be reachable
+      wait_for:
+        host: 127.0.0.1
+        port: "{{ mgmt_ssh_base_port + idx }}"
+        delay: 10
+        timeout: 300
+      loop: "{{ all_switches }}"
+      loop_control:
+        index_var: idx
+        label: "{{ item.name }}"
+
+    - name: Initialize each switch
+      include_tasks: tasks/initialize-switch.yml
+      vars:
+        switch_name: "{{ item.0.name }}"
+        switch_ssh_port: "{{ mgmt_ssh_base_port + item.1 }}"
+        switch_type: "{{ 'spine' if item.0.name.startswith('spine') else 'leaf' }}"
+        switch_id: "{{ item.1 }}"
+      loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}"
+
+- name: Install netris license
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Install license
+      ansible.builtin.uri:
+       url:         "{{ netris_web_api_url }}/api/v2/license"
+       method: PUT
+       validate_certs: false
+       headers:
+         Cookie:    "{{ netris_login_cookie }}"
+       body:
+         key: "{{ netris_license_key }}"
+       body_format: "json"
+      when: netris_license_key
+
+- name: Configure Cumulus Switches
+  hosts: all_switches
+  gather_facts: no
+  strategy: free
+
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+  tasks:
+    - name: Configure each switch
+      include_tasks: tasks/configure-switch.yml
+
+- name: Print switches info
+  hosts: localhost
+  gather_facts: no
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+  tasks:
+    - name: "Netris enrollment info"
+      vars:
+        netris_enrollment_info: |
+           ==================
+           Netris switch info
+           ==================
+           {% for switch in all_switches %}
+           {% set loopback_ip = loop.index0 | int + 1 %}
+             {{ switch.name }}:
+               loopback: {{loopback_base_switch }}.{{ loopback_ip }}
+           {% endfor %}
+      debug:
+        msg: "{{ netris_enrollment_info.split('\n') }}"

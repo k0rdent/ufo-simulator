@@ -1,0 +1,28 @@
+- name: Destroy VMs
+  ansible.builtin.command: virsh destroy {{ vm_name }}
+  failed_when: false
+  changed_when: true
+
+- name: Undefine VMs with NVRAM
+  ansible.builtin.command: virsh undefine {{ vm_name }} --nvram
+  failed_when: false
+  changed_when: true
+
+- name: Remove VM disk images
+  ansible.builtin.file:
+    path: "{{ disk_path }}/{{ vm_name }}-disk.img"
+    state: absent
+
+- name: Remove VM disk images
+  ansible.builtin.file:
+    path: "{{ disk_path }}/{{ vm_name }}-config.iso"
+    state: absent
+
+- name: Get remaining VM list
+  ansible.builtin.command: virsh list --all
+  register: vm_list
+  changed_when: false
+
+- name: Display VM list
+  ansible.builtin.debug:
+    var: vm_list.stdout_lines

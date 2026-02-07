@@ -1,0 +1,62 @@
+---
+- name: Prepare IPA
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  ignore_errors: false
+  vars:
+    ipa_files:
+     - url: https://cloud-images.ubuntu.com/noble/20260108/noble-server-cloudimg-amd64.img
+       dst: noble-server-cloudimg-amd64.img
+
+  tasks:
+    - name: Prepare nginx
+      block:
+        - name: Install nginx
+          package:
+            name: nginx
+            state: present
+    
+        - name: Deploy main nginx.conf
+          template:
+            src: templates/nginx.conf.j2
+            dest: "/etc/nginx/nginx.conf"
+            owner: root
+            group: root
+            mode: '0644'
+            validate: nginx -t -c %s
+          notify: reload nginx
+          tags: [config]
+    
+    - name: Ensure initramfs files
+      block:
+        - name: Ensure target directory
+          file:
+            path: /var/www/html/ipa/
+            state: directory
+
+        - name: Download nginx signing key
+          ansible.builtin.get_url:
+            url: "{{ item.url }}"
+            dest: "/var/www/html/ipa/{{ item.dst }}"
+            mode: '0644'
+            owner: root
+            group: root
+            timeout: 60
+          with_items: "{{ ipa_files }}"
+
+  handlers:
+    - name: reload nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      listen: reload nginx
+
+    # Only use restart when configuration is seriously broken
+    # (reload is almost always enough when validation passes)
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+      listen: restart nginx

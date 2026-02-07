@@ -1,0 +1,11 @@
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Site
+metadata:
+  name: default
+spec:
+  publicAsn: 65513
+  rohAsn: 0
+  vmAsn: 0
+  rohRoutingProfile: default
+  siteMesh: disabled
+  aclDefaultPolicy: permit

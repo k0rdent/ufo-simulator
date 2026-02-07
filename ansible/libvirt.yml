@@ -1,0 +1,332 @@
+# Copyright 2025 s3rj1k
+# SPDX-License-Identifier: MIT
+
+# Example:
+#   ansible-playbook libvirt.yaml
+
+---
+- name: Libvirt with Redfish on Debian/Ubuntu AMD64
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  ignore_errors: false
+
+  pre_tasks:
+    - name: Check if system is supported
+      block:
+        - name: Check if distribution is Debian or Ubuntu
+          fail:
+            msg: "This playbook only supports Debian or Ubuntu distributions"
+          when: ansible_distribution not in ["Debian", "Ubuntu"]
+
+        - name: Check if architecture is AMD64
+          fail:
+            msg: "This playbook only supports AMD64 architecture"
+          when: ansible_architecture != "x86_64"
+
+        - name: Get OS version
+          debug:
+            msg: "Running on {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_architecture }})"
+
+  handlers:
+    - name: Restart libvirtd
+      systemd:
+        name: libvirtd
+        state: restarted
+        daemon_reload: yes
+      when: ansible_service_mgr == 'systemd'
+
+    - name: Restart sushy-emulator
+      systemd:
+        name: sushy-emulator
+        state: restarted
+        daemon_reload: yes
+      when: ansible_service_mgr == 'systemd'
+
+  tasks:
+    - name: Update and upgrade system packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+      register: system_upgraded
+
+    - name: Consolidated package management
+      block:
+        - name: Install all required packages
+          apt:
+            name:
+              # Libvirt
+              - libguestfs-tools
+              - libosinfo-bin
+              - libvirt-clients
+              - libvirt-daemon-system
+              - ovmf
+              - qemu-kvm
+              - virtinst
+              # Python development headers
+              - python3-dev
+              # Sushy Tools dependencies
+              - apache2-utils
+              - build-essential
+              - gcc
+              - libvirt-dev
+              - pkg-config
+              - python3-libvirt
+              - python3-pip
+              - python3-venv
+              - python3-lxml
+              # SSL certificate generation
+              - openssl
+            state: present
+            update_cache: yes
+          when: system_upgraded is success
+
+    - name: Configure libvirt
+      block:
+        - name: Enable libvirtd service
+          service:
+            name: libvirtd
+            enabled: yes
+            state: started
+
+        - name: Configure libvirt QEMU
+          copy:
+            dest: /etc/libvirt/qemu.conf
+            content: |
+              security_driver = "none"
+              user = "root"
+              group = "root"
+              dynamic_ownership = 0
+              # https://github.com/stefanberger/swtpm/issues/572#issuecomment-1642014467
+              swtpm_user="swtpm"
+              swtpm_group="swtpm"
+          when: ansible_distribution == "Ubuntu"
+
+        - name: Configure libvirt QEMU
+          copy:
+            dest: /etc/libvirt/qemu.conf
+            content: |
+              security_driver = "none"
+              user = "root"
+              group = "root"
+              dynamic_ownership = 0
+          when: ansible_distribution == "Debian"
+
+        - name: Destroy images libvirt pool
+          community.libvirt.virt_pool:
+            name: images
+            command: destroy
+            state: undefined
+
+        - name: Create and activate default libvirt storage pool
+          community.libvirt.virt_pool:
+            name: default
+            command: define
+            state: present
+            autostart: yes
+            xml: |
+              <pool type='dir'>
+                <name>default</name>
+                <target>
+                  <path>/var/lib/libvirt/images</path>
+                </target>
+              </pool>
+
+        - name: Activate and activate default libvirt storage pool
+          community.libvirt.virt_pool:
+            name: default
+            command: start
+            state: present
+            autostart: yes
+
+      notify: Restart libvirtd
+
+    - name: Install and configure Sushy Tools Redfish Emulator
+      block:
+        - name: Create Sushy Tools directory structure
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - /opt/sushy-tools
+            - /etc/sushy
+            - /etc/sushy/ssl
+
+        - name: Create Python virtual environment for Sushy Tools
+          command:
+            cmd: python3 -m venv /opt/sushy-tools/venv
+            creates: /opt/sushy-tools/venv/bin/python
+
+        - name: Install Sushy Tools and dependencies in virtual environment
+          pip:
+            name:
+              - sushy-tools==2.0.0
+              - libvirt-python
+            virtualenv: /opt/sushy-tools/venv
+            virtualenv_command: python3 -m venv
+
+        - name: Generate self-signed SSL certificate for Sushy Tools
+          block:
+            - name: Generate private key
+              command:
+                cmd: openssl genrsa -out /etc/sushy/sushy.key 2048
+                creates: /etc/sushy/sushy.key
+
+            - name: Generate self-signed certificate
+              command:
+                cmd: >
+                  openssl req -new -x509 -key /etc/sushy/sushy.key
+                  -out /etc/sushy/sushy.cert -days 365
+                  -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+                creates: /etc/sushy/sushy.cert
+
+            - name: Set proper permissions on SSL files
+              file:
+                path: "{{ item }}"
+                owner: root
+                group: root
+                mode: "0600"
+              loop:
+                - /etc/sushy/sushy.key
+                - /etc/sushy/sushy.cert
+
+        - name: Create htpasswd file for Redfish authentication
+          command:
+            cmd: htpasswd -cbB /etc/sushy/htpasswd admin {{ redfish_password }}
+            creates: /etc/sushy/htpasswd
+
+        - name: Set proper permissions on auth file
+          file:
+            path: /etc/sushy/htpasswd
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Save Redfish credentials to file
+          copy:
+            content: "{{ redfish_password }}"
+            dest: /etc/sushy/.redfish_password
+            mode: "0600"
+            owner: root
+            group: root
+
+        - name: Create Sushy Tools configuration file
+          copy:
+            dest: /etc/sushy/sushy-emulator.conf
+            content: |
+              SUSHY_EMULATOR_LISTEN_IP = u'0.0.0.0'
+              SUSHY_EMULATOR_LISTEN_PORT = 8000
+              SUSHY_EMULATOR_OS_CLOUD = None
+              SUSHY_EMULATOR_LIBVIRT_URI = u'qemu:///system'
+              SUSHY_EMULATOR_IGNORE_BOOT_DEVICE = False
+              SUSHY_EMULATOR_FEATURE_SET = u'full'
+              SUSHY_EMULATOR_AUTH_FILE = u'/etc/sushy/htpasswd'
+              SUSHY_EMULATOR_SSL_CERT = u'/etc/sushy/sushy.cert'
+              SUSHY_EMULATOR_SSL_KEY = u'/etc/sushy/sushy.key'
+              SUSHY_EMULATOR_BOOT_LOADER_MAP = {
+                  u'UEFI': {
+                      u'x86_64': u'/usr/share/OVMF/OVMF_CODE.fd'
+                  },
+                  u'Legacy': {
+                      u'x86_64': None
+                  }
+              }
+              SUSHY_EMULATOR_VMEDIA_DEVICES = {
+                  u'Cd': {
+                      u'Name': 'Virtual CD',
+                      u'MediaTypes': [
+                          u'CD',
+                          u'DVD'
+                      ]
+                  }
+              }
+              SUSHY_EMULATOR_VMEDIA_VERIFY_SSL = False
+            mode: "0644"
+
+        - name: Create Sushy Tools startup script
+          copy:
+            dest: /opt/sushy-tools/sushy-emulator.sh
+            content: |
+              #!/bin/bash
+
+              set -eux -o pipefail
+
+              CONFIG="${SUSHY_TOOLS_CONFIG:-/etc/sushy/sushy-emulator.conf}"
+              ARGS=""
+
+              if [[ -f "${CONFIG}" ]]; then
+                  ARGS="${ARGS} --config ${CONFIG}"
+              fi
+
+              if [[ ! -f "${CONFIG}" ]] || ! grep -q "^SUSHY_EMULATOR_LISTEN_IP =" "${CONFIG}"; then
+                  # Listen on all interfaces unless explicitly configured otherwise.
+                  ARGS="${ARGS} --interface ::"
+              fi
+
+              # Activate virtual environment and start emulator
+              source /opt/sushy-tools/venv/bin/activate
+
+              # Execute sushy-emulator with debug enabled
+              exec /opt/sushy-tools/venv/bin/sushy-emulator --debug $ARGS
+            mode: "0755"
+
+        - name: Create systemd service for Sushy Tools
+          copy:
+            dest: /etc/systemd/system/sushy-emulator.service
+            content: |
+              [Unit]
+              Description=Sushy Tools Redfish Emulator
+              Documentation=https://docs.openstack.org/sushy-tools/
+              After=network.target libvirtd.service
+              Wants=libvirtd.service
+
+              [Service]
+              Type=simple
+              User=root
+              Group=root
+              WorkingDirectory=/opt/sushy-tools
+              ExecStart=/opt/sushy-tools/sushy-emulator.sh
+              Restart=always
+              RestartSec=10
+              TimeoutStartSec=60
+              TimeoutStopSec=30
+
+              # Environment variables
+              Environment=SUSHY_TOOLS_CONFIG=/etc/sushy/sushy-emulator.conf
+              Environment=PYTHONUNBUFFERED=1
+
+              # Security settings
+              NoNewPrivileges=true
+              PrivateTmp=true
+              ProtectSystem=strict
+              ProtectHome=true
+              ReadWritePaths=/opt/sushy-tools /var/lib/libvirt /run/libvirt
+
+              [Install]
+              WantedBy=multi-user.target
+
+        - name: Reload systemd daemon
+          systemd:
+            daemon_reload: yes
+
+        - name: Enable Sushy Tools service
+          systemd:
+            name: sushy-emulator
+            enabled: yes
+            state: started
+      notify: Restart sushy-emulator
+
+    - name: Handle system reboot check
+      block:
+        - name: Check if reboot is required
+          stat:
+            path: /var/run/reboot-required
+          register: reboot_required_file
+
+        - name: Print reboot status
+          debug:
+            msg: "System reboot is required"
+          when: reboot_required_file.stat.exists
+      when: system_upgraded is success

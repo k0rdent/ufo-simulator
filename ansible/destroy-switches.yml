@@ -1,0 +1,46 @@
+---
+# Destroy Virtual Switch Lab
+
+- name: Destroy Virtual Switch Lab
+  hosts: localhost
+  become: yes
+  gather_facts: no
+
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+
+  tasks:
+    - name: Stop VMs
+      command: virsh destroy {{ item.name }}
+      register: result
+      failed_when: false
+      changed_when: result.rc == 0
+      loop: "{{ all_switches }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Undefine VMs
+      command: virsh undefine {{ item.name }}
+      register: result
+      failed_when: false
+      changed_when: result.rc == 0
+      loop: "{{ all_switches }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Remove VM disk images
+      file:
+        path: "{{ vm_disk_path }}/{{ item.name }}.qcow2"
+        state: absent
+      loop: "{{ all_switches }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Clean up XML definitions
+      file:
+        path: /tmp/switch-lab-xml
+        state: absent
+
+    - name: Lab destroyed
+      debug:
+        msg: "Virtual Switch Lab has been destroyed"

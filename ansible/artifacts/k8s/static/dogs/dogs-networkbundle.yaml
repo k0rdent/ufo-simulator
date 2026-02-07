@@ -1,0 +1,93 @@
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: NetworkBundle
+metadata:
+  name: dogs
+  namespace: kcm-system
+spec:
+  allocations:
+    subnetAllocations:
+      - name: dogs-mgmt-subnet
+        prefixLength: 24
+        subnetpool: default
+        subnet: dogs-mgmt-subnet
+        network: dogs-mgmt-net
+        tenant: dogs
+        vpc: dogs
+        sites:
+          - default
+        gateway: true
+      - name: dogs-data-subnet
+        prefixLength: 24
+        subnetpool: default
+        subnet: dogs-data-subnet
+        network: dogs-data-net
+        tenant: dogs
+        vpc: dogs
+        sites:
+          - default
+    networks:
+      - name: dogs-mgmt-net
+        type: evpn
+        vpc: dogs
+        tenant: dogs
+        sites:
+          - default
+        evpn:
+          type: l3
+        vlan:
+          id: "auto"
+        dnsServers:
+        - "4.2.2.1"
+      - name: dogs-data-net
+        type: evpn
+        vpc: dogs
+        tenant: dogs
+        sites:
+          - default
+        evpn:
+          type: l3
+        vlan:
+          id: "auto"
+        dnsServers:
+        - "4.2.2.1"
+  networkData:
+    links:
+      ethernets:
+        - type: "phy"
+          id: "enp1s0"
+          mtu: 1500
+          macAddress:
+            fromAnnotation:
+              object: machine
+              annotation: net_interface_mgmt_0_mac
+        - type: "phy"
+          id: "enp2s0"
+          mtu: 1500
+          macAddress:
+            fromAnnotation:
+              object: machine
+              annotation: net_interface_mgmt_1_mac
+                #      bonds:
+                #        - id: "bond0"
+                #          mtu: 1500
+                #          bondMode: "802.3ad"
+                #          bondXmitHashPolicy: "layer2"
+                #          bondLinks:
+                #            - enp1s0
+                #            - enp2s0
+                #          macAddress:
+                #            fromAnnotation:
+                #              object: machine
+                #              annotation: net_interface_mgmt_0_mac
+    networks:
+      ipv4:
+      - id: "Baremetal"
+        link: "enp1s0"
+        ipFromSubnet:
+          name: dogs-mgmt-subnet
+        routes:
+        - network: "0.0.0.0"
+          netmask: 0
+          gateway:
+            gatewayFromSubnet:
+              name: dogs-mgmt-subnet

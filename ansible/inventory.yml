@@ -1,0 +1,9 @@
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: /usr/bin/python3
+      cumulus_new_password: "NjFjZWIxMmI4MGI1!"
+      netris_admin_password: "NjFjZWIxMmI4MGI1!"
+      redfish_password: "NjFjZWIxMmI4MGI"
+      ctl_public_ip: "10.10.0.181"

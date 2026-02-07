@@ -1,0 +1,80 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: oot-capm3-repo
+  namespace: kcm-system
+  labels:
+    k0rdent.mirantis.com/managed: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  type: oci
+  url: 'oci://registry.mirantis.com/k0rdent-bm/charts/'
+  interval: 10m0s
+
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: oot-capm3-ci-repo
+  namespace: kcm-system
+  labels:
+    k0rdent.mirantis.com/managed: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  type: oci
+  url: 'oci://registry.ci.mirantis.com/k0rdent-bm/charts/'
+  interval: 10m0s
+
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: oot-k0rdent-ai-repo
+  namespace: kcm-system
+  labels:
+    k0rdent.mirantis.com/managed: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  type: oci
+  url: 'oci://registry.ci.mirantis.com/k0rdent-ai/k0rdent-bm-lab/'
+  interval: 10m0s
+#  secretRef:
+#    name: oci-k0rdent-ai-creds
+
+---
+apiVersion: k0rdent.mirantis.com/v1beta1
+kind: ProviderTemplate
+metadata:
+  name: cluster-api-provider-metal3-0.4.0
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  helm:
+    chartSpec:
+      chart: cluster-api-provider-metal3
+      version: 0.4.0
+      interval: 10m0s
+      sourceRef:
+        kind: HelmRepository
+        name: oot-capm3-ci-repo
+
+---
+apiVersion: k0rdent.mirantis.com/v1beta1
+kind: ClusterTemplate
+metadata:
+  name: capm3-standalone-cp-0.4.0
+  namespace: kcm-system
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  helm:
+    chartSpec:
+      chart: capm3-standalone-cp
+      version: 0.4.0
+      interval: 10m0s
+      sourceRef:
+        kind: HelmRepository
+        name: oot-capm3-ci-repo

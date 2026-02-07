@@ -1,0 +1,99 @@
+- name: "{{ vm_name }} - Build link list"
+  set_fact:
+    vm_links: []
+
+- name: "{{ vm_name }} - Add links where this switch is local"
+  set_fact:
+    vm_links: "{{ vm_links + [{'port': link_item.local_port, 'udp_local': udp_base_port + (link_idx * 2), 'udp_remote': udp_base_port + (link_idx * 2) + 1}] }}"
+  loop: "{{ topology.links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.local }}:{{ link_item.local_port }}"
+  when: link_item.local == vm_name
+
+- name: "{{ vm_name }} - Add links where this switch is remote"
+  set_fact:
+    vm_links: "{{ vm_links + [{'port': link_item.remote_port, 'udp_local': udp_base_port + (link_idx * 2) + 1, 'udp_remote': udp_base_port + (link_idx * 2)}] }}"
+  loop: "{{ topology.links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.remote }}:{{ link_item.remote_port }}"
+  when: link_item.remote == vm_name
+
+- name: Check if VMs already exist
+  ansible.builtin.command: virsh dominfo {{ vm_name }}
+  register: vm_exists
+  changed_when: false
+  failed_when: false
+
+- name: Create VMs with virt-install
+  ansible.builtin.command: >
+    virt-install
+    --name "{{ vm_name }}"
+    --vcpus "{{ vm_vcpus }}"
+    --ram "{{ vm_ram }}"
+    --os-variant "debian12"
+    --connect "qemu:///system"
+    --disk "path={{ disk_path }}/{{ vm_name }}-disk.img,bus=virtio,size={{ vm_disk_size }},sparse=yes"
+    --disk "device=cdrom,bus=sata"
+    --network none
+    --console "pty,target.type=virtio"
+    --serial "pty"
+    --graphics "vnc,listen=0.0.0.0"
+    --import
+    --noautoconsole
+    --noreboot
+    --boot "uefi,firmware.feature0.name=enrolled-keys,firmware.feature0.enabled=no,firmware.feature1.name=secure-boot,firmware.feature1.enabled=yes,bootmenu.enable=on,network,hd"
+    {% for link in vm_links %}
+    {% set vm_mac = vm_base_mac ~ ':' ~ ('%02x' | format((vm_base_offset | int + loop.index0) // 256)) ~ ':' ~ ('%02x' | format((vm_base_offset | int + loop.index0) % 256)) %}
+    --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
+    --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }},mac={{ vm_mac }}'
+    {% endfor %}
+  when: vm_exists.rc != 0
+
+- name: Get VM list
+  ansible.builtin.command: virsh list --all
+  register: vm_list
+  changed_when: false
+
+- name: Display VM list
+  ansible.builtin.debug:
+    var: vm_list.stdout_lines
+
+- name: VM uuid
+  ansible.builtin.shell: virsh domuuid {{ vm_name }}
+  register: vm_uuid
+  changed_when: false
+
+- name: Render metal3 bmhs templates
+  vars:
+    server_name: "{{ vm_name }}"
+    pxe_mac: "{{vm_base_mac }}:{{ '%02x' | format(vm_base_offset | int // 256) }}:{{ '%02x' | format(vm_base_offset | int % 256) }}"
+    server_uuid: '{{ vm_uuid.stdout | regex_replace("\s","") }}'
+  ansible.builtin.template:
+    src: "k8s/metal3_bmh.j2"
+    dest: "{{ k8s_artifacts_dir }}/{{ server_name }}_bmh.yaml"
+
+- name: Display summary
+  debug:
+    msg: "{{ msg.split('\n') }}"
+  vars:
+    msg: |
+      Virtual Baremetal VMs created!
+
+      | VM  | MAC Address       | VBMC Port | VBMC Address     |
+      |-----|-------------------|-----------|------------------|
+      | vm1 | 52:54:00:12:34:01 | 6231      | 172.16.81.254    |
+      | vm2 | 52:54:00:12:34:02 | 6232      | 172.16.81.254    |
+      | vm3 | 52:54:00:12:34:03 | 6233      | 172.16.81.254    |
+
+      Test IPMI with:
+        ipmitool -I lanplus -U admin -P password -H 172.16.81.254 -p 6231 power status
+
+      Start a VM:
+        ipmitool -I lanplus -U admin -P password -H 172.16.81.254 -p 6231 power on
+
+      Set PXE boot:
+        ipmitool -I lanplus -U admin -P password -H 172.16.81.254 -p 6231 chassis bootdev pxe

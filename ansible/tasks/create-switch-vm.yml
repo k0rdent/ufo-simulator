@@ -1,0 +1,78 @@
+---
+# Create a single switch VM using virt-install
+
+- name: "{{ switch_name }} - Check if VM exists"
+  command: virsh dominfo {{ switch_name }}
+  register: vm_exists
+  failed_when: false
+  changed_when: false
+
+- name: "{{ switch_name }} - Build link list"
+  set_fact:
+    switch_links: []
+
+- name: "{{ switch_name }} - Add links where this switch is local"
+  set_fact:
+    switch_links: "{{ switch_links + [{'port': link_item.local_port, 'udp_local': udp_base_port + (link_idx * 2), 'udp_remote': udp_base_port + (link_idx * 2) + 1}] }}"
+  loop: "{{ topology.links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.local }}:{{ link_item.local_port }}"
+  when: link_item.local == switch_name
+
+- name: "{{ switch_name }} - Add links where this switch is remote"
+  set_fact:
+    switch_links: "{{ switch_links + [{'port': link_item.remote_port, 'udp_local': udp_base_port + (link_idx * 2) + 1, 'udp_remote': udp_base_port + (link_idx * 2)}] }}"
+  loop: "{{ topology.links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.remote }}:{{ link_item.remote_port }}"
+  when: link_item.remote == switch_name
+
+- name: "{{ switch_name }} - Debug links"
+  debug:
+    msg: "Links for {{ switch_name }}: {{ switch_links }}"
+
+- name: "{{ switch_name }} - Build virt-install command"
+  set_fact:
+    virt_install_cmd: >-
+      virt-install
+      --os-variant ubuntu20.04
+      --machine q35
+      --name {{ switch_name }}
+      --vcpus {{ switch_vcpus }}
+      --memory {{ switch_memory_mb }}
+      --import
+      --disk path={{ vm_disk_path }}/{{ switch_name }}.qcow2,bus=sata
+      --graphics none
+      --video none
+      --osinfo detect=on,require=off
+      --network none
+      --controller usb,model=none
+      --noautoconsole
+      --qemu-commandline='-netdev user,id=mgmt,net=192.168.0.0/24,hostfwd=tcp::{{ ssh_port }}-:22'
+      --qemu-commandline='-device virtio-net-pci,netdev=mgmt,mac=00:01:00:00:{{ "%02x" | format(switch_index | int) }}:00'
+      {% for link in switch_links %}
+      --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
+      --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }}'
+      {% endfor %}
+      {% if "leaf" in switch_name %}
+      --network bridge={{ br_pxe_name }},model=virtio
+      {% endif %}
+
+- name: "{{ switch_name }} - Create VM with virt-install"
+  shell: "{{ virt_install_cmd }}"
+  when: vm_exists.rc != 0
+
+- name: "{{ switch_name }} - Start VM if not running"
+  command: virsh start {{ switch_name }}
+  register: start_result
+  failed_when: start_result.rc != 0 and 'already active' not in start_result.stderr
+  changed_when: start_result.rc == 0
+  when: vm_exists.rc == 0
+
+- name: "{{ switch_name }} - Set autostart"
+  command: virsh autostart {{ switch_name }}
+  changed_when: false

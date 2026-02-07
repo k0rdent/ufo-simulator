@@ -1,0 +1,36 @@
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Server
+metadata:
+  name: {{ server_name }}
+  namespace: kcm-system
+spec:
+  tenant: Admin
+  description: {{ server_name }}
+  site: default
+  portsCount: 4
+  mainIp: {{ loopback_ip }}
+  mgmtIp: {{ mgmt_ip }}
+  tags:
+{% for link in links %}
+{% if link.remote == server_name %}
+    - iface.{{ link.remote_port }}={{ link.remote }}-{{ link.role }}
+{% endif %}
+{%- endfor %}
+### LINKS ####
+{% for link in links %}
+{% if link.remote == server_name %}
+--- 
+apiVersion: k8s.netris.ai/v1alpha1 
+kind: Link 
+metadata: 
+  name: {{ server_name }}-{{ link.remote_port }}
+  namespace: kcm-system
+spec: 
+  ports: 
+  - {{ link.local_port }}@{{ link.local }}
+  - {{ link.remote_port }}@{{ link.remote }} 
+  role: {{ link.role }}
+{% endif %}
+{% endfor %}
+### END LINKS ###

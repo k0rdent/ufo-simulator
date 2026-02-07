@@ -1,0 +1,23 @@
+---
+# Configure a single Cumulus switch via SSH
+- name: "{{ switch_name }} - Check ssh connection"
+  delegate_to: 127.0.0.1
+  shell: |
+    sshpass -p "{{ cumulus_new_password }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -p {{ switch_ssh_port }} cumulus@127.0.0.1 \
+      "hostname"
+  register: result
+  ignore_errors: True
+
+- name: Change expired Cumulus password non-interactively
+  expect:
+    command: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {{ switch_ssh_port }} cumulus@127.0.0.1
+    responses:
+      'cumulus.*s password:': "{{ cumulus_default_password }}"
+      'Current password:': "{{ cumulus_default_password }}"
+      'New password:': "{{ cumulus_new_password }}"
+      'Retype new password:': "{{ cumulus_new_password }}"
+      'Permission denied, please try again.': ""
+    timeout: 30
+  delegate_to: localhost
+  when: result.rc != 0

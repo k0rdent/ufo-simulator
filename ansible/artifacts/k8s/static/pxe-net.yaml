@@ -1,0 +1,37 @@
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: pxe
+  namespace: kcm-system
+  annotations:
+    ufo.mirantis.com/pxe: default
+spec:
+  vpc: Default
+  type: evpn
+  vlan:
+    id: "300"
+  evpn:
+    type: l2
+  tags:
+    - ufo.mirantis.com/pxe=default
+  gateways: []
+  dhcp:
+    enabled: false
+  sites:
+    - default
+  tenant: Admin
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Subnet
+metadata:
+  name: pxe
+  namespace: kcm-system
+spec:
+  vpc: Default
+  cidr: 172.16.81.0/24
+  tags: []
+  network: pxe
+  sites:
+    - default
+  tenant: Admin

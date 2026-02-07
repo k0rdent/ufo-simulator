@@ -1,0 +1,65 @@
+---
+- name: Install Metallb
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  ignore_errors: false
+  vars:
+    workspace: /opt/ufo_lab/
+    metallb_repo: https://github.com/metallb/metallb
+    metallb_branch: v0.15.3
+    metallb_dir: "{{ workspace }}/metallb"
+
+  tasks:
+    - name: Ensure target directory
+      file:
+        path:  "{{ workspace }}"
+        state: directory
+
+    - name: Download charts repo
+      ansible.builtin.git:
+        repo: "{{ metallb_repo }}"
+        dest: "{{ metallb_dir }}"
+        version: "{{ metallb_branch }}"
+
+    - name: Make chart dependencies
+      ansible.builtin.shell:
+        cmd: |
+          helm dep up
+          rm -rf .cache
+        chdir: "{{ metallb_dir }}/charts/metallb/"
+
+    - name: Ensure target directory
+      file:
+        path: "{{ k8s_artifacts_dir }}/metallb/"
+        state: directory
+
+    - name: Handle metallb templates
+      block:
+        - name: Render templates
+          ansible.builtin.template:
+            src: "k8s/metallb/{{ item }}"
+            dest: "{{ k8s_artifacts_dir }}/metallb/{{ item }}"
+          with_items:
+           - "metallb.yaml"
+           - "metallb-address-pool.yaml"
+
+    - name: Deploy/upgrade netris controller helm release
+      kubernetes.core.helm:
+        name: metallb
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: "{{ metallb_dir }}/charts/metallb/"
+        release_namespace: metallb-system
+        create_namespace: true
+        values_files:
+          - "{{ k8s_artifacts_dir }}/metallb/metallb.yaml"
+        state: present
+        wait: true
+        wait_timeout: 300s
+
+    - name: Apply Address pools
+      ansible.builtin.command:
+        cmd: kubectl --kubeconfig {{ kubeconfig_path }} apply -f {{ item }}
+      with_items:
+      - "{{ k8s_artifacts_dir }}/metallb/metallb-address-pool.yaml"

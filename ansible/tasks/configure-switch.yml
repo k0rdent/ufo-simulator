@@ -1,0 +1,72 @@
+---
+- name: Define a variable with multiline shell commands
+  vars:
+    switch_digit: "{{ switch_id | int + 1 }}"
+    loopback_ip: "{{ loopback_base_switch }}.{{ switch_digit }}"
+  set_fact:
+    nv_commands:
+      - "nv set system hostname {{ switch_name }}"
+      - "nv set service lldp"
+      - "nv set interface swp1-48 link state up"
+    netris_enrollment_info: |
+      {{ switch_name }}:
+        loopback: {{ loopback_ip }}
+
+- name: "{{ switch_name }} - Set hostname"
+  args:
+    executable: /bin/bash
+  shell: "{{ nv_commands |join ('\n') }}"
+
+
+- name: "{{ switch_name }} - Apply config"
+  args:
+    executable: /bin/bash
+  shell: "nv config apply --assume-yes"
+
+- name: "{{ switch_name }} - Configuration complete"
+  debug:
+    msg: "{{ nv_commands }}"
+
+- name: Check if switch enrolled
+  ansible.builtin.stat:
+    path: /opt/netris/installer.lock
+  register: lock_file
+
+- name: Download netris installator
+  ansible.builtin.shell: |
+    curl -f -L -o /tmp/get-netris.sh https://get.netris.io; chmod 755 /tmp/get-netris.sh
+  args:
+    creates: /tmp/get-netris.sh
+  when: not lock_file.stat.exists
+
+- name: Enroll switch to netris
+  when: not lock_file.stat.exists
+  args:
+    executable: /bin/sh
+  vars:
+    switch_digit: "{{ switch_id | int + 1 }}"
+    loopback_ip: "{{ loopback_base_switch }}.{{ switch_digit }}"
+  become: true
+  environment:
+    PATH: "/usr/bin:/bin:/usr/cumulus/bin:/sbin:/usr/sbin"
+  shell: |
+    /tmp/get-netris.sh --lo {{ loopback_ip }} --controller {{ netris_controller_ip }} --ctl-version 4.6.0-003 --hostname {{ switch_name }} --auth {{ netris_auth_token }} --node-type switch --hw-nos cumulus_nvue --debug --apt-repo dev
+  register: enroll_cmd
+  ignore_errors: True
+
+- name: Failed to register
+  fail:
+    msg: "Failed to enroll switch {{ switch_name }} with stdout: {{ enroll_cmd.stdout }} \n error: {{ enroll_cmd.stderr }}"
+  when: not lock_file.stat.exists and enroll_cmd.rc != 0
+
+
+- name: Reboot switch to apply netris agent config
+  become: true
+  ansible.builtin.reboot:
+    reboot_timeout: 120
+  when: not lock_file.stat.exists and enroll_cmd.rc == 0
+
+- name: "{{ switch_name }} - Netris enrollment complete"
+  debug:
+    msg: "{{ netris_enrollment_info.splitlines() }}"
+

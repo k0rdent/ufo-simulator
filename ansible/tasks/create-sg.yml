@@ -1,0 +1,99 @@
+- name: "{{ vm_name }} - Build link list"
+  set_fact:
+    vm_links: []
+
+- name: "{{ vm_name }} - Add links where this switch is local"
+  set_fact:
+    vm_links: "{{ vm_links + [{'port': link_item.local_port, 'udp_local': udp_base_port + (link_idx * 2), 'udp_remote': udp_base_port + (link_idx * 2) + 1}] }}"
+  loop: "{{ topology.links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.local }}:{{ link_item.local_port }}"
+  when: link_item.local == vm_name
+
+- name: "{{ vm_name }} - Add links where this switch is remote"
+  set_fact:
+    vm_links: "{{ vm_links + [{'port': link_item.remote_port, 'udp_local': udp_base_port + (link_idx * 2) + 1, 'udp_remote': udp_base_port + (link_idx * 2)}] }}"
+  loop: "{{ topology.links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.remote }}:{{ link_item.remote_port }}"
+  when: link_item.remote == vm_name
+
+- name: Check if SG image exists
+  stat:
+    path: "{{ sg_image }}"
+  register: sg_img
+
+- name: Download SoftGate image if not present
+  get_url:
+    url: "{{ sg_image_url }}"
+    dest: "{{ sg_image }}"
+    mode: '0644'
+  when: not sg_img.stat.exists
+
+# ===========================================
+# Create SoftGate  disks (copy-on-write)
+# ===========================================
+- name: Create softGate images (CoW backed by base)
+  command: >
+    qemu-img create -f qcow2 -F qcow2
+    -b {{ sg_image }}
+    {{ vm_disk_path }}/{{ vm_name }}-disk.qcow2 {{ sg_disk_size }}G
+  args:
+    creates: "{{ vm_disk_path }}/{{ vm_name }}-disk.qcow2"
+
+- name: Check if VMs already exist
+  ansible.builtin.command: virsh dominfo {{ vm_name }}
+  register: vm_exists
+  changed_when: false
+  failed_when: false
+
+- name: Generate config drive
+  include_tasks: tasks/configdrive.yml
+  vars:
+    instance_id: "83679162-1378-4288-a2d4-70e13ec132aa"
+    hostname: "{{ vm_name }}"
+    iso_path: "{{ vm_disk_path }}/{{ vm_name }}-config.iso"
+    configdrive_dir: "/tmp/config_drive/{{ vm_name }}"
+    links: []
+
+- name: Create VMs with virt-install
+  ansible.builtin.command: >
+    virt-install
+    --os-variant ubuntu24.04
+    --machine q35
+    --name "{{ vm_name }}"
+    --vcpus "{{ vm_vcpus }}"
+    --ram "{{ vm_ram }}"
+    --connect "qemu:///system"
+    --disk path={{ vm_disk_path }}/{{ vm_name }}-disk.qcow2,bus=sata
+    --disk {{ vm_disk_path }}/{{ vm_name }}-config.iso,device=cdrom,bus=sata
+    --network none
+    --console "pty,target.type=virtio"
+    --serial "pty"
+    --graphics "vnc,listen=0.0.0.0"
+    --import
+    --noautoconsole
+    --noreboot
+    --boot "uefi,firmware.feature0.name=enrolled-keys,firmware.feature0.enabled=no,firmware.feature1.name=secure-boot,firmware.feature1.enabled=yes,bootmenu.enable=on,hd"
+    --network bridge={{ br_mgmt_name }},model=virtio
+    --network bridge={{ br_ext_name }},model=virtio
+    {% for link in vm_links %}
+    {% set vm_mac = sg_base_mac ~ ':' ~ ('%02x' | format((vm_base_offset | int + loop.index0) // 256)) ~ ':' ~ ('%02x' | format((vm_base_offset | int + loop.index0) % 256)) %}
+    --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
+    --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }},mac={{ vm_mac }}'
+    {% endfor %}
+  when: vm_exists.rc != 0
+
+- name: VM uuid
+  ansible.builtin.shell: virsh domuuid {{ vm_name }}
+  register: vm_uuid
+  changed_when: false
+
+- name: "{{ vm_name }} - Start VM if not running"
+  command: virsh start {{ vm_name }}
+  register: start_result
+  failed_when: start_result.rc != 0 and 'already active' not in start_result.stderr

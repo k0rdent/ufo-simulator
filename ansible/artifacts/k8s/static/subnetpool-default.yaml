@@ -1,0 +1,14 @@
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetPool
+metadata:
+  name: default
+  namespace: kcm-system
+spec:
+  ip_version: 4
+  min_prefix: 19
+  max_prefix: 24
+  prefixes:
+    - 10.11.0.0/16
+  tags:
+    - default
+

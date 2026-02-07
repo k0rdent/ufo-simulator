@@ -1,0 +1,69 @@
+- name: Install pycdlib Python library via pip (required for community.general.iso_create)
+  become: true
+  ansible.builtin.package:
+    name: genisoimage
+    state: present
+
+- name: Ensure temporary configdrive directory exists
+  ansible.builtin.file:
+    path: "{{ configdrive_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Render meta_data.json inline from template
+  ansible.builtin.copy:
+    dest: "{{ configdrive_dir }}/meta-data"
+    content: |
+      instance-id: {{ hostname }}
+      hostname: {{ hostname }}
+      local-hostname: {{ hostname }}
+    mode: "0644"
+
+- name: Render user_data inline from template
+  ansible.builtin.copy:
+    dest: "{{ configdrive_dir }}/user-data"
+    content: |
+      #cloud-config
+      password: 'qalab'
+      chpasswd:
+        expire: false
+      ssh_pwauth: true
+    mode: "0644"
+
+- name: Render network_data.json inline from template
+  ansible.builtin.copy:
+    dest: "{{ configdrive_dir }}/network-config"
+    content: |
+      version: 2
+      ethernets:
+        enp1s0:
+          dhcp4: no
+          addresses:
+            - {{ mgmt_ip }}/{{ br_mgmt_netmask }}
+          routes:
+            - to: 0.0.0.0/0
+              via: {{ management_gateway_sg }}
+          nameservers:
+            addresses:
+              - {{ management_dns_server }}
+        enp2s0:
+          dhcp4: no
+          addresses: []
+        enp0s4:
+          dhcp4: no
+          addresses: []
+        enp0s5:
+          dhcp4: no
+          addresses: []
+    mode: "0644"
+
+- name: Generate config-drive ISO using mkisofs (genisoimage)
+  ansible.builtin.command:
+    cmd: >-
+      genisoimage -o "{{ iso_path }}" -V cidata -r -J --quiet   "{{ configdrive_dir }}"
+
+- name: Clean up temporary directory (optional)
+  ansible.builtin.file:
+    path: "{{ configdrive_dir }}"
+    state: absent
+  when: cleanup_temp | default(true)

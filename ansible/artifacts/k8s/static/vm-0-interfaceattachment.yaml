@@ -1,0 +1,33 @@
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: ServerInterfaceAttachment
+metadata:
+  name: vm-0-interfaces
+spec:
+  server: vm-0
+  attachments:
+    - role: mgmt
+      network: pxe
+      accessMode: true
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: ServerInterfaceAttachment
+metadata:
+  name: vm-1-interfaces
+spec:
+  server: vm-1
+  attachments:
+    - role: mgmt
+      network: pxe
+      accessMode: true
+---     
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: ServerInterfaceAttachment
+metadata:
+  name: vm-2-interfaces
+spec:
+  server: vm-2
+  attachments:
+    - role: mgmt
+      network: pxe
+      accessMode: true

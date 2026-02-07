@@ -1,0 +1,6 @@
+# Ignore everything by default
+*
+
+# Un-ignore static directory and its contents
+!static/
+!static/*

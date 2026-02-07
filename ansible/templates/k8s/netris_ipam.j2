@@ -1,0 +1,111 @@
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Allocation
+metadata:
+  name: mgmt-allocation
+spec:
+  prefix: {{ management_base }}.0.0/16
+  tenant: Admin
+  vpc: Default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Allocation
+metadata:
+  name: loopback-allocation
+spec:
+  prefix: {{ loopback_base }}.0.0/16
+  tenant: Admin
+  vpc: Default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: mgmt-subnet-switches
+spec:
+  prefix: {{ management_base_switch }}.0/24
+  tenant: Admin
+  vpc: Default
+  purpose: management
+  sites:
+  - default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: loopback-subnet-switches
+spec:
+  prefix: {{ loopback_base_switch }}.0/24
+  tenant: Admin
+  vpc: Default
+  purpose: loopback
+  sites:
+  - default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: mgmt-subnet-sg
+spec:
+  prefix: {{ management_base_sg }}.0/24
+  tenant: Admin
+  vpc: Default
+  purpose: management
+  sites:
+  - default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: mgmt-subnet-servers
+spec:
+  prefix: {{ management_base_server }}.0/24
+  tenant: Admin
+  vpc: Default
+  purpose: management
+  sites:
+  - default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: loopback-subnet-servers
+spec:
+  prefix: {{ loopback_base_server }}.0/24
+  tenant: Admin
+  vpc: Default
+  purpose: loopback
+  sites:
+  - default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: loopback-subnet-sg
+spec:
+  prefix: {{ loopback_base_sg }}.0/24
+  tenant: Admin
+  vpc: Default
+  purpose: loopback
+  sites:
+  - default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Allocation
+metadata:
+  name: ext-allocation
+spec:
+  prefix: {{ ext_base }}.0.0/16
+  tenant: Admin
+  vpc: Default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Subnet
+metadata:
+  name: ext-subnet-switches
+spec:
+  prefix: {{ ext_nat }}/24
+  tenant: Admin
+  vpc: Default
+  purpose: nat
+  sites:
+  - default

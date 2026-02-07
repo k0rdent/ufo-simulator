@@ -1,0 +1,87 @@
+---
+- name: Install UFO
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  ignore_errors: false
+  vars:
+    workspace: /opt/ufo_lab/
+    ufo_repo: https://github.com/jumpojoy/unified-fabric-operator
+    ufo_repo_dir: "{{ workspace }}/unified-fabric-operator"
+    ufo_branch: main
+    go_version: 1.25.5
+    netris_operator_dir: "{{ workspace }}/netris-operator"
+  tasks:
+    - name: Install recent Go from official tarball
+      ansible.builtin.shell: |
+        set -e
+        GO_VERSION="{{ go_version }}"
+        wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+        rm -rf /usr/local/go && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+        echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+      args:
+           creates: /usr/local/go/bin/go
+
+    - name: Install unified fabric manager
+      when:  ufo_dev_mode
+      block:
+        # Most people actually want newer version, so...
+
+        - name: Create symlink to netris-operator
+          ansible.builtin.file:
+            src:   "{{ netris_operator_dir }}"
+            path:  /tmp/netris-operator
+            state: link
+
+              #        - name: Download sources
+              #          ansible.builtin.git:
+              #            repo: "{{ ufo_repo }}"
+              #            dest: "{{ ufo_repo_dir }}"
+              #            version: "{{ ufo_branch }}"
+
+        - name: Install CRDs
+          ansible.builtin.shell: |
+            kubectl --kubeconfig {{ kubeconfig_path }} apply -k {{ ufo_repo_dir }}/config/crd/
+
+        - name: Print info
+          vars:
+            info_msg: |
+              #### Unified Fabric Operator Info ####
+    
+              Installation directory: {{ ufo_repo_dir }}
+              Run operator: source /etc/profile.d/go.sh; pushd {{ ufo_repo_dir }}; make run
+
+          debug:
+            msg: "{{ info_msg.split('\n') }}"
+
+    - name: Install Unified fabric operator via helm chart
+      when: not ufo_dev_mode
+      block:
+        - name: Ensure target directory
+          file:
+            path: "{{ k8s_artifacts_dir }}/ufo/"
+            state: directory
+    
+        - name: Handle ufo templates
+          block:
+            - name: Render templates
+              ansible.builtin.template:
+                src: "k8s/ufo/{{ item }}"
+                dest: "{{ k8s_artifacts_dir }}/ufo/{{ item }}"
+              with_items:
+               - "ufo.yaml"
+    
+        - name: Deploy/upgrade netris controller helm release
+          kubernetes.core.helm:
+            name: ufo
+            kubeconfig: "{{ kubeconfig_path }}"
+            chart_ref: "{{ ufo_chart_repo }}"
+            chart_version: "{{ ufo_chart_version }}"
+            release_namespace: ufo
+            create_namespace: true
+            values_files:
+              - "{{ k8s_artifacts_dir }}/ufo/ufo.yaml"
+            state: present
+            wait: true
+            wait_timeout: 300s

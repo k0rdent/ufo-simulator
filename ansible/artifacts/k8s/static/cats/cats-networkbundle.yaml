@@ -1,0 +1,111 @@
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: NetworkBundle
+metadata:
+  name: cats
+  namespace: kcm-system
+spec:
+  allocations:
+    subnetAllocations:
+      - name: cats-mgmt-subnet
+        prefixLength: 24
+        subnetpool: default
+        subnet: cats-mgmt-subnet
+        network: cats-mgmt-net
+        tenant: cats
+        vpc: cats
+        sites:
+          - default
+        gateway: true
+      - name: cats-data-subnet
+        prefixLength: 24
+        subnetpool: default
+        subnet: cats-data-subnet
+        network: cats-data-net
+        tenant: cats
+        vpc: cats
+        sites:
+          - default
+    networks:
+      - name: cats-mgmt-net
+        type: evpn
+        vpc: cats
+        tenant: cats
+        sites:
+          - default
+        evpn:
+          type: l3
+        vlan:
+          id: "auto"
+        dnsServers:
+        - "4.2.2.1"
+      - name: cats-data-net
+        type: evpn
+        vpc: cats
+        tenant: cats
+        sites:
+          - default
+        evpn:
+          type: l3
+        vlan:
+          id: "auto"
+        dnsServers:
+        - "4.2.2.1"
+  networkData:
+    links:
+      ethernets:
+        - type: "phy"
+          id: "enp1s0"
+          mtu: 1500
+          macAddress:
+            fromAnnotation:
+              object: machine
+              annotation: net_interface_mgmt_0_mac
+        - type: "phy"
+          id: "enp2s0"
+          mtu: 1500
+          macAddress:
+            fromAnnotation:
+              object: machine
+              annotation: net_interface_mgmt_1_mac
+        - type: "phy"
+          id: "enp3s0"
+          mtu: 1500
+          macAddress:
+            fromAnnotation:
+              object: machine
+              annotation: net_interface_north-south_0_mac
+        - type: "phy"
+          id: "enp4s0"
+          mtu: 1500
+          macAddress:
+            fromAnnotation:
+              object: machine
+              annotation: net_interface_north-south_1_mac
+                #      bonds:
+                #        - id: "bond0"
+                #          mtu: 1500
+                #          bondMode: "802.3ad"
+                #          bondXmitHashPolicy: "layer2"
+                #          bondLinks:
+                #            - enp1s0
+                #            - enp2s0
+                #          macAddress:
+                #            fromAnnotation:
+                #              object: machine
+                #              annotation: net_interface_mgmt_0_mac
+    networks:
+      ipv4:
+      - id: "Baremetal"
+        link: "enp1s0"
+        ipFromSubnet:
+          name: cats-mgmt-subnet
+        routes:
+        - network: "0.0.0.0"
+          netmask: 0
+          gateway:
+            gatewayFromSubnet:
+              name: cats-mgmt-subnet
+      - id: "data"
+        link: "enp3s0"
+        ipFromSubnet:
+          name: cats-data-subnet

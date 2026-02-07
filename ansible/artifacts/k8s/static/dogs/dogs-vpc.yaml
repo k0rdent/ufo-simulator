@@ -1,0 +1,9 @@
+apiVersion: k8s.netris.ai/v1alpha1
+kind: VPC
+metadata:
+  name: dogs
+  annotations:
+    resource.k8s.netris.ai/import: "true"
+spec:
+  adminTenant: dogs
+  guestTenants: []

@@ -1,0 +1,178 @@
+# Virtual Switch Lab Configuration
+# Adjust these values based on your available RAM
+#
+k8s_artifacts_dir: "{{ playbook_dir }}/artifacts/k8s"
+
+# Base images
+cumulus_image: "/var/lib/libvirt/images/cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
+cumulus_image_url: "https://networkingdownloads.nvidia.com/custhelp/Non_Monetized_Products/Software/CumulusSoftware/CumulusVX/cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
+ubuntu_image: "/var/lib/libvirt/images/ubuntu-24.04-server-cloudimg-amd64.img"
+vm_disk_path: "/var/lib/libvirt/images"
+
+# VM Resources
+switch_vcpus: 4
+switch_memory_mb: 6192
+server_vcpus: 2
+server_memory_mb: 4096
+
+# Management network - SSH access to VMs via port forwarding
+mgmt_ssh_base_port: 2200  # leaf-0 = 2200, leaf-1 = 2201, etc.
+
+# UDP tunnel base port for inter-switch links
+udp_base_port: 10000
+
+# Topology Definition
+# Simple leaf-spine topology for testing
+topology:
+  spines:
+    - name: spine-0
+    - name: spine-1
+  leafs:
+    - name: leaf-0
+    - name: leaf-1
+  nodes:
+    - name: vm-0
+    - name: vm-1
+    - name: vm-2
+  softgates:
+    - name: sg-0
+    - name: sg-1
+
+  # Links format: [local_switch, local_port, remote_switch, remote_port]
+  # Each link will get a unique UDP port pair
+  links:
+    - { local: "leaf-0", local_port: "swp1", remote: "vm-0", remote_port: "eth1", role: "mgmt" }
+    - { local: "leaf-0", local_port: "swp2", remote: "vm-0", remote_port: "eth3", role: "north-south" }
+    - { local: "leaf-0", local_port: "swp3", remote: "vm-1", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp4", remote: "vm-1", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp5", remote: "vm-2", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp6", remote: "vm-2", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp7", remote: "vm-3", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp8", remote: "vm-3", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp9", remote: "vm-4", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp10", remote: "vm-4", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp11", remote: "vm-5", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp12", remote: "vm-5", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp13", remote: "vm-6", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp14", remote: "vm-6", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp15", remote: "vm-7", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp16", remote: "vm-7", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp17", remote: "vm-8", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp18", remote: "vm-8", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp19", remote: "vm-9", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp20", remote: "vm-9", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp21", remote: "vm-10", remote_port: "eth1", role: "mgmt"  }
+    - { local: "leaf-0", local_port: "swp22", remote: "vm-10", remote_port: "eth3", role: "north-south"  }
+
+    - { local: "leaf-1", local_port: "swp1", remote: "vm-0", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp2", remote: "vm-0", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp3", remote: "vm-1", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp4", remote: "vm-1", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp5", remote: "vm-2", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp6", remote: "vm-2", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp7", remote: "vm-3", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp8", remote: "vm-3", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp9", remote: "vm-4", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp10", remote: "vm-4", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp11", remote: "vm-5", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp12", remote: "vm-5", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp13", remote: "vm-6", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp14", remote: "vm-6", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp15", remote: "vm-7", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp16", remote: "vm-7", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp17", remote: "vm-8", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp18", remote: "vm-8", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp19", remote: "vm-9", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp20", remote: "vm-9", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp21", remote: "vm-10", remote_port: "eth2", role: "mgmt"  }
+    - { local: "leaf-1", local_port: "swp22", remote: "vm-10", remote_port: "eth4", role: "north-south"  }
+
+    - { local: "leaf-0", local_port: "swp23", remote: "sg-0", remote_port: "eth1", role: ext }
+    - { local: "leaf-1", local_port: "swp23", remote: "sg-0", remote_port: "eth2", role: ext }
+ 
+    - { local: "leaf-0", local_port: "swp24", remote: "sg-1", remote_port: "eth1", role: ext }
+    - { local: "leaf-1", local_port: "swp24", remote: "sg-1", remote_port: "eth2", role: ext }
+
+    - { local: "spine-0", local_port: "swp1", remote: "leaf-0", remote_port: "swp25" }
+    - { local: "spine-0", local_port: "swp2", remote: "leaf-1", remote_port: "swp25" }
+    - { local: "spine-1", local_port: "swp1", remote: "leaf-0", remote_port: "swp26" }
+    - { local: "spine-1", local_port: "swp2", remote: "leaf-1", remote_port: "swp26" }
+
+# Cumulus default credentials
+cumulus_user: cumulus
+cumulus_default_password: cumulus
+cumulus_new_password: password
+
+redfish_username: admin
+redfish_password: password
+
+vm_base_mac: "52:54:00:12"
+bridge_name: br-mgmt
+vm_vcpus: 6
+vm_ram: 6144
+vm_disk_size: 60
+vm_port_count: 4
+disk_path: /var/lib/libvirt/images
+
+sg_base_mac: "52:54:00:13"
+sg_port_count: 2
+sg_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+sg_image: "/var/lib/libvirt/images/noble-server-cloudimg-amd64.img"
+sg_disk_size: 60
+
+netris_auth_token: <token from webapi>
+netris_admin_username: netris
+netris_admin_password: password
+netris_license_key: ""
+
+loopback_base: "192.169"
+management_base: "192.168"
+loopback_base_switch: "192.169.0"
+management_base_switch: "192.168.0"
+management_gateway_switch: "{{ management_base_switch }}.254"
+
+loopback_base_server: "192.169.1"
+management_base_server: "192.168.1"
+management_gateway_server: "{{ management_base_server }}.254"
+
+loopback_base_sg: "192.169.2"
+management_base_sg: "192.168.2"
+management_gateway_sg: "{{ management_base_sg }}.254"
+management_dns_server: 4.2.2.1
+
+ext_base: 192.167
+ext_base_sg: 192.167.2
+ext_base_gateway_sg: "{{ ext_base_sg }}.254"
+ext_sg_netmask: 24
+ext_nat: "{{ ext_base_sg }}.0"
+
+ext_base_switch: "{{ ext_base }}.3"
+ext_base_gateway_switch: "{{ ext_base_switch }}.254"
+
+pxe_base: 172.16.81
+
+br_pxe_name: br-pxe
+br_pxe_ip: 172.16.81.254
+br_pxe_netmask: 24
+
+br_mgmt_name: br-mgmt
+br_mgmt_ip: 172.16.81.254
+br_mgmt_netmask: 24
+
+br_ext_name: br-ext
+br_ext_netmask: 24
+
+
+ufo_dev_mode: false
+ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
+ufo_chart_version: 0.0.1-8586bfe
+ufo_image_tag: 0.0.1-8586bfe.1769198335
+ufo_fabric_backend: netris
+
+netris_controller_ip: 10.172.1.100
+netris_web_frontend_ip: 10.172.1.101
+netris_web_api_url: "http://{{ netris_web_frontend_ip }}"
+
+kubeconfig_path: "/root/.kube/config"
+
+docker_image_proxy: https://dockerproxy.artifactory-eu.mcp.mirantis.net

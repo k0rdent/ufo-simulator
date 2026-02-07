@@ -1,0 +1,123 @@
+---
+# Ansible Playbook for Virtual Cumulus Switch Lab
+# Creates a leaf-spine topology using libvirt/KVM with UDP tunnels for links
+
+- name: Setup Virtual Switch Lab
+  hosts: localhost
+  become: yes
+  gather_facts: yes
+
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_servers: "{{ topology.nodes + topology.softgates }}"
+
+  tasks:
+    # ===========================================
+    # Prerequisites
+    # ===========================================
+    - name: Ensure required packages are installed
+      apt:
+        name:
+          - qemu-kvm
+          - qemu-utils
+          - libvirt-daemon-system
+          - libvirt-clients
+          - virtinst
+          - bridge-utils
+        state: present
+        update_cache: no
+
+    - name: Ensure libvirtd is running
+      service:
+        name: libvirtd
+        state: started
+        enabled: yes
+
+    - name: Check if Cumulus image exists
+      stat:
+        path: "{{ cumulus_image }}"
+      register: cumulus_img
+
+    - name: Download Cumulus image if not present
+      get_url:
+        url: "{{ cumulus_image_url }}"
+        dest: "{{ cumulus_image }}"
+        mode: '0644'
+      when: not cumulus_img.stat.exists
+
+    # ===========================================
+    # Create switch VM disks (copy-on-write)
+    # ===========================================
+    - name: Create switch disk images (CoW backed by base)
+      command: >
+        qemu-img create -f qcow2 -F qcow2
+        -b {{ cumulus_image }}
+        {{ vm_disk_path }}/{{ item.name }}.qcow2
+      args:
+        creates: "{{ vm_disk_path }}/{{ item.name }}.qcow2"
+      loop: "{{ all_switches }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # ===========================================
+    # Build link information for each switch
+    # ===========================================
+    - name: Create Switches with virt-install
+      include_tasks: tasks/create-switch-vm.yml
+      vars:
+        switch_name: "{{ item.0.name }}"
+        switch_index: "{{ item.1 }}"
+        ssh_port: "{{ mgmt_ssh_base_port + item.1 }}"
+      loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}"
+
+    - name: Render Netris templates 
+      vars: 
+        switch_name: "{{ item.0.name }}" 
+        links: "{{ topology.links }}"
+        switch_index: "{{ item.1 }}"
+        switch_digit: "{{ switch_index | int + 1 }}"
+        loopback_ip: "{{ loopback_base_switch }}.{{ switch_digit }}"
+        mgmt_ip: "{{ management_base_switch }}.{{ switch_digit }}"
+      ansible.builtin.template: 
+        src: "k8s/netris_switch.j2" 
+        dest: "{{ k8s_artifacts_dir }}/{{ switch_name }}.yaml" 
+      loop: "{{ all_switches | zip(range(all_switches | length)) | list }}" 
+      loop_control: 
+        loop_var: item
+
+    - name: Render Netris IPA 
+      ansible.builtin.template: 
+        src: "k8s/netris_ipam.j2" 
+        dest: "{{ k8s_artifacts_dir }}/netris_ipam.yaml" 
+
+    # ===========================================
+    # Display connection info
+    # ===========================================
+    - name: Display Switch information
+      vars:
+        msg: |
+          ============================================
+          Virtual Switch Lab is running!
+          ============================================
+
+          SSH Access (user: cumulus, password: cumulus):
+          {% for switch in all_switches %}
+          {{ switch.name }}: ssh -p {{ mgmt_ssh_base_port + loop.index0 }} cumulus@127.0.0.1
+          {% endfor %}
+
+          Console Access:
+          {% for switch in all_switches %}
+          {{ switch.name }}: virsh console {{ switch.name }}
+          {% endfor %}
+
+          Topology:
+          {% for link in topology.links %}
+          {{ link.local }}:{{ link.local_port }} <--> {{ link.remote }}:{{ link.remote_port }}
+          {% endfor %}
+
+          To destroy the lab: ansible-playbook -i inventory.yml destroy.yml
+          ============================================
+      debug:
+        msg: "{{ msg.split('\n') }}"

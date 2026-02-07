@@ -1,0 +1,30 @@
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Switch
+metadata:
+  name: {{ switch_name }}
+spec:
+  tenant: Admin
+  description: Spine switch
+  nos: cumulus_nvue
+  site: default
+  # asn: 4200000021
+  profile: default-inventory-profile
+  mainIp: {{ loopback_ip }}
+  mgmtIp: {{ mgmt_ip }}
+  portsCount: 48
+### LINKS ####
+{% for link in links %}
+{% if link.remote == switch_name %}
+--- 
+apiVersion: k8s.netris.ai/v1alpha1 
+kind: Link 
+metadata: 
+  name: {{ switch_name }}-{{ link.remote_port }} 
+spec: 
+  ports: 
+  - {{ link.local_port }}@{{ link.local }}
+  - {{ link.remote_port }}@{{ link.remote }} 
+{% endif %}
+{% endfor %}
+### END LINKS ###

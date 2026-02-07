@@ -1,0 +1,36 @@
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Server
+metadata:
+  name: {{ server_name }}
+  namespace: kcm-system
+spec:
+  tenant: Admin
+  description: {{ server_name }}
+  site: default
+  portsCount: 1
+  mainIp: {{ loopback_ip }}
+  mgmtIp: {{ mgmt_ip }}
+  tags:
+    - iface.eth1={{ server_name }}-pxe
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Link
+metadata:
+  name: {{ server_name }}-eth1
+spec:
+  ports:
+  - swp27@leaf-0
+  - eth1@{{ server_name }}
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: ServerInterfaceAttachment
+metadata:
+  name: ctl-interfaces
+  namespace: kcm-system
+spec:
+  server: ctl
+  attachments:
+    - role: pxe
+      network: pxe
+      accessMode: true

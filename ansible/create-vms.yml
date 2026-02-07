@@ -1,0 +1,141 @@
+---
+# Ansible Playbook for Virtual Cumulus Switch Lab
+# Creates a leaf-spine topology using libvirt/KVM with UDP tunnels for links
+
+- name: Setup Virtual Switch Lab
+  hosts: localhost
+  become: yes
+  gather_facts: yes
+
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_servers: "{{ topology.nodes }}"
+    all_softgates: "{{ topology.softgates }}"
+  handlers:
+    - name: Apply netplan
+      command: sudo netplan apply
+      async: 45
+      poll: 0
+
+  tasks:
+    # ===========================================
+    # Prerequisites
+    # ===========================================
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - python3-pip
+          - ovmf
+        state: present
+        update_cache: false
+    
+    - name: Create artifacts directory
+      file:
+        path: "{{ k8s_artifacts_dir }}"
+        state: directory
+        recurse: true
+    
+    # Create PXE network
+    # ===========================================
+    - name: Create PXE network
+      include_tasks: tasks/pxe-net.yml
+
+    # ===========================================
+    # Build link information for each VM
+    # ===========================================
+    - name: Create VMs with virt-install
+      include_tasks: tasks/create-vm.yml
+      vars:
+        vm_name: "{{ item.0.name }}"
+        vm_index: "{{ item.1 }}"
+        vm_base_offset: "{{ vm_index | int * vm_port_count }}"
+        ssh_port: "{{ mgmt_ssh_base_port + vm_index | int }}"
+        vm_mac_0: "{{vm_base_mac }}:{{ '%02x' | format(base_offset | int // 256) }}:{{ '%02x' | format(base_offset | int % 256) }}"
+        vm_mac_1: "{{vm_base_mac }}:{{ '%02x' | format((base_offset | int + 1) // 256) }}:{{ '%02x' | format((base_offset | int + 1) % 256) }}"
+      loop: "{{ all_servers | zip(range(all_servers | length)) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}"
+
+    # ================
+    # Create SoftGates
+    # ================
+    - name: Create SoftGates with virt-install
+      include_tasks: tasks/create-sg.yml
+      vars:
+        vm_name: "{{ item.0.name }}"
+        vm_index: "{{ item.1 }}"
+        vm_base_offset: "{{ vm_index | int * sg_port_count }}"
+        ssh_port: "{{ mgmt_ssh_base_port + vm_index | int }}"
+        mgmt_ip: "{{ management_base_sg }}.{{  vm_index | int + 1 }}"
+      loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
+      loop_control:
+        label: "{{ item.0.name }}"
+
+    - name: Render Netris SG templates
+      vars:
+        sg_name: "{{ item.0.name }}"
+        links: "{{ topology.links }}"
+        sg_index: "{{ item.1 }}"
+        sg_digit: "{{ sg_index | int + 1 }}"
+        loopback_ip: "{{ loopback_base_sg }}.{{ sg_digit }}"
+        mgmt_ip: "{{ management_base_sg }}.{{  sg_index | int + 1 }}"
+      ansible.builtin.template:
+        src: "k8s/netris_sg.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ sg_name }}.yaml"
+      loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
+      loop_control:
+        loop_var: item
+
+    - name: Render Netris Server templates
+      vars:
+        server_name: "{{ item.0.name }}"
+        links: "{{ topology.links }}"
+        server_index: "{{ item.1 }}"
+        server_digit: "{{ server_index | int + 1 }}"
+        loopback_ip: "{{ loopback_base_server }}.{{ server_digit }}"
+        mgmt_ip: "{{ management_base_server }}.{{ server_digit }}"
+      ansible.builtin.template:
+        src: "k8s/netris_server.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
+      loop: "{{ all_servers | zip(range(all_servers | length)) | list }}"
+      loop_control:
+        loop_var: item
+
+    - name: Render Netris mgmt host templates
+      vars:
+        server_name: ctl
+        loopback_ip: "{{ loopback_base_server }}.253"
+        mgmt_ip: "{{ management_base_server }}.253"
+      ansible.builtin.template:
+        src: "k8s/netris_ctl.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
+
+    # ===========================================
+    # Display connection info
+    # ===========================================
+    - name: Display summary
+      debug:
+        msg: "{{ msg.split('\n') }}"
+      vars:
+        msg: |
+          Virtual Baremetal VMs created!
+    
+          | VM  | MAC Address       | VBMC Port | VBMC Address     |
+          |-----|-------------------|-----------|------------------|
+          {% for item in all_servers %}
+          {% set vm_index = loop.index0 %}
+          {% set base_offset = vm_index * vm_port_count %}
+
+          {% set vm_mac_0 = vm_base_mac ~ ':' ~ ('%02x' | format(base_offset // 256)) ~ ':' ~ ('%02x' | format(base_offset % 256)) %}
+          {% set vm_mac_1 = vm_base_mac ~ ':' ~ ('%02x' | format((base_offset +1)// 256)) ~ ':' ~ ('%02x' | format((base_offset+1) % 256)) %}
+          | {{ item.name }} | {{ vm_mac_0 }} {{ vm_mac_1 }} |  | 172.16.81.254    |
+          {% endfor %}
+    
+          Test IPMI with:
+            ipmitool -I lanplus -U admin -P password -H 127.0.0.1 -p 6231 power status
+    
+          Start a VM:
+            ipmitool -I lanplus -U admin -P password -H 172.16.81.254 -p 6231 power on
+    
+          Set PXE boot:
+            ipmitool -I lanplus -U admin -P password -H 172.16.81.254 -p 6231 chassis bootdev pxe

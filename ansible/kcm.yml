@@ -1,0 +1,54 @@
+---
+- name: Install KCM
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  ignore_errors: false
+  vars:
+    workspace: /opt/ufo_lab/
+    kcm_chart_repo: oci://ghcr.io/k0rdent/kcm/charts/kcm
+    kcm_chart_version: 1.5.0
+
+  tasks:
+    - name: Deploy/upgrade kcm chart
+      kubernetes.core.helm:
+        name: kcm
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: "{{ kcm_chart_repo }}"
+        chart_version: "{{ kcm_chart_version }}"
+        release_namespace: kcm-system
+        create_namespace: true
+        values:
+          regional:
+            telemetry:
+              mode: disabled
+            velero:
+              enabled: false
+          controller:
+            defaultHelmTimeout: 90m
+        state: present
+        wait: true
+        wait_timeout: 300s
+
+    - name: Ensure target directory
+      file:
+        path: "{{ k8s_artifacts_dir }}/kcm/"
+        state: directory
+
+    - name: Handle kcm templates
+      block:
+        - name: Render templates
+          ansible.builtin.template:
+            src: "k8s/kcm/{{ item }}"
+            dest: "{{ k8s_artifacts_dir }}/kcm/{{ item }}"
+          with_items:
+           - "management.yml"
+           - "metal3-provider.yml"
+          
+        - name: Apply Management object
+          ansible.builtin.command:
+            cmd: kubectl --kubeconfig {{ kubeconfig_path }} apply -f "{{ k8s_artifacts_dir }}/kcm/{{ item }}"
+          with_items:
+           - "management.yml"
+           - "metal3-provider.yml"

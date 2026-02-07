@@ -1,0 +1,52 @@
+---
+# Configure Cumulus switches after boot
+# Run this after the VMs have fully booted (give them ~2-3 minutes)
+
+- name: Configure Cumulus Switches
+  hosts: localhost
+
+  vars:
+    all_softgates: "{{ topology.softgates }}"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+  tasks:
+    - name: Set netris_auth_token
+      ansible.builtin.include_tasks: tasks/netris_get_auth_token.yml
+
+    - name: Add a new host to inventory
+      add_host:
+        name: "{{ item.0.name }}"
+        hostname: "{{ item.0.name }}"
+        groups: all_softgates
+        ansible_user: ubuntu
+        ansible_password: "qalab"
+        loopback_ip: "{{ loopback_base_sg }}.{{ item.1 | int + 1 }}"
+        mgmt_ip: "{{ management_base_sg }}.{{ item.1 | int + 1 }}"
+        ansible_host: "{{ management_base_sg }}.{{ item.1 | int + 1 }}"
+        sg_name: "{{ item.0.name }}"
+      loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
+      loop_control:
+        loop_var: item
+
+    - name: Wait for Softgates to be reachable
+      wait_for:
+        host: "{{ management_base_sg }}.{{  item.1 | int + 1 }}"
+        delay: 10
+        timeout: 300
+        port: 22
+      loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
+      loop_control:
+        loop_var: item
+
+- name: Configure Softgates
+  hosts: all_softgates
+  gather_facts: no
+  strategy: free
+  become: true
+
+  vars:
+    all_softgates: "{{ topology.softgates }}"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+  tasks:
+    - name: Configure each SoftGateway
+      include_tasks: tasks/configure-sg.yml

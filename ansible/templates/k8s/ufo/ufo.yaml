@@ -1,0 +1,4 @@
+image:
+  repository: registry.ci.mirantis.com/k0rdent-bm/images/unified-fabric-operator
+  tag: {{ ufo_image_tag }}
+fabricBackend: {{ ufo_fabric_backend }}

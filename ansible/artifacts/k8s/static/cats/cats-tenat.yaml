@@ -1,0 +1,7 @@
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Tenant
+metadata:
+  name: cats
+  namespace: default
+spec:
+  description: "cats tenant"

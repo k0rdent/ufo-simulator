@@ -1,0 +1,44 @@
+- name: Authenticate and capture session cookie
+  ansible.builtin.uri:
+    url:         "{{ netris_web_api_url }}/api/auth"
+    method:      POST
+    body_format: json
+    body: >-
+      {
+        "user": "{{ netris_admin_username }}",
+        "password": "{{ netris_admin_password }}",
+        "auth_scheme_id": 1
+      }
+    headers:
+      Content-Type: "application/json"
+    validate_certs:  false           # equivalent to curl -k
+    status_code:     200
+    return_content:  true            # optional — if you want the JSON body too
+  register: login
+
+- name: Set cookie fact
+  ansible.builtin.set_fact:
+    netris_login_cookie: "{{ login.set_cookie }}"
+
+- name: Get netris general settings
+  ansible.builtin.uri:
+    url:         "{{ netris_web_api_url }}/api/v2/general"
+    method:      GET
+    validate_certs: false
+    headers:
+      Cookie:    "{{ netris_login_cookie }}"
+    return_content: true
+  register: api_result
+
+- name: Extract netris_auth_token from general settings
+  ansible.builtin.set_fact:
+    netris_auth_token: >-
+      {{ api_result.json.data
+         | selectattr('name', 'equalto', 'netris_auth_token')
+         | map(attribute='value')
+         | first
+         | default('')
+         | trim
+         | replace('\n', '')
+         | replace('\r', '')
+      }}
