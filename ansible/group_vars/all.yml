@@ -123,7 +123,7 @@ sg_disk_size: 60
 netris_auth_token: <token from webapi>
 netris_admin_username: netris
 netris_admin_password: password
-netris_license_key: ""
+netris_license: ""
 
 loopback_base: "192.169"
 management_base: "192.168"

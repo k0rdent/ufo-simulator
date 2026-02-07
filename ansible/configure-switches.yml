@@ -77,9 +77,9 @@
        headers:
          Cookie:    "{{ netris_login_cookie }}"
        body:
-         key: "{{ netris_license_key }}"
+         key: "{{ netris_license | b64decod }}"
        body_format: "json"
-      when: netris_license_key
+      when: netris_license
 
 - name: Configure Cumulus Switches
   hosts: all_switches

@@ -7,6 +7,7 @@ UFO_K8S_ARTIFACTS_DIR=${UFO_ARTIFACTS_DIR}/k8s
 export DEBIAN_FRONTEND=noninteractive
 export PIP_BREAK_SYSTEM_PACKAGES=1
 export KUBECONFIG=/root/.kube/config
+export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
 
 apt update && apt install -y python3-pip
 
@@ -15,7 +16,10 @@ pip3 install ansible
 mkdir -p ${WORKDIR}
 
 if [[ ! -d $UFO_SIMULATOR_ANSIBLE_DIR ]]; then
-    git clone https://github.com/jumpojoy/netris-simulator $UFO_SIMULATOR_ANSIBLE_DIR
+    git clone https://github.com/k0rdent/ufo-simulator $UFO_SIMULATOR_ANSIBLE_DIR
+    pushd $UFO_SIMULATOR_ANSIBLE_DIR
+    git checkout ${UFO_SIMULATOR_REF}
+    popd
 fi
 
 CUMULUS_NEW_PASSWORD=$(date +%s | sha256sum | base64 | head -c 15)
@@ -27,6 +31,7 @@ sed -i "s/<CUMULUS_NEW_PASSWORD>/${CUMULUS_NEW_PASSWORD}/g" ${UFO_SIMULATOR_ANSI
 sed -i "s/<NETRIS_ADMIN_PASSWORD>/${NETRIS_ADMIN_PASSWORD}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 sed -i "s/<REDFISH_PASSWORD>/${REDFISH_PASSWORD}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 sed -i "s/<CTL_PUBLIC_IP>/${CTL_PUBLIC_IP}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
+sed -i "s/<NETRIS_LICENSE>/${NETRIS_LICENSE}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 
 
 # TODO: fix ugly hack
