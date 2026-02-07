@@ -1,8 +1,8 @@
 WORKDIR=/opt/ufo_lab/
 
-UFO_SIMULATOR_DIR=${WORKDIR}/ufo-simulator/
-UFO_SIMULATOR_ANSIBLE_DIR=${WORKDIR}/ansible
-UFO_ARTIFACTS_DIR=${UFO_SIMULATOR_ANSIBLE_DIR}/artifacts
+UFO_SIMULATOR_DIR=${WORKDIR}/ufo-simulator
+UFO_SIMULATOR_ANSIBLE_DIR=${UFO_SIMULATOR_DIR}/ansible
+UFO_ARTIFACTS_DIR=${UFO_SIMULATOR_DIR}/artifacts
 UFO_K8S_ARTIFACTS_DIR=${UFO_ARTIFACTS_DIR}/k8s
 export DEBIAN_FRONTEND=noninteractive
 export PIP_BREAK_SYSTEM_PACKAGES=1
@@ -16,8 +16,8 @@ pip3 install ansible
 mkdir -p ${WORKDIR}
 
 if [[ ! -d $UFO_SIMULATOR_ANSIBLE_DIR ]]; then
-    git clone https://github.com/k0rdent/ufo-simulator $UFO_SIMULATOR_ANSIBLE_DIR
-    pushd $UFO_SIMULATOR_ANSIBLE_DIR
+    git clone https://github.com/k0rdent/ufo-simulator $UFO_SIMULATOR_DIR
+    pushd $UFO_SIMULATOR_DIR
     git checkout ${UFO_SIMULATOR_REF}
     popd
 fi
