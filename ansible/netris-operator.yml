@@ -13,8 +13,11 @@
   tasks:
     - name: Ensure target directory
       file:
-        path:  "{{ workspace }}"
+        path:  "{{ item }}"
         state: directory
+      with_items:
+        - "{{ workspace }}"
+        - "{{ k8s_artifacts_dir }}/netris"
 
     - name: Download charts repo
       ansible.builtin.git:

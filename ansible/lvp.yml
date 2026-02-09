@@ -26,6 +26,23 @@
             name: "{{ ansible_hostname }}"
             labels: "{{ lvp_labels }}"
 
+    - name: Ensure target directory
+      file:
+        path:  "{{ item }}"
+        state: directory
+      with_items:
+        - "{{ workspace }}"
+        - "{{ k8s_artifacts_dir }}/lvp"
+
+    - name: Handle templates
+      block:
+        - name: Render templates
+          ansible.builtin.template:
+            src: "k8s/lvp/{{ item }}"
+            dest: "{{ k8s_artifacts_dir }}/lvp/{{ item }}"
+          with_items:
+           - "lvp.yaml"
+
     - name: Deploy/upgrade lvp release
       kubernetes.core.helm:
         name: lvp
@@ -34,7 +51,7 @@
         release_namespace: lvp
         create_namespace: true
         values_files:
-          - "{{ workspace }}/netris-simulator/templates/k8s/lvp/lvp.yaml"
+          - "{{ k8s_artifacts_dir }}/lvp/lvp.yaml"
         state: present
         wait: true
         wait_timeout: 120s
