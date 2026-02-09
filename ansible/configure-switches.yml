@@ -77,7 +77,7 @@
        headers:
          Cookie:    "{{ netris_login_cookie }}"
        body:
-         key: "{{ netris_license | b64decod }}"
+         key: "{{ netris_license | b64decode }}"
        body_format: "json"
       when: netris_license
 
