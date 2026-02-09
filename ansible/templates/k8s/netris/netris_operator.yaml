@@ -3,5 +3,5 @@ controller:
   login: "{{ netris_admin_username }}"
   password: "{{ netris_admin_password }}"
 image:
-  repository: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-  tag: 0.0.1-c1a3a31.
+  repository: "{{ netris_operator_image }}"
+  tag: "{{ netris_operator_image_tag }}"
