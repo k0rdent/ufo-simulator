@@ -3,8 +3,8 @@ all:
     localhost:
       ansible_connection: local
       ansible_python_interpreter: /usr/bin/python3
-      cumulus_new_password: "<CUMULUS_NEW_PASSWORD>"
-      netris_admin_password: "<NETRIS_ADMIN_PASSWORD>"
+      cumulus_new_password: "<CUMULUS_NEW_PASSWORD>1!"
+      netris_admin_password: "<NETRIS_ADMIN_PASSWORD>1!"
       redfish_password: "<REDFISH_PASSWORD>"
       ctl_public_ip: "<CTL_PUBLIC_IP>"
       netris_license: "<NETRIS_LICENSE>"
