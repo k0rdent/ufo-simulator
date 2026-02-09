@@ -11,27 +11,18 @@ spec:
         subnetpool: default
         subnet: cats-mgmt-subnet
         network: cats-mgmt-net
-        tenant: cats
         vpc: cats
-        sites:
-          - default
         gateway: true
       - name: cats-data-subnet
         prefixLength: 24
         subnetpool: default
         subnet: cats-data-subnet
         network: cats-data-net
-        tenant: cats
         vpc: cats
-        sites:
-          - default
     networks:
       - name: cats-mgmt-net
         type: evpn
         vpc: cats
-        tenant: cats
-        sites:
-          - default
         evpn:
           type: l3
         vlan:
@@ -41,71 +32,66 @@ spec:
       - name: cats-data-net
         type: evpn
         vpc: cats
-        tenant: cats
-        sites:
-          - default
         evpn:
           type: l3
         vlan:
           id: "auto"
         dnsServers:
         - "4.2.2.1"
-  networkData:
-    links:
-      ethernets:
-        - type: "phy"
-          id: "enp1s0"
-          mtu: 1500
+  networkv2:
+    ethernets:
+      eth1:
+        match:
           macAddress:
             fromAnnotation:
-              object: machine
+              object: baremetalhost
               annotation: net_interface_mgmt_0_mac
-        - type: "phy"
-          id: "enp2s0"
-          mtu: 1500
+        mtu: 1500
+      eth2:
+        match:
           macAddress:
             fromAnnotation:
-              object: machine
+              object: baremetalhost
               annotation: net_interface_mgmt_1_mac
-        - type: "phy"
-          id: "enp3s0"
-          mtu: 1500
+        mtu: 1500
+      eth3:
+        match:
           macAddress:
             fromAnnotation:
-              object: machine
-              annotation: net_interface_north-south_0_mac
-        - type: "phy"
-          id: "enp4s0"
-          mtu: 1500
+              object: baremetalhost
+              annotation: net_interface_data_0_mac
+        mtu: 1500
+      eth4:
+        match:
           macAddress:
             fromAnnotation:
-              object: machine
-              annotation: net_interface_north-south_1_mac
-                #      bonds:
-                #        - id: "bond0"
-                #          mtu: 1500
-                #          bondMode: "802.3ad"
-                #          bondXmitHashPolicy: "layer2"
-                #          bondLinks:
-                #            - enp1s0
-                #            - enp2s0
-                #          macAddress:
-                #            fromAnnotation:
-                #              object: machine
-                #              annotation: net_interface_mgmt_0_mac
-    networks:
-      ipv4:
-      - id: "Baremetal"
-        link: "enp1s0"
-        ipFromSubnet:
-          name: cats-mgmt-subnet
-        routes:
-        - network: "0.0.0.0"
-          netmask: 0
-          gateway:
-            gatewayFromSubnet:
-              name: cats-mgmt-subnet
-      - id: "data"
-        link: "enp3s0"
-        ipFromSubnet:
-          name: cats-data-subnet
+              object: baremetalhost
+              annotation: net_interface_data_1_mac
+        mtu: 1500
+    bonds:
+      bond0:
+       interfaces:
+        - eth1
+        - eth2
+       addresses:
+        - ipFromSubnet:
+            name: cats-mgmt-subnet
+       gatewayv4:
+         gatewayFromSubnet:
+           name: cats-mgmt-subnet
+       mtu: 1500
+      bond1:
+       interfaces:
+        - eth3
+        - eth4
+       mtu: 1500
+    vlans:
+      data:
+        id:
+          vlanIdFromNetwork:
+            name: cats-data-net
+        link: bond1
+        addresses:
+         - ipFromSubnet:
+             name: cats-data-subnet
+        mtu: 1500

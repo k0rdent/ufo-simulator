@@ -42,50 +42,50 @@ topology:
   # Each link will get a unique UDP port pair
   links:
     - { local: "leaf-0", local_port: "swp1", remote: "vm-0", remote_port: "eth1", role: "mgmt" }
-    - { local: "leaf-0", local_port: "swp2", remote: "vm-0", remote_port: "eth3", role: "north-south" }
+    - { local: "leaf-0", local_port: "swp2", remote: "vm-0", remote_port: "eth3", role: "data" }
     - { local: "leaf-0", local_port: "swp3", remote: "vm-1", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp4", remote: "vm-1", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp4", remote: "vm-1", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp5", remote: "vm-2", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp6", remote: "vm-2", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp6", remote: "vm-2", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp7", remote: "vm-3", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp8", remote: "vm-3", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp8", remote: "vm-3", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp9", remote: "vm-4", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp10", remote: "vm-4", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp10", remote: "vm-4", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp11", remote: "vm-5", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp12", remote: "vm-5", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp12", remote: "vm-5", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp13", remote: "vm-6", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp14", remote: "vm-6", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp14", remote: "vm-6", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp15", remote: "vm-7", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp16", remote: "vm-7", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp16", remote: "vm-7", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp17", remote: "vm-8", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp18", remote: "vm-8", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp18", remote: "vm-8", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp19", remote: "vm-9", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp20", remote: "vm-9", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp20", remote: "vm-9", remote_port: "eth3", role: "data"  }
     - { local: "leaf-0", local_port: "swp21", remote: "vm-10", remote_port: "eth1", role: "mgmt"  }
-    - { local: "leaf-0", local_port: "swp22", remote: "vm-10", remote_port: "eth3", role: "north-south"  }
+    - { local: "leaf-0", local_port: "swp22", remote: "vm-10", remote_port: "eth3", role: "data"  }
 
     - { local: "leaf-1", local_port: "swp1", remote: "vm-0", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp2", remote: "vm-0", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp2", remote: "vm-0", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp3", remote: "vm-1", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp4", remote: "vm-1", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp4", remote: "vm-1", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp5", remote: "vm-2", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp6", remote: "vm-2", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp6", remote: "vm-2", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp7", remote: "vm-3", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp8", remote: "vm-3", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp8", remote: "vm-3", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp9", remote: "vm-4", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp10", remote: "vm-4", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp10", remote: "vm-4", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp11", remote: "vm-5", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp12", remote: "vm-5", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp12", remote: "vm-5", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp13", remote: "vm-6", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp14", remote: "vm-6", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp14", remote: "vm-6", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp15", remote: "vm-7", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp16", remote: "vm-7", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp16", remote: "vm-7", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp17", remote: "vm-8", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp18", remote: "vm-8", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp18", remote: "vm-8", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp19", remote: "vm-9", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp20", remote: "vm-9", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp20", remote: "vm-9", remote_port: "eth4", role: "data"  }
     - { local: "leaf-1", local_port: "swp21", remote: "vm-10", remote_port: "eth2", role: "mgmt"  }
-    - { local: "leaf-1", local_port: "swp22", remote: "vm-10", remote_port: "eth4", role: "north-south"  }
+    - { local: "leaf-1", local_port: "swp22", remote: "vm-10", remote_port: "eth4", role: "data"  }
 
     - { local: "leaf-0", local_port: "swp23", remote: "sg-0", remote_port: "eth1", role: ext }
     - { local: "leaf-1", local_port: "swp23", remote: "sg-0", remote_port: "eth2", role: ext }
@@ -167,7 +167,7 @@ br_ext_name: br-ext
 br_ext_netmask: 24
 
 
-ufo_dev_mode: false
+ufo_dev_mode: true
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
 ufo_chart_version: 0.0.1-8586bfe
 ufo_image_tag: 0.0.1-8586bfe.1769198335
