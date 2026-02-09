@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+
+set -x
+
 WORKDIR=/opt/ufo_lab/
 
 UFO_SIMULATOR_DIR=${WORKDIR}/ufo-simulator
