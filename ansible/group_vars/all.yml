@@ -124,7 +124,7 @@ netris_auth_token: <token from webapi>
 netris_admin_username: netris
 netris_admin_password: password
 netris_license: ""
-netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
+netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
 netris_operator_chart_version: 0.0.1-f431da9.1770637678
 netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
 netris_operator_image_tag: 0.0.1-f431da9
