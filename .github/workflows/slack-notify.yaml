@@ -1,0 +1,22 @@
+name: notify-slack
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - closed
+
+jobs:
+  notify-slack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on workflow success
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
+          payload: |
+            pull_request_url: "${{ github.event.pull_request.html_url }}"
+            pull_request_title: "${{ github.event.pull_request.title }}"
+            github_repo_name: "${{ github.event.repository.name }}"
