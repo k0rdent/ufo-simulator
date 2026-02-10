@@ -24,7 +24,7 @@ spec:
         type: evpn
         vpc: dogs
         evpn:
-          type: l3
+          type: l2
         vlan:
           id: "auto"
         dnsServers:
@@ -33,7 +33,7 @@ spec:
         type: evpn
         vpc: dogs
         evpn:
-          type: l3
+          type: l2
         vlan:
           id: "auto"
         dnsServers:
@@ -70,6 +70,8 @@ spec:
         mtu: 1500
     bonds:
       bond0:
+       parameters:
+         mode: active-backup
        interfaces:
         - eth1
         - eth2
@@ -80,7 +82,13 @@ spec:
          gatewayFromSubnet:
            name: dogs-mgmt-subnet
        mtu: 1500
+       nameservers:
+         addresses:
+           dnsFromNetwork:
+             name: dogs-mgmt-net
       bond1:
+       parameters:
+         mode: active-backup
        interfaces:
         - eth3
         - eth4

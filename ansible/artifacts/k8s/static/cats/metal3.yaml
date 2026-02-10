@@ -44,6 +44,15 @@ spec:
       - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
       - --labels="metal3.io/uuid={{ ds.meta_data.uuid }}"
       - --force=false
+    preStartCommands:
+      - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+      - sudo mkdir -vp /home/rescue/.ssh/
+      - sudo chown rescue /home/rescue/.ssh/authorized_keys
+    files:
+    - content: |
+        PasswordAuthentication yes
+      path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
+      permissions: "0644"
     k0s:
       apiVersion: k0s.k0sproject.io/v1beta1
       kind: ClusterConfig
@@ -89,6 +98,15 @@ spec:
         - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
         - --labels="metal3.io/uuid={{ ds.meta_data.uuid }}"
         - --force=false
+      preStartCommands:
+        - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+        - sudo mkdir -vp /home/rescue/.ssh/
+        - sudo chown rescue /home/rescue/.ssh/authorized_keys
+      files:
+      - content: |
+          PasswordAuthentication yes
+        path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
+        permissions: "0644"
 ---
 # Source: capm3-standalone-cp/templates/machinedeployment.yaml
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -164,9 +182,9 @@ spec:
 #        name: release-name-dt
         name: cats
       image:
-        url: http://172.16.81.254:80/artifacts/ipa/ubuntu-noble.qcow2
+        url: http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
         format: qcow2
-        checksum: 91e48663558cde5631ee3e2ad80208a774c0e1bde714b9f88989cecea9ef10c4
+        checksum: 00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
         checksumType: sha256
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
@@ -184,7 +202,7 @@ spec:
 #        name: release-name-dt
         name: cats
       image:
-        url:  http://172.16.81.254:80/artifacts/ipa/ubuntu-noble.qcow2
+        url:  http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
         format: qcow2
-        checksum:  91e48663558cde5631ee3e2ad80208a774c0e1bde714b9f88989cecea9ef10c4
+        checksum:  00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
         checksumType: sha256

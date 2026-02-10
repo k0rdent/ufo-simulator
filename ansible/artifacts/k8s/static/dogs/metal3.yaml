@@ -44,6 +44,15 @@ spec:
       - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
       - --labels="metal3.io/uuid={{ ds.meta_data.uuid }}"
       - --force=false
+    preStartCommands:
+      - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+      - sudo mkdir -vp /home/rescue/.ssh/
+      - sudo chown rescue /home/rescue/.ssh/authorized_keys
+    files:
+    - content: |
+        PasswordAuthentication yes
+      path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
+      permissions: "0644"
     k0s:
       apiVersion: k0s.k0sproject.io/v1beta1
       kind: ClusterConfig
@@ -89,6 +98,15 @@ spec:
         - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
         - --labels="metal3.io/uuid={{ ds.meta_data.uuid }}"
         - --force=false
+      preStartCommands:
+        - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+        - sudo mkdir -vp /home/rescue/.ssh/
+        - sudo chown rescue /home/rescue/.ssh/authorized_keys
+      files:
+      - content: |
+          PasswordAuthentication yes
+        path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
+        permissions: "0644"
 ---
 # Source: capm3-standalone-cp/templates/machinedeployment.yaml
 apiVersion: cluster.x-k8s.io/v1beta1
