@@ -18,9 +18,6 @@ spec:
   gateways: []
   dhcp:
     enabled: false
-  sites:
-    - default
-  tenant: Admin
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Subnet
@@ -32,6 +29,3 @@ spec:
   cidr: 172.16.81.0/24
   tags: []
   network: pxe
-  sites:
-    - default
-  tenant: Admin
