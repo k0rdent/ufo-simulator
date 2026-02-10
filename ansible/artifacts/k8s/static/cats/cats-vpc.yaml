@@ -1,9 +1,5 @@
-apiVersion: k8s.netris.ai/v1alpha1
-kind: VPC
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Vpc
 metadata:
   name: cats
-  annotations:
-    resource.k8s.netris.ai/import: "true"
-spec:
-  adminTenant: Admin
-  guestTenants: []
+spec: {}
