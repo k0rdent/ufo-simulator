@@ -12,10 +12,10 @@ all:
 
       # Artifacts
       netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
-      netris_operator_chart_version: 0.0.1-d71fc01
+      netris_operator_chart_version: 0.0.1-a71c5e7
       netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-      netris_operator_image_tag: 0.0.1-d71fc01.1770641523
+      netris_operator_image_tag: 0.0.1-a71c5e7.1770815330
 
       ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-      ufo_chart_version: 0.0.4-791d3c3
-      ufo_image_tag: 0.0.1-791d3c3.1770732876
+      ufo_chart_version: 0.0.4-9074394
+      ufo_image_tag: 0.0.1-9074394.1770820413
