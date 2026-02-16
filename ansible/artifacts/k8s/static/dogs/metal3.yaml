@@ -182,9 +182,9 @@ spec:
 #        name: release-name-dt
         name: dogs
       image:
-        url: http://172.16.81.254:80/artifacts/ipa/ubuntu-noble.qcow2
+        url: http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
         format: qcow2
-        checksum: 91e48663558cde5631ee3e2ad80208a774c0e1bde714b9f88989cecea9ef10c4
+        checksum: 00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
         checksumType: sha256
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
@@ -202,7 +202,7 @@ spec:
 #        name: release-name-dt
         name: dogs
       image:
-        url:  http://172.16.81.254:80/artifacts/ipa/ubuntu-noble.qcow2
+        url:  http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
         format: qcow2
-        checksum:  91e48663558cde5631ee3e2ad80208a774c0e1bde714b9f88989cecea9ef10c4
+        checksum:  00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
         checksumType: sha256

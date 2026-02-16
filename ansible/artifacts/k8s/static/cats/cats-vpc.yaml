@@ -1,5 +1,7 @@
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Vpc
 metadata:
+  annotations:
+    ufo.mirantis.com/netris-adminTenant: "Admin"
   name: cats
 spec: {}
