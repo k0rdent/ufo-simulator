@@ -89,5 +89,5 @@ done
 
 # Wait for bmhs are
 for i in range {0..2}; do
-    kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}' baremetalhost/vm-${i}  --timeout=1800s
+    kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
 done
