@@ -26,6 +26,19 @@
               hello-time: 2
               max-age: 20
             # No interfaces: [] needed — omitting it creates an empty bridge (ports: none)
+        # Temporary connect ctl node to mgmt networks while softgates are not implemented
+        # on netris simulator
+        vlans:
+          br-pxe.2:
+            id: 2
+            link: br-pxe
+            addresses:
+              - 10.11.0.254/24
+          br-pxe.4:
+            id: 4
+            link: br-pxe
+            addresses:
+              - 10.11.2.254/24
 
 - name: Create MGMT bridge configuration with Netplan
   ansible.builtin.copy:
