@@ -96,5 +96,5 @@ spec:
           interface: br-mgmt
           ipAddress: {{ br_mgmt_ip }}
     name: cluster-api-provider-metal3
-    template: cluster-api-provider-metal3-v0.5.0-alpha1
+    template: cluster-api-provider-metal3-0.5.0-alpha1
   release: kcm-1-5-0
