@@ -48,14 +48,14 @@ spec:
 apiVersion: k0rdent.mirantis.com/v1beta1
 kind: ProviderTemplate
 metadata:
-  name: cluster-api-provider-metal3-0.4.0
+  name: cluster-api-provider-metal3-v0.5.0-alpha1
   annotations:
     helm.sh/resource-policy: keep
 spec:
   helm:
     chartSpec:
       chart: cluster-api-provider-metal3
-      version: 0.4.0
+      version: v0.5.0-alpha1
       interval: 10m0s
       sourceRef:
         kind: HelmRepository
@@ -65,7 +65,7 @@ spec:
 apiVersion: k0rdent.mirantis.com/v1beta1
 kind: ClusterTemplate
 metadata:
-  name: capm3-standalone-cp-0.4.0
+  name: capm3-standalone-cp-v0.5.0-alpha1
   namespace: kcm-system
   annotations:
     helm.sh/resource-policy: keep
@@ -73,7 +73,7 @@ spec:
   helm:
     chartSpec:
       chart: capm3-standalone-cp
-      version: 0.4.0
+      version: v0.5.0-alpha1
       interval: 10m0s
       sourceRef:
         kind: HelmRepository
