@@ -79,6 +79,15 @@ kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-1.yaml
 kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
 kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
 kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0_bmh.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1_bmh.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2_bmh.yaml
+
+# Wait netris is fully initialized
+sleep 120
+
+for i in range {0..2}; do
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-${i}_bmh.yaml
+done
+
+# Wait for bmhs are
+for i in range {0..2}; do
+    kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}' baremetalhost/vm-${i}  --timeout=1800s
+done
