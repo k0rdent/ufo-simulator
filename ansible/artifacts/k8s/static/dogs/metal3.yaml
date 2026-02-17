@@ -15,7 +15,7 @@ spec:
       cidrBlocks:
       - 10.95.0.0/16
   controlPlaneEndpoint:
-    host: 10.11.0.250
+    host: 10.11.2.250
     port: 6443
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -71,10 +71,10 @@ spec:
             type: Keepalived
             keepalived:
               vrrpInstances:
-                - virtualIPs: ["10.11.0.250/24"]
+                - virtualIPs: ["10.11.2.250/24"]
                   authPass: password
               virtualServers:
-                - ipAddress: "10.11.0.250"
+                - ipAddress: "10.11.2.250"
         storage:
           type: etcd
   machineTemplate:
@@ -147,7 +147,7 @@ metadata:
   namespace: kcm-system
 spec:
   controlPlaneEndpoint:
-    host: 10.11.0.250
+    host: 10.11.2.250
     port: 6443
   noCloudProvider: true
 ---
