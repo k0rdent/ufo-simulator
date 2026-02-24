@@ -12,6 +12,7 @@ export DEBIAN_FRONTEND=noninteractive
 export PIP_BREAK_SYSTEM_PACKAGES=1
 export KUBECONFIG=/root/.kube/config
 export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
+export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
 
 apt update && apt install -y python3-pip
 
@@ -22,7 +23,8 @@ mkdir -p ${WORKDIR}
 if [[ ! -d $UFO_SIMULATOR_ANSIBLE_DIR ]]; then
     git clone https://github.com/k0rdent/ufo-simulator $UFO_SIMULATOR_DIR
     pushd $UFO_SIMULATOR_DIR
-    git checkout ${UFO_SIMULATOR_REF}
+    git fetch origin ${UFO_SIMULATOR_REFSPEC}:FETCH_HEAD
+    git checkout FETCH_HEAD
     popd
 fi
 
