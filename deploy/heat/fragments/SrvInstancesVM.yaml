@@ -19,6 +19,12 @@ parameters:
     default: 3600
   public_net_id:
     type: string
+  netris_license:
+    type: string
+  ufo_simulator_refspec:
+    type: string
+    default: 'main'
+
 resources:
   software_config:
     type: OS::Heat::SoftwareConfig
@@ -29,6 +35,8 @@ resources:
           template: { get_file: ../scripts/instance_boot.sh }
           params:
             $wait_condition_notify: { get_attr: [ wait_handle, curl_cli ] }
+            $netris_license: { get_param: netris_license }
+            $ufo_simulator_refspec: { get_param: ufo_simulator_refspec }
   software_config_multi:
     type: "OS::Heat::MultipartMime"
     properties:

@@ -5,7 +5,9 @@ set -ex
 [[ -z "$_INSTALL_SCRIPT" ]] || return 0
 declare -r -g _INSTALL_SCRIPT=1
 
-echo $(id)
+export NETRIS_LICENSE=$netris_license
+export UFO_SIMULATOR_REFSPEC=$ufo_simulator_refspec
+export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-"main"}
 
 function wait_condition_send {
     local status=${1:-SUCCESS}
@@ -38,9 +40,13 @@ function handle_exit {
 }
 trap handle_exit EXIT
 
-git clone https://github.com/jumpojoy/netris-simulator /tmp/netris-simulator
-bash /tmp/netris-simulator/deploy/install.sh
+git clone https://github.com/k0rdent/ufo-simulator /tmp/ufo-simulator
+pushd /tmp/ufo-simulator
+git fetch origin ${UFO_SIMULATOR_REFSPEC}:FETCH_HEAD
+git checkout FETCH_HEAD
+popd
+bash /tmp/ufo-simulator/deploy/install.sh
 
-rm -rf /tmp/netris-simulator
+rm -rf /tmp/ufo-simulator
 
 wait_condition_send "SUCCESS" "Instance successfuly started."
