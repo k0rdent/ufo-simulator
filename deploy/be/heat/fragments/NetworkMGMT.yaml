@@ -1,0 +1,25 @@
+heat_template_version: queens
+
+parameters:
+  mgmt_network_cidr:
+    type: string
+
+resources:
+
+  network:
+    type: OS::Neutron::Net
+    properties:
+      port_security_enabled: false
+  subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: { get_resource: network }
+      enable_dhcp: false
+      cidr: { get_param: mgmt_network_cidr }
+      gateway_ip: null
+
+outputs:
+  public_network:
+    value: { get_resource: network }
+  mgmt_subnet_id:
+    value: { get_resource: subnet }

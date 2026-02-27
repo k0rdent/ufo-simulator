@@ -1,0 +1,44 @@
+heat_template_version: queens
+parameters:
+  key_name:
+    type: string
+    description: Name of keypair to assign to servers
+  image:
+    type: string
+    description: Name of image to use for servers
+  flavor:
+    type: string
+    description: Flavor to use for servers
+  wan_network:
+    type: string
+  wan_subnet_id:
+    type: string
+  wan_mac_address:
+    type: string
+    default: 'fa:16:3e:73:10:02'
+  wan_ip_address:
+    type: string
+
+resources:
+  server:
+    type: OS::Nova::Server
+    properties:
+      config_drive: true
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - port: { get_resource: wan_server_port }
+  wan_server_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: wan_network }
+      port_security_enabled: false
+      mac_address: { get_param: wan_mac_address }
+      fixed_ips:
+        - subnet: { get_param: wan_subnet_id }
+        - ip_address: { get_param: wan_ip_address }
+outputs:
+  wan_ip:
+    description: IP address of wan port
+    value: { get_attr: [ wan_server_port, fixed_ips ] }
