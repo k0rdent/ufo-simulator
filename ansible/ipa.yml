@@ -7,7 +7,7 @@
   ignore_errors: false
   vars:
     ipa_files:
-     - url: https://cloud-images.ubuntu.com/noble/20260108/noble-server-cloudimg-amd64.img
+     - url: https://binary-mirantis-com.s3.amazonaws.com/openstack/bin/ubuntu/24.04/noble-server-cloudimg-amd64-20251026.img
        dst: noble-server-cloudimg-amd64.img
 
   tasks:

@@ -184,7 +184,7 @@ spec:
       image:
         url: http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
         format: qcow2
-        checksum: 00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
+        checksum: 85743244cc8f2f47384480c81dbb677585d20ed693127667dbfb116f1682f793
         checksumType: sha256
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
@@ -204,5 +204,5 @@ spec:
       image:
         url:  http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
         format: qcow2
-        checksum:  00786c0936a7dd91a6b07941ca60bb56652975e0e72f9dacf73c887ada420966
+        checksum:  85743244cc8f2f47384480c81dbb677585d20ed693127667dbfb116f1682f793
         checksumType: sha256
