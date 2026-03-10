@@ -3,8 +3,6 @@ heat_template_version: queens
 parameters:
   public_net_id:
     type: string
-  lcm_network_cidr:
-    type: string
   dns_nameservers:
     type: json
     default: ['172.18.224.6', '172.18.176.6']
@@ -20,8 +18,11 @@ resources:
     properties:
       network: { get_resource: network }
       enable_dhcp: false
-      cidr: { get_param: lcm_network_cidr }
+      cidr: '10.10.0.0/24'
       dns_nameservers: { get_param: dns_nameservers }
+      allocation_pools:
+      - start: 10.10.0.100
+        end: 10.10.0.200
 
   router:
     type: OS::Neutron::Router

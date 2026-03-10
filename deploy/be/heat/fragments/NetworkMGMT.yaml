@@ -1,9 +1,5 @@
 heat_template_version: queens
 
-parameters:
-  mgmt_network_cidr:
-    type: string
-
 resources:
 
   network:
@@ -15,8 +11,11 @@ resources:
     properties:
       network: { get_resource: network }
       enable_dhcp: false
-      cidr: { get_param: mgmt_network_cidr }
+      cidr: '10.200.0.0/24'
       gateway_ip: null
+      allocation_pools:
+        - start: 10.200.0.100
+          end: 10.200.0.200
 
 outputs:
   public_network:

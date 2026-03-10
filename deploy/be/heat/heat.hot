@@ -21,26 +21,12 @@ parameters:
   dns_nameservers:
     type: json
     default: ['172.18.224.6', '172.18.176.6']
-  lcm_network_cidr:
-    type: string
-    default: '10.10.0.0/24'
-  wan_network_cidr:
-    type: string
-    description: The CIDR of control network, used to detect control interface.
-    default: '10.10.10.0/24'
   gtw_wan_ip_address:
     type: string
     default: '10.10.10.1'
   vnc_wan_ip_address:
     type: string
     default: '10.10.10.3'
-  satori_wan_ip_address:
-    type: string
-    default: '10.10.10.4'
-  mgmt_network_cidr:
-    type: string
-    description: The CIDR of control network, used to detect control interface.
-    default: '10.200.0.0/24'
   vnc_mgmt_ip_address:
     type: string
     default: '10.200.0.2'
@@ -50,6 +36,9 @@ parameters:
   gtw_mgmt_ip_address:
     type: string
     default: '10.200.0.1'
+  satori_mgmt_ip_address:
+    type: string
+    default: '10.200.0.4'
   ssh_public_key:
     type: string
   satori_flavor:
@@ -72,15 +61,10 @@ resources:
     type: MCP2::NetworkLCM
     properties:
       public_net_id: { get_param: public_net_id }
-      lcm_network_cidr: { get_param: lcm_network_cidr }
   wan_network:
     type: MCP2::NetworkWAN
-    properties:
-      wan_network_cidr: { get_param: wan_network_cidr }
   mgmt_network:
     type: MCP2::NetworkMGMT
-    properties:
-      mgmt_network_cidr: { get_param: mgmt_network_cidr }
   dummy_network:
     type: MCP2::NetworkDUMMY
   gtw:
@@ -143,12 +127,12 @@ resources:
      - dummy_network
     type: MCP2::SrvInstancesSATORI
     properties:
-      image: { get_param: sdlc_image }
-      flavor: { get_param: sdlc_flavor }
+      image: { get_param: satori_image }
+      flavor: { get_param: satori_flavor }
       key_name: { get_param: key_pair }
-      wan_network: { get_attr: [wan_network, wan_network] }
-      wan_subnet_id: { get_attr: [wan_network, wan_subnet_id]}
-      wan_ip_address: { get_param: satori_wan_ip_address }
+      mgmt_network: { get_attr: [mgmt_network, public_network] }
+      mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
+      mgmt_ip_address: { get_param: satori_mgmt_ip_address }
 outputs:
    
   gtw_floating_ip:

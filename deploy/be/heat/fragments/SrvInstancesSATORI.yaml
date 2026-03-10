@@ -9,14 +9,14 @@ parameters:
   flavor:
     type: string
     description: Flavor to use for servers
-  wan_network:
+  mgmt_network:
     type: string
-  wan_subnet_id:
+  mgmt_subnet_id:
     type: string
-  wan_mac_address:
+  mgmt_mac_address:
     type: string
     default: 'fa:16:3e:73:10:02'
-  wan_ip_address:
+  mgmt_ip_address:
     type: string
 
 resources:
@@ -28,17 +28,17 @@ resources:
       flavor: { get_param: flavor }
       key_name: { get_param: key_name }
       networks:
-        - port: { get_resource: wan_server_port }
-  wan_server_port:
+        - port: { get_resource: mgmt_server_port }
+  mgmt_server_port:
     type: OS::Neutron::Port
     properties:
-      network_id: { get_param: wan_network }
+      network_id: { get_param: mgmt_network }
       port_security_enabled: false
-      mac_address: { get_param: wan_mac_address }
+      mac_address: { get_param: mgmt_mac_address }
       fixed_ips:
-        - subnet: { get_param: wan_subnet_id }
-        - ip_address: { get_param: wan_ip_address }
+        - subnet: { get_param: mgmt_subnet_id }
+        - ip_address: { get_param: mgmt_ip_address }
 outputs:
-  wan_ip:
+  mgmt_ip:
     description: IP address of wan port
-    value: { get_attr: [ wan_server_port, fixed_ips ] }
+    value: { get_attr: [ mgmt_server_port, fixed_ips ] }
