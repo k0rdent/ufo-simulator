@@ -20,8 +20,8 @@ resources:
       dns_nameservers: { get_param: dns_nameservers }
       gateway_ip: null
       allocation_pools:
-        - start: 10.10.10.100
-          end: 10.10.10.200
+        - start: 10.10.10.240
+          end: 10.10.10.250
 
 outputs:
   wan_network:
