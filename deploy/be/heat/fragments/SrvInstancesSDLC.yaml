@@ -61,7 +61,7 @@ resources:
       mac_address: { get_param: mgmt_mac_address }
       fixed_ips:
         - subnet: { get_param: mgmt_subnet_id }
-        - ip_address: { get_param: mgmt_ip_address }
+          ip_address: { get_param: mgmt_ip_address }
 outputs:
   mgmt_ip:
     description: IP address of mgmt port
