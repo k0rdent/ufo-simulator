@@ -1,0 +1,44 @@
+heat_template_version: queens
+parameters:
+  key_name:
+    type: string
+    description: Name of keypair to assign to servers
+  image:
+    type: string
+    description: Name of image to use for servers
+  flavor:
+    type: string
+    description: Flavor to use for servers
+  mgmt_network:
+    type: string
+  mgmt_subnet_id:
+    type: string
+  mgmt_mac_address:
+    type: string
+    default: 'fa:16:3e:73:10:02'
+  mgmt_ip_address:
+    type: string
+
+resources:
+  server:
+    type: OS::Nova::Server
+    properties:
+      config_drive: true
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - port: { get_resource: mgmt_server_port }
+  mgmt_server_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: mgmt_network }
+      port_security_enabled: false
+      mac_address: { get_param: mgmt_mac_address }
+      fixed_ips:
+        - subnet: { get_param: mgmt_subnet_id }
+          ip_address: { get_param: mgmt_ip_address }
+outputs:
+  mgmt_ip:
+    description: IP address of wan port
+    value: { get_attr: [ mgmt_server_port, fixed_ips ] }

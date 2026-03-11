@@ -1,0 +1,25 @@
+heat_template_version: queens
+
+parameters:
+  dummy_network_cidr:
+    type: string
+    default: '192.168.100.0/24'
+
+resources:
+
+  network:
+    type: OS::Neutron::Net
+    properties:
+      port_security_enabled: false
+  subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: { get_resource: network }
+      enable_dhcp: false
+      cidr: { get_param: dummy_network_cidr }
+
+outputs:
+  public_network:
+    value: { get_resource: network }
+  dummy_subnet_id:
+    value: { get_resource: subnet }

@@ -1,0 +1,152 @@
+heat_template_version: queens
+parameters:
+  sdlc_image:
+    type: string
+    description: Name of image to use for servers
+  satori_image:
+    type: string
+    description: Name of image to use for servers
+  vnc_image:
+    type: string
+    description: Name of image to use for servers
+  gtw_image:
+   type: string
+   description: Image for gtw node
+  public_net_id:
+    type: string
+    default: ''
+    description: >
+      ID of public network for which floating IP addresses will be allocated/
+      for baremetal case flat provision network for nodes
+  dns_nameservers:
+    type: json
+    default: ['172.18.224.6', '172.18.176.6']
+  gtw_wan_ip_address:
+    type: string
+    default: '10.10.10.1'
+  vnc_wan_ip_address:
+    type: string
+    default: '10.10.10.3'
+  vnc_mgmt_ip_address:
+    type: string
+    default: '10.200.0.2'
+  sdlc_mgmt_ip_address:
+    type: string
+    default: '10.200.0.3'
+  gtw_mgmt_ip_address:
+    type: string
+    default: '10.200.0.1'
+  satori_mgmt_ip_address:
+    type: string
+    default: '10.200.0.4'
+  ssh_public_key:
+    type: string
+  satori_flavor:
+    type: string
+  sdlc_flavor:
+    type: string
+  vnc_flavor:
+    type: string
+  gtw_flavor:
+    type: string
+  key_pair:
+    type: string
+    default: k0s-ksiuser
+  build_url:
+    type: string
+    default: ''
+
+resources:
+  lcm_network:
+    type: MCP2::NetworkLCM
+    properties:
+      public_net_id: { get_param: public_net_id }
+  wan_network:
+    type: MCP2::NetworkWAN
+  mgmt_network:
+    type: MCP2::NetworkMGMT
+  dummy_network:
+    type: MCP2::NetworkDUMMY
+  gtw:
+    depends_on:
+     - wan_network
+     - mgmt_network
+     - dummy_network
+    type: MCP2::SrvInstancesGTW
+    properties:
+      image: { get_param: gtw_image }
+      flavor: { get_param: gtw_flavor }
+      lcm_network: { get_attr: [lcm_network, public_network] }
+      lcm_subnet_id: { get_attr: [lcm_network, lcm_subnet_id]}
+      wan_network: { get_attr: [wan_network, wan_network] }
+      wan_subnet_id: { get_attr: [wan_network, wan_subnet_id]}
+      mgmt_network: { get_attr: [mgmt_network, public_network] }
+      mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
+      public_net_id: { get_param: public_net_id }
+      key_name: { get_param: key_pair }
+      wan_ip_address: { get_param: gtw_wan_ip_address }
+      mgmt_ip_address: { get_param: gtw_mgmt_ip_address }
+      key_name: { get_param: key_pair }
+  vncs:
+    depends_on:
+     - wan_network
+     - mgmt_network
+     - dummy_network
+    type: MCP2::SrvInstancesVNC
+    properties:
+      image: { get_param: vnc_image }
+      flavor: { get_param: vnc_flavor }
+      wan_network: { get_attr: [wan_network, wan_network] }
+      wan_subnet_id: { get_attr: [wan_network, wan_subnet_id]}
+      mgmt_network: { get_attr: [mgmt_network, public_network] }
+      mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
+      dummy_network: { get_attr: [dummy_network, public_network] }
+      dummy_subnet_id: { get_attr: [dummy_network, dummy_subnet_id]}
+      key_name: { get_param: key_pair }
+      wan_ip_address: { get_param: vnc_wan_ip_address }
+      mgmt_ip_address: { get_param: vnc_mgmt_ip_address }
+  sdlcs:
+    depends_on:
+     - wan_network
+     - mgmt_network
+     - dummy_network
+    type: MCP2::SrvInstancesSDLC
+    properties:
+      image: { get_param: sdlc_image }
+      flavor: { get_param: sdlc_flavor }
+      mgmt_network: { get_attr: [mgmt_network, public_network] }
+      mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
+      dummy_network: { get_attr: [dummy_network, public_network] }
+      dummy_subnet_id: { get_attr: [dummy_network, dummy_subnet_id]}
+      key_name: { get_param: key_pair }
+      mgmt_ip_address: { get_param: sdlc_mgmt_ip_address }
+  satories:
+    depends_on:
+     - wan_network
+     - mgmt_network
+     - dummy_network
+    type: MCP2::SrvInstancesSATORI
+    properties:
+      image: { get_param: satori_image }
+      flavor: { get_param: satori_flavor }
+      key_name: { get_param: key_pair }
+      mgmt_network: { get_attr: [mgmt_network, public_network] }
+      mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
+      mgmt_ip_address: { get_param: satori_mgmt_ip_address }
+outputs:
+   
+  gtw_floating_ip:
+    description: Private IP addresses of the deployed satori instances
+    value: { get_attr: [gtw, server_public_ip] }
+#  satories_floating_ip:
+#    description: Private IP addresses of the deployed satori instances
+#    value: { get_attr: [satories, server_public_ip] }
+#  sdlcs_floating_ip:
+#    description: Private IP addresses of the deployed sdlcs instances
+#    value: { get_attr: [sdlcs, server_public_ip] }
+  vncs_floating_ip:
+    description: Private IP addresses of the deployed vnc instances
+    value: { get_attr: [vncs, server_public_ip] }
+  build_url:
+    description: "Info build url,if any"
+    value: { get_param: build_url }

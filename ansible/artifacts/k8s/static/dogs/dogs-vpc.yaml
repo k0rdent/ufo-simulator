@@ -2,6 +2,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: Vpc
 metadata:
   name: dogs
+  namespace: kcm-system
   annotations:
     ufo.mirantis.com/netris-adminTenant: "Admin"
 spec: {}

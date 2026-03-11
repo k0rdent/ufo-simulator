@@ -9,6 +9,18 @@ parameters:
   flavor:
     type: string
     description: Flavor to use for servers
+  wan_network:
+    type: string
+  wan_subnet_id:
+    type: string
+  wan_ip_address:
+    type: string
+  mgmt_network:
+    type: string
+  mgmt_subnet_id:
+    type: string
+  mgmt_ip_address:
+    type: string
   lcm_network:
     type: string
   lcm_subnet_id:
@@ -19,11 +31,8 @@ parameters:
     default: 3600
   public_net_id:
     type: string
-  netris_license:
+  key_name:
     type: string
-  ufo_simulator_refspec:
-    type: string
-    default: 'main'
 
 resources:
   software_config:
@@ -34,9 +43,9 @@ resources:
         str_replace:
           template: { get_file: ../scripts/instance_boot.sh }
           params:
+            $node_type: "gtw"
             $wait_condition_notify: { get_attr: [ wait_handle, curl_cli ] }
-            $netris_license: { get_param: netris_license }
-            $ufo_simulator_refspec: { get_param: ufo_simulator_refspec }
+
   software_config_multi:
     type: "OS::Heat::MultipartMime"
     properties:
@@ -49,11 +58,13 @@ resources:
       config_drive: true
       image: { get_param: image }
       flavor: { get_param: flavor }
-      key_name: { get_param: key_name }
       networks:
         - port: { get_resource: lcm_server_port }
-      user_data_format: SOFTWARE_CONFIG
-      user_data: { get_resource:  software_config_multi}
+        - port: { get_resource: wan_server_port }
+        - port: { get_resource: mgmt_server_port }
+      user_data_format: RAW
+      user_data: { get_resource:  software_config_multi }
+      key_name: { get_param: key_name }
   lcm_server_port:
     type: OS::Neutron::Port
     properties:
@@ -61,11 +72,27 @@ resources:
       port_security_enabled: false
       fixed_ips:
         - subnet: { get_param: lcm_subnet_id }
+  wan_server_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: wan_network }
+      port_security_enabled: false
+      fixed_ips:
+        - subnet: { get_param: wan_subnet_id }
+          ip_address: { get_param: wan_ip_address }
   server_floating_ip:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network_id: { get_param: public_net_id }
       port_id: { get_resource: lcm_server_port }
+  mgmt_server_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: mgmt_network }
+      port_security_enabled: false
+      fixed_ips:
+        - subnet: { get_param: mgmt_subnet_id }
+          ip_address: { get_param: mgmt_ip_address }
   wait_handle:
     type: OS::Heat::WaitConditionHandle
   wait_condition:

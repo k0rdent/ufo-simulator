@@ -1,0 +1,30 @@
+heat_template_version: queens
+
+parameters:
+  dns_nameservers:
+    type: json
+    default: ['172.18.224.6', '172.18.176.6']
+resources:
+
+  network:
+    type: OS::Neutron::Net
+    properties:
+      port_security_enabled: false
+
+  subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: { get_resource: network }
+      enable_dhcp: false
+      cidr: '10.10.10.0/24'
+      dns_nameservers: { get_param: dns_nameservers }
+      gateway_ip: null
+      allocation_pools:
+        - start: 10.10.10.240
+          end: 10.10.10.250
+
+outputs:
+  wan_network:
+    value: { get_resource: network }
+  wan_subnet_id:
+    value: { get_resource: subnet }

@@ -5,17 +5,33 @@ on:
     types:
       - opened
       - reopened
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
-  notify-slack:
+  notify-slack-pr:
+    name: Notify Slack (PR)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Notify Slack on workflow success
+      - name: Notify Slack
         uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: webhook-trigger
           payload: |
-            pull_request_url: "${{ github.event.pull_request.html_url }}"
-            pull_request_title: "${{ github.event.pull_request.title }}"
-            github_repo_name: "${{ github.event.repository.name }}"
+            msg: ":bell: [${{ github.event.repository.name }}] I'm a new pull request: ${{ github.event.pull_request.title }}: ${{ github.event.pull_request.html_url }}"
+
+  notify-slack-tag:
+    name: Notify Slack (tag)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
+          payload: |
+            msg: ":bananadance_smile: [${{ github.event.repository.name }}] New release published ${{ github.ref_name }}"

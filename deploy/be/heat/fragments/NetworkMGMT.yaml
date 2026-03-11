@@ -1,0 +1,24 @@
+heat_template_version: queens
+
+resources:
+
+  network:
+    type: OS::Neutron::Net
+    properties:
+      port_security_enabled: false
+  subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: { get_resource: network }
+      enable_dhcp: false
+      cidr: '10.200.0.0/24'
+      gateway_ip: null
+      allocation_pools:
+        - start: 10.200.0.240
+          end: 10.200.0.250
+
+outputs:
+  public_network:
+    value: { get_resource: network }
+  mgmt_subnet_id:
+    value: { get_resource: subnet }
