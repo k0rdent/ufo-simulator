@@ -4,6 +4,8 @@ metadata:
   name: cats
   namespace: kcm-system
 spec:
+  vpc: cats
+  clusterName: cats-cluster
   allocations:
     subnetAllocations:
       - name: cats-mgmt-subnet
@@ -11,18 +13,15 @@ spec:
         subnetpool: default
         subnet: cats-mgmt-subnet
         network: cats-mgmt-net
-        vpc: cats
         gateway: true
       - name: cats-data-subnet
         prefixLength: 24
         subnetpool: default
         subnet: cats-data-subnet
         network: cats-data-net
-        vpc: cats
     networks:
       - name: cats-mgmt-net
         type: evpn
-        vpc: cats
         evpn:
           type: l2
         vlan:
@@ -31,7 +30,6 @@ spec:
         - "4.2.2.1"
       - name: cats-data-net
         type: evpn
-        vpc: cats
         evpn:
           type: l2
         vlan:
