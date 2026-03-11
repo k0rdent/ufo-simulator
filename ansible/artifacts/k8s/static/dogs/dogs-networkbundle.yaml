@@ -4,6 +4,8 @@ metadata:
   name: dogs
   namespace: kcm-system
 spec:
+  vpc: dogs
+  clusterName: dogs-cluster
   allocations:
     subnetAllocations:
       - name: dogs-mgmt-subnet
@@ -11,18 +13,15 @@ spec:
         subnetpool: default
         subnet: dogs-mgmt-subnet
         network: dogs-mgmt-net
-        vpc: dogs
         gateway: true
       - name: dogs-data-subnet
         prefixLength: 24
         subnetpool: default
         subnet: dogs-data-subnet
         network: dogs-data-net
-        vpc: dogs
     networks:
       - name: dogs-mgmt-net
         type: evpn
-        vpc: dogs
         evpn:
           type: l2
         vlan:
@@ -31,7 +30,6 @@ spec:
         - "4.2.2.1"
       - name: dogs-data-net
         type: evpn
-        vpc: dogs
         evpn:
           type: l2
         vlan:
