@@ -1,5 +1,9 @@
 ---
 # Create a single switch VM using virt-install
+- name: Create libvirt artifacts directory
+  ansible.builtin.file:
+    path:   "{{ artifacts_dir }}/libvirt"
+    state: directory
 
 - name: "{{ switch_name }} - Check if VM exists"
   command: virsh dominfo {{ switch_name }}
@@ -35,7 +39,20 @@
   debug:
     msg: "Links for {{ switch_name }}: {{ switch_links }}"
 
+
+- name: "{{ switch_name }} - Create VM"
+  when: sdn_provider == "verity"
+  block:
+  - name: "{{ switch_name }} - Render VM xml"
+    ansible.builtin.template:
+      src: "libvirt/switch.xml.j2"
+      dest: "{{ artifacts_dir }}/libvirt/{{ switch_name }}.xml"
+  - name: "{{ switch_name }} - Create VM with virt-install"
+    shell: "virsh define {{ artifacts_dir }}/libvirt/{{ switch_name }}.xml"
+    when: vm_exists.rc != 0
+
 - name: "{{ switch_name }} - Build virt-install command"
+  when: sdn_provider == "netris"
   set_fact:
     virt_install_cmd: >-
       virt-install
@@ -64,14 +81,13 @@
 
 - name: "{{ switch_name }} - Create VM with virt-install"
   shell: "{{ virt_install_cmd }}"
-  when: vm_exists.rc != 0
+  when: sdn_provider == "netris" and vm_exists.rc != 0
 
 - name: "{{ switch_name }} - Start VM if not running"
   command: virsh start {{ switch_name }}
   register: start_result
   failed_when: start_result.rc != 0 and 'already active' not in start_result.stderr
   changed_when: start_result.rc == 0
-  when: vm_exists.rc == 0
 
 - name: "{{ switch_name }} - Set autostart"
   command: virsh autostart {{ switch_name }}

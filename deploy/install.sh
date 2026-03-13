@@ -13,6 +13,14 @@ export PIP_BREAK_SYSTEM_PACKAGES=1
 export KUBECONFIG=/root/.kube/config
 export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
 export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
+export FABRIC_BACKEND=${FABRIC_BACKEND:-"netris"}
+
+BASE_INVENTORY=${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
+ANSIBLE_INTENTORY_ARG="-i ${BASE_INVENTORY}"
+
+if [[ ${FABRIC_BACKEND} == "verity" ]]; then
+ANSIBLE_INTENTORY_ARG="${ANSIBLE_INTENTORY_ARG} -i ${UFO_SIMULATOR_DIR}/inventory/verity.yml"
+fi
 
 apt update && apt install -y python3-pip
 
@@ -41,32 +49,32 @@ sed -i "s/<NETRIS_LICENSE>/${NETRIS_LICENSE}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/inv
 
 
 # TODO: fix ugly hack
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/k0s.yml || /bin/true
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0s.yml || /bin/true
 sleep 30
 rm -rf /root/.kube/config
 
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/k0s.yml || /bin/true
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0s.yml || /bin/true
 # Give some time for kubernetes to start
 sleep 120
 
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/libvirt.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/libvirt.yml
 # Create vms to initialize PXE interface used later in kcm/ironic
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/create-vms.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/create-switches.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/create-vms.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/create-switches.yml
 
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/ipa.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/kcm.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/lvp.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/metallb.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ipa.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/kcm.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/lvp.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/metallb.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml
 
 # Wait everything is ready before moving forwad
 kubectl wait --for=condition=Ready=True management/kcm --timeout=1800s
 kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
 
-ansible-playbook -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml
 
 # Register resources
 kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/site-default.yaml

@@ -42,7 +42,7 @@
 
 - name: Create MGMT bridge configuration with Netplan
   ansible.builtin.copy:
-    dest: /etc/netplan/10-br-mgmt.yaml
+    dest: /etc/netplan/60-br-mgmt.yaml
     owner: root
     group: root
     mode: "0600"  # Netplan files are often 0600 for security
@@ -61,6 +61,11 @@
               forward-delay: 0
               hello-time: 2
               max-age: 20
+            {% if br_mgmt_phys_interface -%}
+            interfaces:
+              - {{ br_mgmt_phys_interface }}
+            {% endif %}
+
 
 - name: Create EXT bridge configuration with Netplan
   ansible.builtin.copy:

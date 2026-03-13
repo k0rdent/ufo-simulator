@@ -33,25 +33,33 @@
         state: started
         enabled: yes
 
+    - name: Set base image for switches according to SDN provider
+      set_fact:
+        switch_base_image: >-
+          {{ cumulus_image if sdn_provider == 'netris' else sonic_image if sdn_provider == 'verity' }}
+        switch_base_image_url: >-
+          {{ cumulus_image_url if sdn_provider == 'netris' else sonic_image_url if sdn_provider == 'verity' }}
+
     - name: Check if Cumulus image exists
       stat:
-        path: "{{ cumulus_image }}"
-      register: cumulus_img
+        path: "{{ switch_base_image }}"
+      register: switch_img
 
     - name: Download Cumulus image if not present
       get_url:
-        url: "{{ cumulus_image_url }}"
-        dest: "{{ cumulus_image }}"
+        url: "{{ switch_base_image_url }}"
+        dest: "{{ switch_base_image }}"
         mode: '0644'
-      when: not cumulus_img.stat.exists
+      when: not switch_img.stat.exists
 
     # ===========================================
     # Create switch VM disks (copy-on-write)
     # ===========================================
+
     - name: Create switch disk images (CoW backed by base)
       command: >
         qemu-img create -f qcow2 -F qcow2
-        -b {{ cumulus_image }}
+        -b {{ switch_base_image }}
         {{ vm_disk_path }}/{{ item.name }}.qcow2
       args:
         creates: "{{ vm_disk_path }}/{{ item.name }}.qcow2"

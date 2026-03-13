@@ -1,0 +1,100 @@
+<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+  <name>{{ switch_name }}</name>
+  <memory unit='KiB'>{{ switch_memory_mb | int * 1024 }}</memory>
+  <vcpu placement='static'>{{ switch_vcpus }}</vcpu>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <os>
+    <type arch='x86_64' machine='pc-q35-6.2'>hvm</type>
+    <boot dev='hd'/>
+    <smbios mode='sysinfo'/>
+  </os>
+  <sysinfo type='smbios'>
+    <chassis>
+      <entry name='serial'>{{ switch_name }}</entry>
+    </chassis>
+  </sysinfo>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-passthrough' check='none' migratable='on'/>
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='{{ vm_disk_path }}/{{ switch_name }}.qcow2' index='1'/>
+      <target dev='sda' bus='sata'/>
+      <alias name='sata0-0-0'/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+    <controller type='usb' index='0' model='none'>
+      <alias name='usb'/>
+    </controller>
+    <controller type='sata' index='0'>
+      <alias name='ide'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
+    </controller>
+    {%- if sdn_provider == "verity" %}
+    <interface type='bridge'>
+      <mac address='00:01:00:00:{{ "%02x" | format(switch_index | int) }}:00'/>
+      <source bridge='{{ br_mgmt_name }}'/>
+      <target dev='vnet78'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+    </interface>
+    {%- endif %}
+    {% for link in switch_links %}
+    <interface type='udp'>
+        <source address='127.0.0.1' port='{{ link.udp_remote }}'>
+	<local address='127.0.0.1' port='{{ link.udp_local }}'/>
+      </source>
+      <model type='virtio'/>
+    </interface>
+    {%- endfor %}
+    {% if "leaf" in switch_name %}
+    <interface type='bridge'>
+      <source bridge='{{ br_pxe_name }}'/>
+      <target dev='vnet78'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+    </interface>
+    {%- endif %}
+    <serial type='pty'>
+      <source path='/dev/pts/2'/>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+      <alias name='serial0'/>
+    </serial>
+    <console type='pty' tty='/dev/pts/2'>
+      <source path='/dev/pts/2'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <input type='mouse' bus='ps2'>
+      <alias name='input0'/>
+    </input>
+    <input type='keyboard' bus='ps2'>
+      <alias name='input1'/>
+    </input>
+    <audio id='1' type='none'/>
+    <memballoon model='virtio'>
+      <alias name='balloon0'/>
+    </memballoon>
+  </devices>
+</domain>
+

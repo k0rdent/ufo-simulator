@@ -77,7 +77,7 @@ spec:
 #            DEPLOY_RAMDISK_BY_ARCH: x86_64:file:///shared/html/images/ironic-python-agent.x86_64.initramfs,aarch64:file:///shared/html/images/ironic-python-agent.arm64.initramfs
 #            DEPLOY_RAMDISK_URL: "file:///shared/html/images/ironic-python-agent.x86_64.initramfs"
             HTTPD_SERVE_NODE_IMAGES: "true"
-            IRONIC_EXTERNAL_HTTP_URL: http://{{ br_mgmt_ip }}
+            IRONIC_EXTERNAL_HTTP_URL: http://{{ br_pxe_ip }}
             IRONIC_KERNEL_PARAMS: console=ttyS0
             IRONIC_REVERSE_PROXY_SETUP: "true"
             RESTART_CONTAINER_CERTIFICATE_UPDATED: "true"
@@ -88,13 +88,13 @@ spec:
           dhcp:
             netmask: 255.255.255.0
             options:
-            - option:router,{{ br_mgmt_ip }}
-            - option:dns-server,{{ br_mgmt_ip }}
-            - option:ntp-server,{{ br_mgmt_ip }}
+            - option:router,{{ br_pxe_ip }}
+            - option:dns-server,{{ br_pxe_ip }}
+            - option:ntp-server,{{ br_pxe_ip }}
             rangeBegin: 172.16.81.100
             rangeEnd: 172.16.81.200
-          interface: br-mgmt
-          ipAddress: {{ br_mgmt_ip }}
+          interface: br-pxe
+          ipAddress: {{ br_pxe_ip }}
     name: cluster-api-provider-metal3
     template: cluster-api-provider-metal3-0.5.0-rc2
   release: kcm-1-5-0

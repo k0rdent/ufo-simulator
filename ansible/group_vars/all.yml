@@ -1,13 +1,17 @@
 # Virtual Switch Lab Configuration
 # Adjust these values based on your available RAM
 #
-k8s_artifacts_dir: "{{ playbook_dir }}/artifacts/k8s"
+artifacts_dir: "{{ playbook_dir }}/artifacts"
+k8s_artifacts_dir: "{{ artifacts_dir }}/k8s"
 
 # Base images
 cumulus_image: "/var/lib/libvirt/images/cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
 cumulus_image_url: "https://networkingdownloads.nvidia.com/custhelp/Non_Monetized_Products/Software/CumulusSoftware/CumulusVX/cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
 ubuntu_image: "/var/lib/libvirt/images/ubuntu-24.04-server-cloudimg-amd64.img"
 vm_disk_path: "/var/lib/libvirt/images"
+
+sonic_image_url: "https://artifactory.mcp.mirantis.net:443/artifactory/binary-dev-k0rdent-ai-local/ufo/verity/sonic-vs.img"
+sonic_image: "/var/lib/libvirt/images/sonic-vs.img"
 
 # VM Resources
 switch_vcpus: 4
@@ -26,10 +30,14 @@ udp_base_port: 10000
 topology:
   spines:
     - name: spine-0
+      mgmt_ip: 10.200.0.110
     - name: spine-1
+      mgmt_ip: 10.200.0.111
   leafs:
     - name: leaf-0
+      mgmt_ip: 10.200.0.100
     - name: leaf-1
+      mgmt_ip: 100.200.0.101
   nodes:
     - name: vm-0
     - name: vm-1
@@ -129,6 +137,8 @@ netris_operator_chart_version: 0.0.1-f431da9
 netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
 netris_operator_image_tag: 0.0.1-f431da9.1770637678
 
+sdn_provider: "netris" # or "verity"
+
 loopback_base: "192.169"
 management_base: "192.168"
 loopback_base_switch: "192.169.0"
@@ -160,8 +170,10 @@ br_pxe_ip: 172.16.81.254
 br_pxe_netmask: 24
 
 br_mgmt_name: br-mgmt
-br_mgmt_ip: 172.16.81.254
+br_mgmt_ip: "{{ management_base_switch }}.254"
+
 br_mgmt_netmask: 24
+br_mgmt_phys_interface: ""
 
 br_ext_name: br-ext
 br_ext_netmask: 24

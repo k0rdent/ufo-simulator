@@ -1,0 +1,5 @@
+all:
+  hosts:
+    localhost:
+      sdn_provider: verity
+      br_mgmt_phys_interface: ens5
