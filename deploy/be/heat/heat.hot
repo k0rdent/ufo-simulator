@@ -12,6 +12,8 @@ parameters:
   gtw_image:
    type: string
    description: Image for gtw node
+  cmp_image:
+   type: string
   public_net_id:
     type: string
     default: ''
@@ -48,6 +50,8 @@ parameters:
   vnc_flavor:
     type: string
   gtw_flavor:
+    type: string
+  cmp_flavor:
     type: string
   key_pair:
     type: string
@@ -133,11 +137,32 @@ resources:
       mgmt_network: { get_attr: [mgmt_network, public_network] }
       mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
       mgmt_ip_address: { get_param: satori_mgmt_ip_address }
+  cmp:
+    depends_on:
+     - wan_network
+     - mgmt_network
+     - dummy_network
+    type: MCP2::SrvInstancesCMP
+    properties:
+      image: { get_param: cmp_image }
+      flavor: { get_param: cmp_flavor }
+      lcm_network: { get_attr: [lcm_network, public_network] }
+      lcm_subnet_id: { get_attr: [lcm_network, lcm_subnet_id]}
+      wan_network: { get_attr: [wan_network, wan_network] }
+      wan_subnet_id: { get_attr: [wan_network, wan_subnet_id]}
+      mgmt_network: { get_attr: [mgmt_network, public_network] }
+      mgmt_subnet_id: { get_attr: [mgmt_network, mgmt_subnet_id]}
+      public_net_id: { get_param: public_net_id }
+      key_name: { get_param: key_pair }
+      key_name: { get_param: key_pair }
 outputs:
    
   gtw_floating_ip:
     description: Private IP addresses of the deployed satori instances
     value: { get_attr: [gtw, server_public_ip] }
+  cmp_floating_ip:
+    description: Private IP addresses of the deployed satori instances
+    value: { get_attr: [cmp, server_public_ip] }
 #  satories_floating_ip:
 #    description: Private IP addresses of the deployed satori instances
 #    value: { get_attr: [satories, server_public_ip] }

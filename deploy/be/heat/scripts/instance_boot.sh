@@ -89,4 +89,9 @@ if [[ ${NODE_TYPE} == "gtw" ]]; then
 
 fi
 
+if [[ ${NODE_TYPE} == "cmp" ]]; then
+    echo "Running node type $NODE_TYPE"
+    ensure_ip_forward
+
+fi
 wait_condition_send "SUCCESS" "Instance successfuly started."
