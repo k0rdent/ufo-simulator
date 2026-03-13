@@ -19,7 +19,7 @@ BASE_INVENTORY=${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 ANSIBLE_INTENTORY_ARG="-i ${BASE_INVENTORY}"
 
 if [[ ${FABRIC_BACKEND} == "verity" ]]; then
-ANSIBLE_INTENTORY_ARG="${ANSIBLE_INTENTORY_ARG} -i ${UFO_SIMULATOR_DIR}/inventory/verity.yml"
+ANSIBLE_INTENTORY_ARG="${ANSIBLE_INTENTORY_ARG} -i ${UFO_SIMULATOR_ANSIBLE_DIR}/inventory/verity.yml"
 fi
 
 apt update && apt install -y python3-pip
@@ -66,29 +66,35 @@ ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ipa.yml
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/kcm.yml
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/lvp.yml
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/metallb.yml
-ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml
-ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml
-ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml
+if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml
+fi
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml
 
 # Wait everything is ready before moving forwad
 kubectl wait --for=condition=Ready=True management/kcm --timeout=1800s
 kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
 
-ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml
+if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml
+fi
 
 # Register resources
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/site-default.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-0.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-1.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-0.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-1.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
-kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml
+if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/site-default.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-0.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-1.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-0.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-1.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml
+fi
 
 # Wait netris is fully initialized
 sleep 120
@@ -97,7 +103,9 @@ for i in range {0..2}; do
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-${i}_bmh.yaml
 done
 
-# Wait for bmhs are
-for i in range {0..2}; do
-    kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
-done
+if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+    # Wait for bmhs are
+    for i in range {0..2}; do
+        kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
+    done
+fi
