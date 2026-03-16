@@ -50,6 +50,10 @@
     </controller>
     {%- if sdn_provider == "verity" %}
     <interface type='bridge'>
+      <driver>
+        <host csum='off'/>
+        <guest csum='off'/>
+      </driver>
       <mac address='00:01:00:00:{{ "%02x" | format(switch_index | int) }}:00'/>
       <source bridge='{{ br_mgmt_name }}'/>
       <target dev='vnet78'/>
@@ -67,6 +71,10 @@
     {%- endfor %}
     {% if "leaf" in switch_name %}
     <interface type='bridge'>
+      <driver>
+        <host csum='off'/>
+        <guest csum='off'/>
+      </driver>
       <source bridge='{{ br_pxe_name }}'/>
       <target dev='vnet78'/>
       <model type='virtio'/>
