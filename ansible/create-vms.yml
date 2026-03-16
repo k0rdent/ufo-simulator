@@ -63,7 +63,7 @@
         # Create SoftGates
         # ================
         - name: Create SoftGates with virt-install
-          when: sdn_provider == netris
+          when: sdn_provider == "netris"
           include_tasks: tasks/create-sg.yml
           vars:
             vm_name: "{{ item.0.name }}"
