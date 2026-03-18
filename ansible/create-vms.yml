@@ -71,6 +71,8 @@
             vm_base_offset: "{{ vm_index | int * sg_port_count }}"
             ssh_port: "{{ mgmt_ssh_base_port + vm_index | int }}"
             mgmt_ip: "{{ management_base_sg }}.{{  vm_index | int + 1 }}"
+            ext_ip: "{{ ext_base_sg }}.{{ vm_index | int + 1 }}"
+            ext_gateway: "{{ ext_base_gateway_sg }}"
           loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
           loop_control:
             label: "{{ item.0.name }}"
@@ -78,6 +80,7 @@
         - name: Render Netris SG templates
           vars:
             sg_name: "{{ item.0.name }}"
+            sg_role: "{{ item.0.role | default('general') }}"
             links: "{{ topology.links }}"
             sg_index: "{{ item.1 }}"
             sg_digit: "{{ sg_index | int + 1 }}"

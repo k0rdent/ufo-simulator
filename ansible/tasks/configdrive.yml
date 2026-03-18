@@ -40,15 +40,16 @@
           dhcp4: no
           addresses:
             - {{ mgmt_ip }}/{{ br_mgmt_netmask }}
+        enp2s0:
+          dhcp4: no
+          addresses:
+            - {{ ext_ip }}/{{ ext_sg_netmask }}
           routes:
             - to: 0.0.0.0/0
-              via: {{ management_gateway_sg }}
+              via: {{ ext_gateway }}
           nameservers:
             addresses:
               - {{ management_dns_server }}
-        enp2s0:
-          dhcp4: no
-          addresses: []
         enp0s4:
           dhcp4: no
           addresses: []

@@ -11,7 +11,7 @@
     creates: /tmp/get-netris.sh
   when: not lock_file.stat.exists
 
-- name: Enroll switch to netris
+- name: Enroll Softgate to netris
   when: not lock_file.stat.exists
   args:
     executable: /bin/sh

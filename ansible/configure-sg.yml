@@ -1,8 +1,8 @@
 ---
-# Configure Cumulus switches after boot
+# Configure Softgates after boot
 # Run this after the VMs have fully booted (give them ~2-3 minutes)
 
-- name: Configure Cumulus Switches
+- name: Configure Softgates
   hosts: localhost
 
   vars:
