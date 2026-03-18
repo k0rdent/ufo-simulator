@@ -46,7 +46,9 @@ topology:
     - name: vm-2
   softgates:
     - name: sg-0
+      role: general
     - name: sg-1
+      role: snat
 
   # Links format: [local_switch, local_port, remote_switch, remote_port]
   # Each link will get a unique UDP port pair
