@@ -78,6 +78,7 @@ kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
 
 if [[ ${FABRIC_BACKEND} == "netris" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml
 fi
 
 # Register resources
@@ -91,6 +92,8 @@ if [[ ${FABRIC_BACKEND} == "netris" ]]; then
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-0.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-1.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml

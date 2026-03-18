@@ -24,6 +24,8 @@
         mgmt_ip: "{{ management_base_sg }}.{{ item.1 | int + 1 }}"
         ansible_host: "{{ management_base_sg }}.{{ item.1 | int + 1 }}"
         sg_name: "{{ item.0.name }}"
+        netris_auth_token: "{{ netris_auth_token }}"
+        netris_controller_ip: "{{ netris_controller_ip }}"
       loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
       loop_control:
         loop_var: item

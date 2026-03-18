@@ -1,20 +1,4 @@
 ---
-- name: Ensure temporary configdrive directory exists
-  ansible.builtin.file:
-    path: "/etc/network/interfaces.d/"
-    state: directory
-    mode: "0755"
-
-- name: Apply network configuration
-  ansible.builtin.copy:
-    dest: "/etc/network/interfaces.d/enp1s0"
-    content: |
-      auto enp1s0
-      iface enp1s0
-          address {{ mgmt_ip }}/{{ br_mgmt_netmask }}
-          gateway {{ management_gateway_sg }}
-          dns-namesrvers {{ management_dns_server }}
-
 - name: Check if sg enrolled
   ansible.builtin.stat:
     path: /opt/netris/installer.lock
@@ -42,7 +26,7 @@
 
 - name: Failed to register
   fail:
-    msg: "Failed to enroll switch {{ switch_name }} with stdout: {{ enroll_cmd.stdout }} \n error: {{ enroll_cmd.stderr }}"
+    msg: "Failed to enroll softgate {{ sg_name }} with stdout: {{ enroll_cmd.stdout }} \n error: {{ enroll_cmd.stderr }}"
   when: not lock_file.stat.exists and enroll_cmd.rc != 0
 
 

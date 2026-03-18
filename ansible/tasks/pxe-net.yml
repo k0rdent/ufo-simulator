@@ -98,3 +98,27 @@
     - "{{ br_pxe_name }}"
     - "{{ br_mgmt_name }}"
     - "{{ br_ext_name }}"
+
+- name: Ensure IP forwarding is enabled
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Detect outbound network interface
+  ansible.builtin.shell: ip route get 4.2.2.1 | awk '{print $5}' | tr -d '\n'
+  register: outbound_iface
+  changed_when: false
+
+- name: Enable NAT masquerade for bridge subnets
+  ansible.builtin.iptables:
+    table: nat
+    chain: POSTROUTING
+    source: "{{ item }}"
+    out_interface: "{{ outbound_iface.stdout }}"
+    jump: MASQUERADE
+  loop:
+    - "{{ management_base_sg }}.0/{{ br_mgmt_netmask }}"
+    - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"

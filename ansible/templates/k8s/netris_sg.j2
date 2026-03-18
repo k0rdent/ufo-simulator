@@ -10,7 +10,7 @@ spec:
   mainIp: {{ loopback_ip }}
   mgmtIp: {{ mgmt_ip }}
   sgFlavor: "sg-hs"
-  sgRole: "snat"
+  sgRole: "general"
   tags:
 {% for link in links %}
 {% if link.remote == sg_name %}
