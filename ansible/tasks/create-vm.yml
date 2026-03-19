@@ -72,6 +72,7 @@
     server_name: "{{ vm_name }}"
     pxe_mac: "{{vm_base_mac }}:{{ '%02x' | format(vm_base_offset | int // 256) }}:{{ '%02x' | format(vm_base_offset | int % 256) }}"
     server_uuid: '{{ vm_uuid.stdout | regex_replace("\s","") }}'
+    links: "{{ topology.links }}"
   ansible.builtin.template:
     src: "k8s/metal3_bmh.j2"
     dest: "{{ k8s_artifacts_dir }}/{{ server_name }}_bmh.yaml"

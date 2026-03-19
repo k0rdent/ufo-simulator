@@ -32,3 +32,22 @@ metadata:
 data:
   password: {{ redfish_password | b64encode }}
   username: {{ redfish_username | b64encode }}
+{% for link in links %}
+{% if link.remote == server_name %}
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Link
+metadata:
+  name: {{ server_name }}-{{ link.remote_port }}
+  namespace: kcm-system
+spec:
+  switch:
+    portName: {{ link.local_port }}
+    name: {{ link.local }}
+  peer:
+    portName: {{ link.remote_port }}
+    name: {{ link.remote }}
+  roles:
+    - {{ link.role }}
+{% endif %}
+{% endfor %}

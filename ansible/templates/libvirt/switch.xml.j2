@@ -76,6 +76,10 @@
         <guest csum='off'/>
       </driver>
       <source bridge='{{ br_pxe_name }}'/>
+      <driver>
+        <host csum='off'/>
+        <guest csum='off'/>
+      </driver>
       <target dev='vnet78'/>
       <model type='virtio'/>
       <alias name='net0'/>
