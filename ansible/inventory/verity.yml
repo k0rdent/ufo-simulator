@@ -3,3 +3,4 @@ all:
     localhost:
       sdn_provider: verity
       br_mgmt_phys_interface: ens5
+      switch_port_name_prefix: "eth1/"
