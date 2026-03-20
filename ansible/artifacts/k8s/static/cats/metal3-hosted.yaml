@@ -15,11 +15,11 @@ spec:
       cidrBlocks:
       - 10.95.0.0/16
   controlPlaneEndpoint:
-    host: 10.11.0.250
+    host: 10.172.1.102
     port: 6443
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta2
-    kind: K0sControlPlane
+    kind: K0smotronControlPlane
     name: release-name-cp-templ
     namespace: kcm-system
   infrastructureRef:
@@ -28,61 +28,39 @@ spec:
     name: release-name
     namespace: kcm-system
 ---
-# Source: capm3-standalone-cp/templates/k0scontrolplane.yaml
+# Source: charts/capm3-hosted-cp/templates/k0smotroncontrolplane.yaml
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
-kind: K0sControlPlane
+kind: K0smotronControlPlane
 metadata:
   name: release-name-cp-templ
   namespace: kcm-system
 spec:
-  version: v1.34.3+k0s.0
+  etcd:
+    autoDeletePVCs: true
+  externalAddress: 10.172.1.102
+  k0sConfig:
+    apiVersion: k0s.k0sproject.io/v1beta1
+    kind: ClusterConfig
+    metadata:
+      name: k0s
+    spec:
+      api:
+        extraArgs: null
+      network:
+        podCIDR: 10.243.0.0/16
+        serviceCIDR: 10.95.0.0/16
+        provider: calico
+        clusterDomain: cluster.local
+      storage:
+        type: etcd
+      telemetry:
+        enabled: false
   replicas: 1
-  updateStrategy: InPlace
-  k0sConfigSpec:
-    args:
-      - --enable-worker
-      - --kubelet-extra-args="--node-ip={{ ds.meta_data.provisioningIP }}"
-      - --labels="metal3.io/uuid={{ ds.meta_data.metal3_uuid }}"
-      - --force=false
-    preStartCommands:
-      - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
-      - sudo mkdir -vp /home/rescue/.ssh/
-      - sudo chown rescue /home/rescue/.ssh/authorized_keys
-    files:
-    - content: |
-        PasswordAuthentication yes
-      path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
-      permissions: "0644"
-    k0s:
-      apiVersion: k0s.k0sproject.io/v1beta1
-      kind: ClusterConfig
-      metadata:
-        name: k0s
-      spec:
-        telemetry:
-          enabled: false
-        network:
-          podCIDR: 10.243.0.0/16
-          serviceCIDR: 10.95.0.0/16
-          provider: calico
-          clusterDomain: cluster.local
-          controlPlaneLoadBalancing:
-            enabled: true
-            type: Keepalived
-            keepalived:
-              vrrpInstances:
-                - virtualIPs: ["10.11.0.250/24"]
-                  authPass: password
-              virtualServers:
-                - ipAddress: "10.11.0.250"
-        storage:
-          type: etcd
-  machineTemplate:
-    infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-      kind: Metal3MachineTemplate
-      name: release-name-cp-mt
-      namespace: kcm-system
+  service:
+    apiPort: 6443
+    konnectivityPort: 8132
+    type: LoadBalancer
+  version: v1.34.3-k0s.0
 ---
 # Source: capm3-standalone-cp/templates/k0sworkerconfigtemplate.yaml
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
@@ -147,7 +125,7 @@ metadata:
   namespace: kcm-system
 spec:
   controlPlaneEndpoint:
-    host: 10.11.0.250
+    host: 10.172.1.102
     port: 6443
   noCloudProvider: true
 ---
@@ -166,26 +144,6 @@ spec:
 #  networkData:
 #    networks: {}
 #    services: {}
----
-# Source: capm3-standalone-cp/templates/metal3machinetemplate-controlplane.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-kind: Metal3MachineTemplate
-metadata:
-  name: release-name-cp-mt
-  namespace: kcm-system
-spec:
-  nodeReuse: false
-  template:
-    spec:
-      automatedCleaningMode: metadata
-      dataTemplate:
-#        name: release-name-dt
-        name: cats
-      image:
-        url: http://172.16.81.254:80/artifacts/ipa/noble-server-cloudimg-amd64.img
-        format: qcow2
-        checksum: 85743244cc8f2f47384480c81dbb677585d20ed693127667dbfb116f1682f793
-        checksumType: sha256
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
