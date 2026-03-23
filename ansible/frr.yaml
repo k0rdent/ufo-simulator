@@ -1,0 +1,51 @@
+---
+# Deploy FRR (Free Range Routing) and apply /etc/frr/frr.conf from templates/frr/frr.conf
+# Inventory: define hosts in group `frr`, or override with -e frr_ansible_hosts=...
+#
+# Optional extra vars: see templates/frr/frr.conf and templates/frr/daemons
+
+- name: Deploy FRR
+  hosts: "localhost"
+  gather_facts: true
+  become: true
+
+  handlers:
+    - name: Restart FRR
+      ansible.builtin.service:
+        name: frr
+        state: restarted
+
+  tasks:
+    - name: Enable FRR
+      when: frr.enabled
+      block:
+        - name: Install FRR package
+          ansible.builtin.package:
+            name: frr
+            state: present
+
+        - name: Deploy FRR daemons
+          ansible.builtin.template:
+            src: frr/daemons
+            dest: /etc/frr/daemons
+            owner: root
+            group: frr
+            mode: "0640"
+            backup: true
+          notify: Restart FRR
+
+        - name: Deploy FRR configuration
+          ansible.builtin.template:
+            src: frr/frr.conf
+            dest: /etc/frr/frr.conf
+            owner: root
+            group: frr
+            mode: "0640"
+            backup: true
+          notify: Restart FRR
+
+        - name: Enable and start FRR
+          ansible.builtin.service:
+            name: frr
+            state: started
+            enabled: true
