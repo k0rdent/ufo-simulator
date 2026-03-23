@@ -178,7 +178,11 @@ br_mgmt_name: br-mgmt
 br_mgmt_ip: "{{ management_base_switch }}.254"
 
 br_mgmt_netmask: 24
+# NIC enslaved to br-mgmt in netplan; also included in cloud-init netplan prune list when set.
 br_mgmt_phys_interface: ""
+# Extra interface names (stanza key or set-name) to strip addresses/nameservers from in
+# /etc/netplan/50-cloud-init.yaml (merged with br_mgmt_phys_interface).
+netplan_cloudinit_prune_ifaces: []
 
 br_ext_name: br-ext
 br_ext_netmask: 24
@@ -205,3 +209,15 @@ netris_web_api_url: "http://{{ netris_web_frontend_ip }}"
 kubeconfig_path: "/root/.kube/config"
 
 docker_image_proxy: https://dockerproxy.artifactory-eu.mcp.mirantis.net
+
+frr:
+  enable: false
+  bgp:
+    listen_interface: 'ens6'
+    enabled: true
+    router_id: 192.168.100.1
+    asn: 64513
+    sdn:
+      asn: 64512
+    peer_ranges:
+    - 192.168.100.0/24
