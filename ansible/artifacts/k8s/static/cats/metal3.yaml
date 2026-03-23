@@ -1,6 +1,6 @@
 ---
 # Source: capm3-standalone-cp/templates/cluster.yaml
-apiVersion: cluster.x-k8s.io/v1beta2
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: cats-cluster
@@ -18,18 +18,18 @@ spec:
     host: 10.11.0.250
     port: 6443
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: K0sControlPlane
     name: cats-cluster-cp-templ
     namespace: cats
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: Metal3Cluster
     name: cats-cluster
     namespace: cats
 ---
 # Source: capm3-standalone-cp/templates/k0scontrolplane.yaml
-apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: K0sControlPlane
 metadata:
   name: cats-cluster-cp-templ
@@ -79,13 +79,13 @@ spec:
           type: etcd
   machineTemplate:
     infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
       kind: Metal3MachineTemplate
       name: cats-cluster-cp-mt
       namespace: cats
 ---
 # Source: capm3-standalone-cp/templates/k0sworkerconfigtemplate.yaml
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: K0sWorkerConfigTemplate
 metadata:
   name: cats-cluster-machine-config
@@ -109,7 +109,7 @@ spec:
         permissions: "0644"
 ---
 # Source: capm3-standalone-cp/templates/machinedeployment.yaml
-apiVersion: cluster.x-k8s.io/v1beta2
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
   name: cats-cluster-md
@@ -129,18 +129,18 @@ spec:
       clusterName: cats-cluster
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: K0sWorkerConfigTemplate
           name: cats-cluster-machine-config
           namespace: cats
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: Metal3MachineTemplate
         name: cats-cluster-worker-mt
         namespace: cats
 ---
 # Source: capm3-standalone-cp/templates/metal3clustertemplate.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3Cluster
 metadata:
   name: cats-cluster
@@ -152,7 +152,7 @@ spec:
   noCloudProvider: true
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-controlplane.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3MachineTemplate
 metadata:
   name: cats-cluster-cp-mt
@@ -173,7 +173,7 @@ spec:
         checksumType: sha256
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3MachineTemplate
 metadata:
   name: cats-cluster-worker-mt
