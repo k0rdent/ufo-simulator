@@ -2,7 +2,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: NetworkBundle
 metadata:
   name: cats
-  namespace: kcm-system
+  namespace: cats
 spec:
   vpc: cats
   clusterName: cats-cluster
@@ -42,28 +42,28 @@ spec:
         match:
           macAddress:
             fromAnnotation:
-              object: baremetalhost
+              object: machine
               annotation: net_interface_mgmt_0_mac
         mtu: 1500
       eth2:
         match:
           macAddress:
             fromAnnotation:
-              object: baremetalhost
+              object: machine
               annotation: net_interface_mgmt_1_mac
         mtu: 1500
       eth3:
         match:
           macAddress:
             fromAnnotation:
-              object: baremetalhost
+              object: machine
               annotation: net_interface_data_0_mac
         mtu: 1500
       eth4:
         match:
           macAddress:
             fromAnnotation:
-              object: baremetalhost
+              object: machine
               annotation: net_interface_data_1_mac
         mtu: 1500
     bonds:
