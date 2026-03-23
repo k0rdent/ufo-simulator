@@ -189,6 +189,13 @@ ufo_chart_version: 0.0.1-8586bfe
 ufo_image_tag: 0.0.1-8586bfe.1769198335
 ufo_fabric_backend: netris
 
+verity_operator_mode: false
+verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
+verity_operator_chart_version: 0.0.1-408dd13
+verity_operator_image_tag: 0.0.1-408dd13.1774008551
+verity_api_username: admin
+verity_api_password: vnc1234
+
 netris_controller_ip: 10.172.1.100
 netris_web_frontend_ip: 10.172.1.101
 netris_web_api_url: "http://{{ netris_web_frontend_ip }}"
