@@ -1,0 +1,9 @@
+apiVersion: metal3.io/v1alpha1
+kind: HostDeployPolicy
+metadata:
+  name: dogs-host-policy
+  namespace: kcm-system
+spec:
+  hostClaimNamespaces:
+    names:
+    - dogs
