@@ -1,0 +1,3 @@
+image:
+  repository: registry.ci.mirantis.com/k0rdent-bm/images/verity-operator
+  tag: {{ verity_operator_image_tag }}

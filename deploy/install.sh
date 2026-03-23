@@ -70,7 +70,12 @@ if [[ ${FABRIC_BACKEND} == "netris" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml
 fi
-    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml
+
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml
+
+if [[ ${FABRIC_BACKEND} == "verity" ]]; then
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/verity.yml
+fi
 
 # Wait everything is ready before moving forwad
 kubectl wait --for=condition=Ready=True management/kcm --timeout=1800s
