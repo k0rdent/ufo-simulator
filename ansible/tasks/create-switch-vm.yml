@@ -78,6 +78,9 @@
       {% if "leaf" in switch_name %}
       --network bridge={{ br_pxe_name }},model=virtio
       {% endif %}
+      {% if switch_name == "leaf-1" %}
+      --network bridge={{ br_ext_name }},model=virtio,mac={{ leaf1_bgp_bridge_mac }}
+      {% endif %}
 
 - name: "{{ switch_name }} - Create VM with virt-install"
   shell: "{{ virt_install_cmd }}"

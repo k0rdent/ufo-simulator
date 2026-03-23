@@ -16,6 +16,10 @@
       command: sudo netplan apply
       async: 45
       poll: 0
+    - name: Restart nftables
+      ansible.builtin.service:
+        name: nftables
+        state: restarted
 
   tasks:
     # ===========================================
@@ -72,46 +76,6 @@
           loop_control:
             label: "{{ item.0.name }}"
     
-        - name: Render Netris SG templates
-          vars:
-            sg_name: "{{ item.0.name }}"
-            sg_role: "{{ item.0.role | default('general') }}"
-            links: "{{ topology.links }}"
-            sg_index: "{{ item.1 }}"
-            sg_digit: "{{ sg_index | int + 1 }}"
-            loopback_ip: "{{ loopback_base_sg }}.{{ sg_digit }}"
-            mgmt_ip: "{{ management_base_sg }}.{{  sg_index | int + 1 }}"
-          ansible.builtin.template:
-            src: "k8s/netris_sg.j2"
-            dest: "{{ k8s_artifacts_dir }}/{{ sg_name }}.yaml"
-          loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
-          loop_control:
-            loop_var: item
-
-    - name: Render Netris Server templates
-      vars:
-        server_name: "{{ item.0.name }}"
-        links: "{{ topology.links }}"
-        server_index: "{{ item.1 }}"
-        server_digit: "{{ server_index | int + 1 }}"
-        loopback_ip: "{{ loopback_base_server }}.{{ server_digit }}"
-        mgmt_ip: "{{ management_base_server }}.{{ server_digit }}"
-      ansible.builtin.template:
-        src: "k8s/netris_server.j2"
-        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
-      loop: "{{ all_servers | zip(range(all_servers | length)) | list }}"
-      loop_control:
-        loop_var: item
-
-    - name: Render Netris mgmt host templates
-      vars:
-        server_name: ctl
-        loopback_ip: "{{ loopback_base_server }}.253"
-        mgmt_ip: "{{ management_base_server }}.253"
-      ansible.builtin.template:
-        src: "k8s/ctl.j2"
-        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
-
     # ===========================================
     # Display connection info
     # ===========================================

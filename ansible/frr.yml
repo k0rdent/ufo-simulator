@@ -1,0 +1,56 @@
+---
+- name: Install and configure host FRR
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+
+  handlers:
+    - name: Restart frr
+      ansible.builtin.service:
+        name: frr
+        state: restarted
+
+  tasks:
+    - name: Install FRR packages
+      ansible.builtin.apt:
+        name:
+          - frr
+          - frr-pythontools
+        state: present
+        update_cache: false
+
+    - name: Ensure FRR daemons are enabled
+      ansible.builtin.lineinfile:
+        path: /etc/frr/daemons
+        regexp: '^{{ item.name }}='
+        line: '{{ item.name }}={{ item.value }}'
+      loop:
+        - { name: zebra, value: "yes" }
+        - { name: bgpd, value: "yes" }
+      notify: Restart frr
+
+    - name: Ensure vtysh integrated config is enabled
+      ansible.builtin.copy:
+        dest: /etc/frr/vtysh.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          service integrated-vtysh-config
+      notify: Restart frr
+
+    - name: Install FRR configuration
+      ansible.builtin.template:
+        src: "frr/frr.conf.j2"
+        dest: /etc/frr/frr.conf
+        owner: root
+        group: root
+        mode: "0640"
+      notify: Restart frr
+
+    - name: Ensure FRR service is enabled
+      ansible.builtin.service:
+        name: frr
+        enabled: true
+        state: started

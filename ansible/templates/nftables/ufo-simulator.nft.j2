@@ -1,0 +1,8 @@
+table ip ufo_nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+{% for cidr in host_masquerade_cidrs %}
+        ip saddr {{ cidr }} oifname "{{ outbound_iface.stdout }}" masquerade
+{% endfor %}
+    }
+}

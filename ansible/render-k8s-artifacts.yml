@@ -1,0 +1,88 @@
+---
+- name: Render generated Kubernetes artifacts
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  vars:
+    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_servers: "{{ topology.nodes }}"
+    all_softgates: "{{ topology.softgates }}"
+
+  tasks:
+    - name: Ensure artifacts directory exists
+      ansible.builtin.file:
+        path: "{{ k8s_artifacts_dir }}"
+        state: directory
+        recurse: true
+
+    - name: Render Netris site definition
+      ansible.builtin.template:
+        src: "k8s/site-default.yaml.j2"
+        dest: "{{ k8s_artifacts_dir }}/site-default.yaml"
+      when: sdn_provider == "netris"
+
+    - name: Render Netris switch templates
+      vars:
+        switch_name: "{{ item.0.name }}"
+        links: "{{ topology.links }}"
+        switch_index: "{{ item.1 }}"
+        switch_digit: "{{ switch_index | int + 1 }}"
+        loopback_ip: "{{ loopback_base_switch }}.{{ switch_digit }}"
+        mgmt_ip: "{{ management_base_switch }}.{{ switch_digit }}"
+      ansible.builtin.template:
+        src: "k8s/netris_switch.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ switch_name }}.yaml"
+      loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
+      loop_control:
+        loop_var: item
+      when: sdn_provider == "netris"
+
+    - name: Render Netris IPAM template
+      ansible.builtin.template:
+        src: "k8s/netris_ipam.j2"
+        dest: "{{ k8s_artifacts_dir }}/netris_ipam.yaml"
+      when: sdn_provider == "netris"
+
+    - name: Render Netris softgate templates
+      vars:
+        sg_name: "{{ item.0.name }}"
+        sg_role: "{{ item.0.role | default('general') }}"
+        links: "{{ topology.links }}"
+        sg_index: "{{ item.1 }}"
+        sg_digit: "{{ sg_index | int + 1 }}"
+        loopback_ip: "{{ loopback_base_sg }}.{{ sg_digit }}"
+        mgmt_ip: "{{ management_base_sg }}.{{ sg_index | int + 1 }}"
+      ansible.builtin.template:
+        src: "k8s/netris_sg.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ sg_name }}.yaml"
+      loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
+      loop_control:
+        loop_var: item
+      when: sdn_provider == "netris"
+
+    - name: Render Netris server templates
+      vars:
+        server_name: "{{ item.0.name }}"
+        links: "{{ topology.links }}"
+        server_index: "{{ item.1 }}"
+        server_digit: "{{ server_index | int + 1 }}"
+        loopback_ip: "{{ loopback_base_server }}.{{ server_digit }}"
+        mgmt_ip: "{{ management_base_server }}.{{ server_digit }}"
+      ansible.builtin.template:
+        src: "k8s/netris_server.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
+      loop: "{{ all_servers | zip(range(all_servers | length)) | list }}"
+      loop_control:
+        loop_var: item
+      when: sdn_provider == "netris"
+
+    - name: Render Netris management host template
+      vars:
+        server_name: ctl
+        loopback_ip: "{{ loopback_base_server }}.253"
+        mgmt_ip: "{{ management_base_server }}.253"
+      ansible.builtin.template:
+        src: "k8s/netris_ctl.j2"
+        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
+      when: sdn_provider == "netris"
