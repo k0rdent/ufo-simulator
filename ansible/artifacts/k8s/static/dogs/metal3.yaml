@@ -1,6 +1,6 @@
 ---
 # Source: capm3-standalone-cp/templates/cluster.yaml
-apiVersion: cluster.x-k8s.io/v1beta2
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: dogs-cluster
@@ -18,18 +18,18 @@ spec:
     host: 10.11.0.250
     port: 6443
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: K0sControlPlane
     name: dogs-cluster-cp-templ
     namespace: dogs
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: Metal3Cluster
     name: dogs-cluster
     namespace: dogs
 ---
 # Source: capm3-standalone-cp/templates/k0scontrolplane.yaml
-apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: K0sControlPlane
 metadata:
   name: dogs-cluster-cp-templ
@@ -79,13 +79,13 @@ spec:
           type: etcd
   machineTemplate:
     infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
       kind: Metal3MachineTemplate
       name: dogs-cluster-cp-mt
       namespace: dogs
 ---
 # Source: capm3-standalone-cp/templates/k0sworkerconfigtemplate.yaml
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: K0sWorkerConfigTemplate
 metadata:
   name: dogs-cluster-machine-config
@@ -109,7 +109,7 @@ spec:
         permissions: "0644"
 ---
 # Source: capm3-standalone-cp/templates/machinedeployment.yaml
-apiVersion: cluster.x-k8s.io/v1beta2
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
   name: dogs-cluster-md
@@ -129,18 +129,18 @@ spec:
       clusterName: dogs-cluster
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: K0sWorkerConfigTemplate
           name: dogs-cluster-machine-config
           namespace: dogs
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: Metal3MachineTemplate
         name: dogs-cluster-worker-mt
         namespace: dogs
 ---
 # Source: capm3-standalone-cp/templates/metal3clustertemplate.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3Cluster
 metadata:
   name: dogs-cluster
@@ -152,7 +152,7 @@ spec:
   noCloudProvider: true
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-controlplane.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3MachineTemplate
 metadata:
   name: dogs-cluster-cp-mt
@@ -173,7 +173,7 @@ spec:
         checksumType: sha256
 ---
 # Source: capm3-standalone-cp/templates/metal3machinetemplate-worker.yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3MachineTemplate
 metadata:
   name: dogs-cluster-worker-mt
