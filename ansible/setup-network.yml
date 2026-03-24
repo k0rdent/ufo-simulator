@@ -1,0 +1,10 @@
+- name: Setup networking
+  hosts: "all"
+  gather_facts: true
+  become: true
+
+  tasks:
+    # Create PXE network
+    # ===========================================
+    - name: Create PXE network
+      include_tasks: tasks/network.yml
