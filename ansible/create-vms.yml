@@ -35,11 +35,6 @@
         state: directory
         recurse: true
     
-    # Create PXE network
-    # ===========================================
-    - name: Create PXE network
-      include_tasks: tasks/pxe-net.yml
-
     # ===========================================
     # Build link information for each VM
     # ===========================================

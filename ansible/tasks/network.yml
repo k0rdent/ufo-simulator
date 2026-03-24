@@ -1,0 +1,220 @@
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - bridge-utils
+      - python3-netaddr
+    state: present
+    update_cache: false
+
+- name: Check for cloud-init netplan file
+  ansible.builtin.stat:
+    path: /etc/netplan/50-cloud-init.yaml
+  register: pxe_cloud_init_netplan
+
+# Remove addresses/nameservers from selected ethernets in cloud-init netplan (br-mgmt + extras).
+# Names: br_mgmt_phys_interface (if set) plus netplan_cloudinit_prune_ifaces; match stanza key OR set-name.
+- name: Start from empty pxe_netplan_prune_iface_list
+  ansible.builtin.set_fact:
+    pxe_netplan_prune_iface_list: []
+
+- name: Build cloud-init netplan iface list to prune (addresses/nameservers)
+  ansible.builtin.set_fact:
+    pxe_netplan_prune_iface_list: "{{ (pxe_netplan_prune_iface_list | default([]) + [item]) | unique | list }}"
+  loop:
+    - "{{ br_mgmt_phys_interface }}"
+    - "{{ br_pxe_phys_interface }}"
+    - "{{ br_ext_phys_interface }}"
+  when:
+    - pxe_cloud_init_netplan.stat.exists
+
+- name: Prune addresses and nameservers for listed ifaces in cloud-init netplan
+  when:
+    - pxe_cloud_init_netplan.stat.exists
+    - (pxe_netplan_prune_iface_list | default([]) | length) > 0
+  block:
+    - name: Read cloud-init netplan
+      ansible.builtin.slurp:
+        src: /etc/netplan/50-cloud-init.yaml
+      register: pxe_ci_netplan_slurp
+
+    - name: Parse cloud-init netplan YAML
+      ansible.builtin.set_fact:
+        pxe_ci_netplan_doc: "{{ pxe_ci_netplan_slurp.content | b64decode | from_yaml }}"
+
+    - name: Extract ethernets map from cloud-init netplan
+      ansible.builtin.set_fact:
+        pxe_ci_netplan_ethers: "{{ (pxe_ci_netplan_doc.network | default({})).ethernets | default({}) }}"
+
+    - name: Start from empty ethernets when rebuilding
+      ansible.builtin.set_fact:
+        pxe_ci_netplan_ethers_pruned: {}
+
+    - name: Rebuild ethernets (drop addresses/nameservers on matched ifaces)
+      ansible.builtin.set_fact:
+        pxe_ci_netplan_ethers_pruned: "{{ pxe_ci_netplan_ethers_pruned | combine({item.key: pxe_ci_netplan_one_iface}) }}"
+      loop: "{{ pxe_ci_netplan_ethers | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      vars:
+        pxe_ci_netplan_set_name: "{{ (item.value | default({})).get('set-name', '') | default('', true) | string }}"
+        pxe_ci_netplan_one_iface: >-
+          {{
+            (item.value | default({}) | dict2items
+             | rejectattr('key', 'equalto', 'addresses')
+             | rejectattr('key', 'equalto', 'nameservers')
+             | items2dict)
+            if (item.key | string in pxe_netplan_prune_iface_list
+                or pxe_ci_netplan_set_name in pxe_netplan_prune_iface_list)
+            else item.value
+          }}
+
+    - name: Write cloud-init netplan with pruned ifaces
+      ansible.builtin.copy:
+        dest: /etc/netplan/50-cloud-init.yaml
+        owner: root
+        group: root
+        mode: "0600"
+        content: "{{ pxe_ci_netplan_out | to_nice_yaml(indent=2) }}"
+      when: pxe_ci_netplan_ethers_pruned != pxe_ci_netplan_ethers
+      vars:
+        # recursive=False: replace network (and ethernets) wholesale. recursive=True would deep-merge
+        # ethernets stanzas and resurrect removed keys like addresses.
+        pxe_ci_netplan_network: "{{ pxe_ci_netplan_doc.network | default({}) | combine({'ethernets': pxe_ci_netplan_ethers_pruned}, recursive=False) }}"
+        pxe_ci_netplan_out: "{{ pxe_ci_netplan_doc | combine({'network': pxe_ci_netplan_network}, recursive=False) }}"
+
+- name: Create PXE bridge configuration with Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/10-br-pxe.yaml
+    owner: root
+    group: root
+    mode: "0600"  # Netplan files are often 0600 for security
+    content: |
+      network:
+        version: 2
+        renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
+        bridges:
+          {{ br_pxe_name }}:
+            addresses:
+              - {{ br_pxe_ip }}/{{ br_pxe_netmask }}
+            parameters:
+              stp: false
+              forward-delay: 0
+              hello-time: 2
+              max-age: 20
+            {% if br_pxe_phys_interface -%}
+            interfaces:
+              - {{ br_pxe_phys_interface }}
+            {% endif %}
+        # Temporary connect ctl node to mgmt networks while softgates are not implemented
+        # on netris simulator
+        vlans:
+          br-pxe.2:
+            id: 2
+            link: br-pxe
+            addresses:
+              - 10.11.0.254/24
+          br-pxe.4:
+            id: 4
+            link: br-pxe
+            addresses:
+              - 10.11.2.254/24
+
+- name: Create MGMT bridge configuration with Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/60-br-mgmt.yaml
+    owner: root
+    group: root
+    mode: "0600"  # Netplan files are often 0600 for security
+    content: |
+      network:
+        version: 2
+        renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
+        bridges:
+          {{ br_mgmt_name }}:
+            addresses:
+              - {{ management_gateway_sg }}/24
+              - {{ management_gateway_server }}/24
+              - {{ management_gateway_switch }}/24
+            parameters:
+              stp: false
+              forward-delay: 0
+              hello-time: 2
+              max-age: 20
+            {% if br_mgmt_phys_interface -%}
+            interfaces:
+              - {{ br_mgmt_phys_interface }}
+            {% endif %}
+
+
+- name: Create EXT bridge configuration with Netplan
+  ansible.builtin.copy:
+    dest: /etc/netplan/10-br-ext.yaml
+    owner: root
+    group: root
+    mode: "0600"  # Netplan files are often 0600 for security
+    content: |
+      network:
+        version: 2
+        renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
+        bridges:
+          {{ br_ext_name }}:
+            addresses:
+              - {{ ext_base_gateway_sg }}/{{ ext_sg_netmask }}
+              - {{ ext_base_gateway_switch }}/{{ ext_sg_netmask }}
+            parameters:
+              stp: false
+              forward-delay: 0
+              hello-time: 2
+              max-age: 20
+            {% if br_ext_phys_interface -%}
+            interfaces:
+              - {{ br_ext_phys_interface }}
+            {% endif %}
+
+# Clear addresses still bound in the kernel after cloud-init netplan was pruned (ignored if iface missing).
+- name: Flush IP addresses from pruned physical interfaces
+  ansible.builtin.command:
+    argv:
+      - ip
+      - addr
+      - flush
+      - dev
+      - "{{ item }}"
+  loop: "{{ pxe_netplan_prune_iface_list | default([]) }}"
+  when: (pxe_netplan_prune_iface_list | default([]) | length) > 0
+  failed_when: false
+
+- name: Apply netplan configuration
+  ansible.builtin.command: netplan apply
+  become: true
+
+- name: Set bridge interface up
+  ansible.builtin.command: ip link set {{ item }} up
+  with_items:
+    - "{{ br_pxe_name }}"
+    - "{{ br_mgmt_name }}"
+    - "{{ br_ext_name }}"
+
+- name: Ensure IP forwarding is enabled
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Detect outbound network interface
+  ansible.builtin.shell: ip route get 4.2.2.1 | awk '{print $5}' | tr -d '\n'
+  register: outbound_iface
+  changed_when: false
+
+- name: Enable NAT masquerade for bridge subnets
+  ansible.builtin.iptables:
+    table: nat
+    chain: POSTROUTING
+    source: "{{ item }}"
+    out_interface: "{{ outbound_iface.stdout }}"
+    jump: MASQUERADE
+  loop:
+    - "{{ management_base_sg }}.0/{{ br_mgmt_netmask }}"
+    - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"

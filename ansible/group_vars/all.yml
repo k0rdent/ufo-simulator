@@ -172,6 +172,7 @@ pxe_base: 172.16.81
 br_pxe_name: br-pxe
 br_pxe_ip: 172.16.81.254
 br_pxe_netmask: 24
+br_pxe_phys_interface: ""
 
 br_mgmt_name: br-mgmt
 br_mgmt_ip: "{{ management_base_switch }}.254"
@@ -181,6 +182,7 @@ br_mgmt_phys_interface: ""
 
 br_ext_name: br-ext
 br_ext_netmask: 24
+br_ext_phys_interface: ""
 
 
 ufo_dev_mode: false
