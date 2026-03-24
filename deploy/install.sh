@@ -89,9 +89,13 @@ fi
 # Register resources
 if [[ ${FABRIC_BACKEND} == "netris" ]]; then
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/site-default.yaml
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
+fi
+
+kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
+kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
+kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
+
+if [[ ${FABRIC_BACKEND} == "netris" ]]; then
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-0.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-1.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
