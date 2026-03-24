@@ -4,6 +4,7 @@ all:
       sdn_provider: verity
       ufo_fabric_backend: 'verity'
       br_mgmt_phys_interface: ens5
+      br_ext_phys_interface: ens6
       switch_port_name_prefix: "eth1/"
 
       verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
