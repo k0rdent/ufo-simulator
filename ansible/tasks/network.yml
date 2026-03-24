@@ -84,7 +84,7 @@
 
 - name: Create PXE bridge configuration with Netplan
   ansible.builtin.copy:
-    dest: /etc/netplan/10-br-pxe.yaml
+    dest: /etc/netplan/60-br-pxe.yaml
     owner: root
     group: root
     mode: "0600"  # Netplan files are often 0600 for security
@@ -148,7 +148,7 @@
 
 - name: Create EXT bridge configuration with Netplan
   ansible.builtin.copy:
-    dest: /etc/netplan/10-br-ext.yaml
+    dest: /etc/netplan/60-br-ext.yaml
     owner: root
     group: root
     mode: "0600"  # Netplan files are often 0600 for security

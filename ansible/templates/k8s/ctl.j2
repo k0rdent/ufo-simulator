@@ -1,3 +1,4 @@
+{%- if sdn_provider == 'netris' %}
 ---
 apiVersion: k8s.netris.ai/v1alpha1
 kind: Server
@@ -31,3 +32,26 @@ spec:
   name: swp27@leaf-0
   vnet: pxe
   untagged: true
+{%- endif %}
+{%- if sdn_provider == 'verity' %}
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: EthPortProfile
+metadata:
+  name: ctl-pxe
+spec:
+  enable: true
+  services:
+    - row_num_enable: true
+      row_num_service: "kcm-system.pxe"
+      row_num_external_vlan: 0
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: Switchport
+metadata:
+  name: eth1-27-leaf-0
+spec:
+  name: "eth1/27@leaf-0"
+  ethernet_port_profile: "ctl-pxe"
+  gateway_port_profile: ""
+{%- endif %}
