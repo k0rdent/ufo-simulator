@@ -3,6 +3,12 @@
   gather_facts: true
   become: true
 
+  handlers:
+    - name: Restart nftables
+      ansible.builtin.service:
+        name: nftables
+        state: restarted
+
   tasks:
     # Create PXE network
     # ===========================================

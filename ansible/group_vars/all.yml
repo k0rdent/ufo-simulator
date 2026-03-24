@@ -166,6 +166,7 @@ ext_nat: "{{ ext_base_sg }}.0"
 
 ext_base_switch: "{{ ext_base }}.3"
 ext_base_gateway_switch: "{{ ext_base_switch }}.254"
+leaf1_bgp_bridge_mac: "52:54:00:14:01:01"
 
 pxe_base: 172.16.81
 
@@ -183,6 +184,24 @@ br_mgmt_phys_interface: ""
 br_ext_name: br-ext
 br_ext_netmask: 24
 br_ext_phys_interface: ""
+
+site_public_asn: 65513
+
+host_bgp_local_as: 65000
+host_bgp_remote_as: "{{ site_public_asn }}"
+host_bgp_router_id: "{{ ext_base_gateway_switch }}"
+host_bgp_peer_group: FABRIC
+host_bgp_peer_group_description: netris-fabric
+host_bgp_listen_range: "{{ ext_base_switch }}.0/24"
+host_bgp_listen_limit: 16
+host_bgp_default_originate: true
+host_bgp_allow_all_route_map: ALLOW-ALL
+
+host_masquerade_cidrs:
+  - "{{ management_base_sg }}.0/{{ br_mgmt_netmask }}"
+  - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"
+  - "10.11.0.0/24"
+  - "10.11.2.0/24"
 
 
 ufo_dev_mode: false

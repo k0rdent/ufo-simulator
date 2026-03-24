@@ -62,6 +62,8 @@ ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/libvirt.y
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/setup-network.yml
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/create-vms.yml
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/create-switches.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-artifacts.yml
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/frr.yml
 
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ipa.yml
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/kcm.yml
@@ -89,7 +91,7 @@ fi
 
 # Register resources
 if [[ ${FABRIC_BACKEND} == "netris" ]]; then
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/site-default.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/site-default.yaml
 fi
 
 kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml

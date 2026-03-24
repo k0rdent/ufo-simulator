@@ -1,0 +1,25 @@
+frr defaults traditional
+hostname {{ inventory_hostname }}
+log syslog informational
+!
+route-map {{ host_bgp_allow_all_route_map }} permit 10
+!
+router bgp {{ host_bgp_local_as }}
+ bgp router-id {{ host_bgp_router_id }}
+ neighbor {{ host_bgp_peer_group }} peer-group
+ neighbor {{ host_bgp_peer_group }} remote-as {{ host_bgp_remote_as }}
+ neighbor {{ host_bgp_peer_group }} description {{ host_bgp_peer_group_description }}
+ bgp listen range {{ host_bgp_listen_range }} peer-group {{ host_bgp_peer_group }}
+ bgp listen limit {{ host_bgp_listen_limit }}
+ !
+ address-family ipv4 unicast
+  neighbor {{ host_bgp_peer_group }} activate
+  neighbor {{ host_bgp_peer_group }} route-map {{ host_bgp_allow_all_route_map }} in
+  neighbor {{ host_bgp_peer_group }} route-map {{ host_bgp_allow_all_route_map }} out
+{% if host_bgp_default_originate %}
+  neighbor {{ host_bgp_peer_group }} default-originate
+{% endif %}
+ exit-address-family
+!
+line vty
+!
