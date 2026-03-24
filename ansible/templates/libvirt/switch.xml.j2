@@ -76,13 +76,15 @@
         <guest csum='off'/>
       </driver>
       <source bridge='{{ br_pxe_name }}'/>
+      <model type='virtio'/>
+    </interface>
+    <interface type='bridge'>
       <driver>
         <host csum='off'/>
         <guest csum='off'/>
       </driver>
-      <target dev='vnet78'/>
+      <source bridge='{{ br_ext_name }}'/>
       <model type='virtio'/>
-      <alias name='net0'/>
     </interface>
     {%- endif %}
     <serial type='pty'>
