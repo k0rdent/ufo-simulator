@@ -43,7 +43,7 @@
     
         - name: Deploy/upgrade verity operator helm release
           kubernetes.core.helm:
-            name: ufo
+            name: verity-operator
             kubeconfig: "{{ kubeconfig_path }}"
             chart_ref: "{{ verity_operator_chart_repo }}"
             chart_version: "{{ verity_operator_chart_version }}"
