@@ -7,6 +7,8 @@ all:
       br_ext_phys_interface: ens6
       switch_port_name_prefix: "eth1/"
 
+      management_base_switch: "10.200.0"
+
       verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
       verity_operator_chart_version: 0.0.1-6b71b38
       verity_operator_image_tag: 0.0.1-6b71b38.1774347742
