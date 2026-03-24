@@ -166,7 +166,6 @@ ext_nat: "{{ ext_base_sg }}.0"
 
 ext_base_switch: "{{ ext_base }}.3"
 ext_base_gateway_switch: "{{ ext_base_switch }}.254"
-leaf1_bgp_peer_ip: "{{ ext_base_switch }}.1"
 leaf1_bgp_bridge_mac: "52:54:00:14:01:01"
 
 pxe_base: 172.16.81

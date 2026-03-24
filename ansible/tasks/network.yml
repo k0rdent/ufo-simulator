@@ -2,6 +2,7 @@
   ansible.builtin.apt:
     name:
       - bridge-utils
+      - nftables
       - python3-netaddr
     state: present
     update_cache: false

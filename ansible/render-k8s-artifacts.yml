@@ -83,6 +83,6 @@
         loopback_ip: "{{ loopback_base_server }}.253"
         mgmt_ip: "{{ management_base_server }}.253"
       ansible.builtin.template:
-        src: "k8s/netris_ctl.j2"
+        src: "k8s/ctl.j2"
         dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
       when: sdn_provider == "netris"
