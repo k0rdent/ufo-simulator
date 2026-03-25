@@ -213,11 +213,11 @@ docker_image_proxy: https://dockerproxy.artifactory-eu.mcp.mirantis.net
 frr:
   enable: false
   bgp:
-    listen_interface: 'ens6'
+    update_source: 192.168.3.1
     enabled: true
-    router_id: 192.168.100.1
+    router_id: 192.168.3.1
     asn: 64513
     sdn:
       asn: 64512
     peer_ranges:
-    - 192.168.100.0/24
+    - 192.168.3.0/24
