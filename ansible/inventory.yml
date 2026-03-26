@@ -1,15 +1,16 @@
 ---
 all:
   vars:
-    ansible_ssh_user: ubuntu
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
     ansible_python_interpreter: /usr/bin/python3
 
   hosts:
     cmp01:
+      ansible_ssh_user: ubuntu
       ansible_connection: local
 
     gtw01:
+      ansible_ssh_user: ubuntu
       ansible_connection: local
       management_gateway_switch: "{{ management_base_switch }}.1"
       management_gateway_server: "{{ management_base_server }}.1"
