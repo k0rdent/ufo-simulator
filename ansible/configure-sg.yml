@@ -4,6 +4,9 @@
 
 - name: Configure Softgates
   hosts: localhost
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     all_softgates: "{{ topology.softgates }}"

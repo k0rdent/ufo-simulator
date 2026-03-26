@@ -14,11 +14,16 @@
 
 ---
 - name: Kubernetes (k0s) on Debian/Ubuntu AMD64
-  hosts: localhost
+  hosts: cmps
   connection: local
   become: true
   gather_facts: true
   ignore_errors: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   vars:
     k0s_version: "v1.33.1+k0s.0"
     K0S_EXTRA_FLAGS: "--enable-dynamic-config --disable-components=konnectivity-server"

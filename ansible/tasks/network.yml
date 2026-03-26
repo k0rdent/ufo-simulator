@@ -94,8 +94,10 @@
         renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
         bridges:
           {{ br_pxe_name }}:
+            {% if br_pxe_ip -%}
             addresses:
               - {{ br_pxe_ip }}/{{ br_pxe_netmask }}
+            {% endif -%}
             parameters:
               stp: false
               forward-delay: 0

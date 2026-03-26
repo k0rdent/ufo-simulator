@@ -3,6 +3,10 @@
   gather_facts: true
   become: true
 
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   tasks:
     # Create PXE network
     # ===========================================

@@ -1,10 +1,15 @@
 ---
 - name: Install Netris Operator
-  hosts: localhost
+  hosts: cmps
   connection: local
   become: true
   gather_facts: true
   ignore_errors: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   vars:
     workspace: /opt/ufo_lab/
     netris_operator_repo: https://github.com/jumpojoy/netris-operator

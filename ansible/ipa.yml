@@ -1,10 +1,15 @@
 ---
 - name: Prepare IPA
-  hosts: localhost
+  hosts: cmps
   connection: local
   become: true
   gather_facts: true
   ignore_errors: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   vars:
     ipa_files:
      - url: https://binary-mirantis-com.s3.amazonaws.com/openstack/bin/ubuntu/24.04/noble-server-cloudimg-amd64-20251026.img

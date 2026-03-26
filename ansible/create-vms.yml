@@ -3,9 +3,13 @@
 # Creates a leaf-spine topology using libvirt/KVM with UDP tunnels for links
 
 - name: Setup Virtual Switch Lab
-  hosts: localhost
+  hosts: cmps
   become: yes
   gather_facts: yes
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     all_switches: "{{ topology.spines + topology.leafs }}"

@@ -141,8 +141,6 @@ netris_operator_chart_version: 0.0.1-f431da9
 netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
 netris_operator_image_tag: 0.0.1-f431da9.1770637678
 
-sdn_provider: "netris" # or "verity"
-
 loopback_base: "192.169"
 management_base: "192.168"
 loopback_base_switch: "192.169.0"
@@ -175,7 +173,6 @@ br_pxe_netmask: 24
 br_pxe_phys_interface: ""
 
 br_mgmt_name: br-mgmt
-br_mgmt_ip: "{{ management_base_switch }}.254"
 
 br_mgmt_netmask: 24
 # NIC enslaved to br-mgmt in netplan; also included in cloud-init netplan prune list when set.
@@ -211,13 +208,16 @@ kubeconfig_path: "/root/.kube/config"
 docker_image_proxy: https://dockerproxy.artifactory-eu.mcp.mirantis.net
 
 frr:
-  enable: false
+  enabled: true
   bgp:
-    update_source: 192.168.3.1
+    update_source: '{{ ext_base_gateway_switch }}'
     enabled: true
-    router_id: 192.168.3.1
+    router_id: '{{ ext_base_gateway_switch }}'
     asn: 64513
     sdn:
       asn: 64512
-    peer_ranges:
-    - 192.168.3.0/24
+      peer_ranges:
+      - "{{ ext_base_switch }}.0/24"
+
+# Mandatory variables set in inventory
+# sdn_provider: "netris" # or "verity"

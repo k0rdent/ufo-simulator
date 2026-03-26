@@ -3,7 +3,7 @@
 # Creates a leaf-spine topology using libvirt/KVM with UDP tunnels for links
 
 - name: Destroy Softgates
-  hosts: localhost
+  hosts: cmps
   become: yes
   gather_facts: yes
 

@@ -5,9 +5,13 @@
 # Optional extra vars: see templates/frr/frr.conf and templates/frr/daemons
 
 - name: Deploy FRR
-  hosts: "localhost"
+  hosts: "gtws"
   gather_facts: true
   become: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   handlers:
     - name: Restart FRR
