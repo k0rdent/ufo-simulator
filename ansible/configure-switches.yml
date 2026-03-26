@@ -3,8 +3,12 @@
 # Run this after the VMs have fully booted (give them ~2-3 minutes)
 
 - name: Configure Cumulus Switches
-  hosts: localhost
+  hosts: cmps
   gather_facts: no
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     all_switches: "{{ topology.spines + topology.leafs }}"

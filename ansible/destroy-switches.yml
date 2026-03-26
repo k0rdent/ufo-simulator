@@ -2,9 +2,13 @@
 # Destroy Virtual Switch Lab
 
 - name: Destroy Virtual Switch Lab
-  hosts: localhost
+  hosts: cmps
   become: yes
   gather_facts: no
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     all_switches: "{{ topology.spines + topology.leafs }}"

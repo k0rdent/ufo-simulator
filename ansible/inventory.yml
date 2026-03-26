@@ -1,21 +1,26 @@
+---
 all:
+  vars:
+    ansible_ssh_user: ubuntu
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_python_interpreter: /usr/bin/python3
+
   hosts:
-    localhost:
+    cmp01:
       ansible_connection: local
-      ansible_python_interpreter: /usr/bin/python3
-      cumulus_new_password: "<CUMULUS_NEW_PASSWORD>1!"
-      netris_admin_password: "<NETRIS_ADMIN_PASSWORD>1!"
-      redfish_password: "<REDFISH_PASSWORD>"
-      ctl_public_ip: "<CTL_PUBLIC_IP>"
-      netris_license: "<NETRIS_LICENSE>"
 
+    gtw01:
+      ansible_connection: local
+      management_gateway_switch: "{{ management_base_switch }}.1"
+      management_gateway_server: "{{ management_base_server }}.1"
+      management_gateway_sg: "{{ management_base_sg }}.1"
+      ext_base_gateway_switch: "{{ ext_base_switch }}.1"
+      ext_base_gateway_sg: "{{ ext_base_sg }}.1"
 
-      # Artifacts
-      netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
-      netris_operator_chart_version: 0.0.1-a71c5e7
-      netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-      netris_operator_image_tag: 0.0.1-a71c5e7.1770815330
-
-      ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-      ufo_chart_version: 0.0.8-c3b289b
-      ufo_image_tag: 0.0.8-c3b289b.1774346969
+  children:
+    cmps:
+      hosts:
+        cmp01:
+    gtws:
+      hosts:
+        gtw01:

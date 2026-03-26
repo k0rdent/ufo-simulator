@@ -6,11 +6,15 @@
 
 ---
 - name: Libvirt with Redfish on Debian/Ubuntu AMD64
-  hosts: localhost
+  hosts: cmps
   connection: local
   become: true
   gather_facts: true
   ignore_errors: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   pre_tasks:
     - name: Check if system is supported
