@@ -3,7 +3,7 @@
 # Run this after the VMs have fully booted (give them ~2-3 minutes)
 
 - name: Configure Softgates
-  hosts: localhost
+  hosts: cmps
   vars_files:
     - ./vars/common.yml
     - ./vars/{{ sdn_provider }}.yml
@@ -48,6 +48,10 @@
   gather_facts: no
   strategy: free
   become: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     all_softgates: "{{ topology.softgates }}"

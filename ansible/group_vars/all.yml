@@ -39,7 +39,11 @@ topology:
     - name: leaf-0
       mgmt_ip: 10.200.0.100
     - name: leaf-1
-      mgmt_ip: 100.200.0.101
+      mgmt_ip: 10.200.0.101
+    - name: ext-leaf-0
+      mgmt_ip: 10.200.0.102
+    - name: ext-leaf-1
+      mgmt_ip: 10.200.0.103
   nodes:
     - name: vm-0
     - name: vm-1
@@ -109,7 +113,10 @@ topology:
     - { local: "spine-0", local_port: "{{ switch_port_name_prefix }}2", remote: "leaf-1", remote_port: "{{ switch_port_name_prefix }}25" }
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}1", remote: "leaf-0", remote_port: "{{ switch_port_name_prefix }}26" }
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}2", remote: "leaf-1", remote_port: "{{ switch_port_name_prefix }}26" }
-
+    - { local: "spine-0", local_port: "{{ switch_port_name_prefix }}3", remote: "ext-leaf-0", remote_port: "{{ switch_port_name_prefix }}1" }
+    - { local: "spine-0", local_port: "{{ switch_port_name_prefix }}4", remote: "ext-leaf-1", remote_port: "{{ switch_port_name_prefix }}1" }
+    - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}3", remote: "ext-leaf-0", remote_port: "{{ switch_port_name_prefix }}2" }
+    - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}4", remote: "ext-leaf-1", remote_port: "{{ switch_port_name_prefix }}2" }
 # Cumulus default credentials
 cumulus_user: cumulus
 cumulus_default_password: cumulus

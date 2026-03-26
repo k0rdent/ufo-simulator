@@ -70,8 +70,13 @@
         label: "{{ item.0.name }}"
 
 - name: Install netris license
-  hosts: localhost
+  hosts: cmps
   gather_facts: no
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   tasks:
     - name: Install license
       ansible.builtin.uri:
@@ -89,6 +94,9 @@
   hosts: all_switches
   gather_facts: no
   strategy: free
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     all_switches: "{{ topology.spines + topology.leafs }}"
@@ -99,8 +107,12 @@
       include_tasks: tasks/configure-switch.yml
 
 - name: Print switches info
-  hosts: localhost
+  hosts: cmps
   gather_facts: no
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   vars:
     all_switches: "{{ topology.spines + topology.leafs }}"
   tasks:

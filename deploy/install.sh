@@ -89,7 +89,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
-        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml --limit ${HOSTNAME}
+        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml --limit 'all:!gtws'
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml --limit ${HOSTNAME}
     fi
     
