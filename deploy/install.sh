@@ -64,6 +64,8 @@ if [[ ${NODE_TYPE} == "gtw" ]]; then
 fi
 
 if [[ ${NODE_TYPE} == "cmp" ]]; then
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-artifacts.yml --limit ${HOSTNAME}
+
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/libvirt.yml --limit ${HOSTNAME}
     # Create vms to initialize PXE interface used later in kcm/ironic
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/create-vms.yml --limit ${HOSTNAME}
