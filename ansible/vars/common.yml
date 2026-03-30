@@ -5,7 +5,7 @@ netris_admin_password: "<NETRIS_ADMIN_PASSWORD>1!"
 redfish_password: "<REDFISH_PASSWORD>"
 ctl_public_ip: "<CTL_PUBLIC_IP>"
 netris_license: "<NETRIS_LICENSE>"
-sdn_provider: verity
+sdn_provider: netris
 
 
 netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator

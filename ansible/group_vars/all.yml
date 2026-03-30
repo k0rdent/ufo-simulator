@@ -231,5 +231,4 @@ host_masquerade_cidrs:
   - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"
   - "10.11.0.0/16"
 
-# Mandatory variables set in inventory
-# sdn_provider: "netris" # or "verity"
+sdn_provider: "netris" # or "verity"
