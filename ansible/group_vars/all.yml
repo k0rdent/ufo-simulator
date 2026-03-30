@@ -226,5 +226,10 @@ frr:
       peer_ranges:
       - "{{ ext_base_switch }}.0/24"
 
+host_masquerade_cidrs:
+  - "{{ management_base_sg }}.0/{{ br_mgmt_netmask }}"
+  - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"
+  - "10.11.0.0/16"
+
 # Mandatory variables set in inventory
 # sdn_provider: "netris" # or "verity"

@@ -12,3 +12,10 @@
     # ===========================================
     - name: Create PXE network
       include_tasks: tasks/network.yml
+
+
+  handlers:
+  - name: Restart nftables
+    ansible.builtin.service:
+      name: nftables
+      state: restarted
