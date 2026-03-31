@@ -92,7 +92,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml --limit 'all:!gtws'
-        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml --limit ${HOSTNAME}
+        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml --limit 'all:!gtws'
     fi
     
     # Register resources
