@@ -105,11 +105,18 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-0.yaml
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/leaf-1.yaml
+        switch_manifests=(
+            leaf-0.yaml
+            leaf-1.yaml
+            ext-leaf-0.yaml
+            ext-leaf-1.yaml
+            spine-0.yaml
+            spine-1.yaml
+        )
+        for manifest in "${switch_manifests[@]}"; do
+            kubectl apply -f "${UFO_K8S_ARTIFACTS_DIR}/${manifest}"
+        done
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-0.yaml
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/spine-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
