@@ -35,9 +35,25 @@
     label: "{{ link_item.remote }}:{{ link_item.remote_port }}"
   when: link_item.remote == switch_name
 
+- name: "{{ switch_name }} - Determine extra host bridge attachment"
+  set_fact:
+    switch_host_bridge: >-
+      {{
+        br_ext_name
+        if switch_name.startswith('ext-leaf-')
+        else br_pxe_name
+        if switch_name.startswith('leaf-')
+        else ''
+      }}
+    switch_host_bridge_port: "{{ switch_port_name_prefix }}{{ switch_links | length + 1 }}"
+
 - name: "{{ switch_name }} - Debug links"
   debug:
-    msg: "Links for {{ switch_name }}: {{ switch_links }}"
+    msg: >-
+      Links for {{ switch_name }}: {{ switch_links }}
+      {%- if switch_host_bridge %}
+      ; host bridge {{ switch_host_bridge }} is connected to {{ switch_host_bridge_port }}
+      {%- endif %}
 
 
 - name: "{{ switch_name }} - Create VM"
@@ -75,8 +91,8 @@
       --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
       --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }}'
       {% endfor %}
-      {% if "leaf" in switch_name %}
-      --network bridge={{ br_pxe_name }},model=virtio
+      {% if switch_host_bridge %}
+      --network bridge={{ switch_host_bridge }},model=virtio
       {% endif %}
 
 - name: "{{ switch_name }} - Create VM with virt-install"
