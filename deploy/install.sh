@@ -97,7 +97,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     
     # Register resources
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/site-default.yaml
+        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/site-default.yaml
     fi
     
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml

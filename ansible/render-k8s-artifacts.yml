@@ -24,6 +24,11 @@
     - name: Render Netris artifacts
       when: sdn_provider == "netris"
       block:
+        - name: Render Netris site template
+          ansible.builtin.template:
+            src: "k8s/netris_site_default.yaml.j2"
+            dest: "{{ k8s_artifacts_dir }}/site-default.yaml"
+
         - name: Render Netris switch templates
           vars:
             switch_name: "{{ item.0.name }}"
