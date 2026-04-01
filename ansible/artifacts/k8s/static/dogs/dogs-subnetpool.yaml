@@ -4,6 +4,7 @@ metadata:
   name: default
   namespace: dogs
 spec:
+  vpc: dogs
   ip_version: 4
   min_prefix: 19
   max_prefix: 24
