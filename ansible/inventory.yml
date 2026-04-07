@@ -15,7 +15,7 @@ all:
       management_gateway_switch: "{{ management_base_switch }}.1"
       management_gateway_server: "{{ management_base_server }}.1"
       management_gateway_sg: "{{ management_base_sg }}.1"
-      ext_base_gateway_switch: "{{ ext_base_switch }}.1"
+      ext_base_gateway_switch: "{{ ext_base_gateway_switch_gtw }}"
       ext_base_gateway_sg: "{{ ext_base_sg }}.1"
 
   children:

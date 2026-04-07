@@ -170,6 +170,7 @@ ext_sg_netmask: 24
 ext_nat: "{{ ext_base_sg }}.0"
 
 ext_base_switch: "{{ ext_base }}.3"
+ext_base_gateway_switch_gtw: "{{ ext_base_switch }}.1"
 ext_base_gateway_switch: "{{ ext_base_switch }}.254"
 
 pxe_base: 172.16.81
@@ -226,9 +227,21 @@ frr:
       peer_ranges:
       - "{{ ext_base_switch }}.0/24"
 
+
+cats_mgmt_cidr: "10.11.0.0/24"
+dogs_mgmt_cidr: "10.12.0.0/24"
+
+external_gateway_bgp:
+  local_ip: "{{ ext_base_switch }}.100/{{ ext_sg_netmask }}"
+  remote_ip: "{{ ext_base_gateway_switch_gtw }}/{{ ext_sg_netmask }}"
+  prefix_list_outbound:
+    - "permit {{ cats_mgmt_cidr }}"
+    - "permit {{ dogs_mgmt_cidr }}"
+
 host_masquerade_cidrs:
   - "{{ management_base_sg }}.0/{{ br_mgmt_netmask }}"
   - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"
-  - "10.11.0.0/16"
+  - "{{ cats_mgmt_cidr }}"
+  - "{{ dogs_mgmt_cidr }}"
 
 sdn_provider: "netris" # or "verity"

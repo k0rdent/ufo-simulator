@@ -88,3 +88,8 @@
           ansible.builtin.template:
             src: "k8s/ctl.j2"
             dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
+
+        - name: Render external gateway BGP manifest
+          ansible.builtin.template:
+            src: "k8s/bgp-external-gateway.yaml.j2"
+            dest: "{{ k8s_artifacts_dir }}/bgp-external-gateway.yaml"

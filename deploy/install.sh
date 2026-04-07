@@ -102,6 +102,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/vpc-internet.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
@@ -122,6 +123,8 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml
+
+        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/bgp-external-gateway.yaml
     fi
     
     # Wait netris is fully initialized

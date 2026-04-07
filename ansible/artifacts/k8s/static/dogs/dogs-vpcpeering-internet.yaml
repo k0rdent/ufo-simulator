@@ -1,0 +1,11 @@
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: VpcPeering
+metadata:
+  name: dogs-to-internet
+  namespace: dogs
+spec:
+  vpcA:
+    name: dogs
+  vpcB:
+    name: internet
+    namespace: kcm-system
