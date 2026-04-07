@@ -1,0 +1,11 @@
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: VpcPeering
+metadata:
+  name: cats-to-internet
+  namespace: cats
+spec:
+  vpcA:
+    name: cats
+  vpcB:
+    name: internet
+    namespace: kcm-system

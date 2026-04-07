@@ -1,0 +1,23 @@
+apiVersion: k8s.netris.ai/v1alpha1
+kind: BGP
+metadata:
+  name: external-gateway
+  namespace: kcm-system
+spec:
+  site: default
+  hardware: ext-leaf-0
+  neighborAs: {{ frr.bgp.asn }}
+  transport:
+    type: port
+    name: swp3@ext-leaf-0
+    vlanId: 1000
+    untagged: true
+  vpc: "kcm-system-internet"
+  localIP: {{ external_gateway_bgp.local_ip }}
+  remoteIP: {{ external_gateway_bgp.remote_ip }}
+  description: External Gateway
+  state: enabled
+  prefixListOutbound:
+{% for prefix in external_gateway_bgp.prefix_list_outbound %}
+    - {{ prefix }}
+{% endfor %}
