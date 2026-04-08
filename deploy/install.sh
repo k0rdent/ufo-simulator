@@ -103,21 +103,26 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/vpc-internet.yaml
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
+        # Wait ipam to be handled before applying other resources
+        sleep 30
+
         switch_manifests=(
+            spine-0.yaml
+            spine-1.yaml
             leaf-0.yaml
             leaf-1.yaml
             ext-leaf-0.yaml
             ext-leaf-1.yaml
-            spine-0.yaml
-            spine-1.yaml
         )
         for manifest in "${switch_manifests[@]}"; do
             kubectl apply -f "${UFO_K8S_ARTIFACTS_DIR}/${manifest}"
+            # Wait switch to be handled before applying other resources
+            sleep 5
         done
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
+        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
