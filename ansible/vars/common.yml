@@ -9,13 +9,13 @@ sdn_provider: netris
 
 
 netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
-netris_operator_chart_version: 0.0.1-a71c5e7
+netris_operator_chart_version: 0.0.1-bde5392
 netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-netris_operator_image_tag: 0.0.1-a71c5e7.1770815330
+netris_operator_image_tag: 0.0.1-bde5392.1775569077
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.0.10-4091363
-ufo_image_tag: 0.0.10-4091363.1775050088
+ufo_chart_version: 0.0.11-588446d
+ufo_image_tag: 0.0.11-588446d.1775643684
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
 verity_operator_chart_version: 0.0.1-6b71b38
