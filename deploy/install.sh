@@ -15,6 +15,11 @@ export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
 export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
 export FABRIC_BACKEND=${FABRIC_BACKEND:-"netris"}
 export NODE_TYPE=${NODE_TYPE:-"cmp"}
+export PROVISION_SOFTGATES=${PROVISION_SOFTGATES:-"false"}
+SOFTGATE_PROVISION_ENABLED=false
+if [[ ${PROVISION_SOFTGATES,,} =~ ^(1|true|yes|on)$ ]]; then
+    SOFTGATE_PROVISION_ENABLED=true
+fi
 
 BASE_INVENTORY=${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 ANSIBLE_INTENTORY_ARG="-i ${BASE_INVENTORY}"
@@ -92,7 +97,9 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml --limit 'all:!gtws'
-        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml --limit 'all:!gtws'
+        if [[ ${SOFTGATE_PROVISION_ENABLED} == true ]]; then
+            ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml --limit 'all:!gtws'
+        fi
     fi
     
     # Register resources
@@ -123,8 +130,10 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
             sleep 5
         done
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
+        if [[ ${SOFTGATE_PROVISION_ENABLED} == true ]]; then
+            kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
+            kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
+        fi
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml

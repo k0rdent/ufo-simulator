@@ -6,6 +6,7 @@ redfish_password: "<REDFISH_PASSWORD>"
 ctl_public_ip: "<CTL_PUBLIC_IP>"
 netris_license: "<NETRIS_LICENSE>"
 sdn_provider: netris
+provision_softgates: "{{ lookup('env', 'PROVISION_SOFTGATES') | default('false', true) | bool }}"
 
 
 netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator

@@ -50,6 +50,7 @@
             dest: "{{ k8s_artifacts_dir }}/netris_ipam.yaml"
     
         - name: Render Netris softgate templates
+          when: provision_softgates | bool
           vars:
             sg_name: "{{ item.0.name }}"
             sg_role: "{{ item.0.role | default('general') }}"

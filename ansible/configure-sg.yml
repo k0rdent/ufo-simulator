@@ -13,6 +13,10 @@
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
   tasks:
+    - name: Skip softgate provisioning when disabled
+      ansible.builtin.meta: end_play
+      when: not (provision_softgates | bool)
+
     - name: Set netris_auth_token
       ansible.builtin.include_tasks: tasks/netris_get_auth_token.yml
 
@@ -57,5 +61,9 @@
     all_softgates: "{{ topology.softgates }}"
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
   tasks:
+    - name: Skip softgate provisioning when disabled
+      ansible.builtin.meta: end_play
+      when: not (provision_softgates | bool)
+
     - name: Configure each SoftGateway
       include_tasks: tasks/configure-sg.yml

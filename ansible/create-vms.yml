@@ -50,7 +50,9 @@
         label: "{{ item.0.name }}"
 
     - name: Manage Softgates
-      when: sdn_provider == "netris"
+      when:
+        - sdn_provider == "netris"
+        - provision_softgates | bool
       block:
         # ================
         # Create SoftGates
