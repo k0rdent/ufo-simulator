@@ -1,0 +1,43 @@
+---
+all:
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_python_interpreter: /usr/bin/python3
+
+  hosts:
+    ext-leaf-0:
+      ansible_ssh_user: admin
+      ansible_host: 10.200.0.102
+      ansible_ssh_pass: admin
+    ext-leaf-1:
+      ansible_ssh_user: admin
+      ansible_host: 10.200.0.103
+      ansible_ssh_pass: admin
+    leaf-0:
+      ansible_ssh_user: admin
+      ansible_host: 10.200.0.100
+      ansible_ssh_pass: admin
+    leaf-1:
+      ansible_ssh_user: admin
+      ansible_host: 10.200.0.101
+      ansible_ssh_pass: admin
+    spine-0:
+      ansible_ssh_user: admin
+      ansible_host: 10.200.0.110
+      ansible_ssh_pass: admin
+    spine-1:
+      ansible_ssh_user: admin
+      ansible_host: 10.200.0.111
+      ansible_ssh_pass: admin
+
+  children:
+    switches:
+      hosts:
+        leaf-0:
+        leaf-1:
+        spine-0:
+        spine-1:
+        ext-leaf-0:
+        ext-leaf-1:
+
+
