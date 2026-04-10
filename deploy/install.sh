@@ -122,7 +122,6 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
             # Wait switch to be handled before applying other resources
             sleep 5
         done
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
@@ -131,6 +130,8 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
 
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/bgp-external-gateway.yaml
     fi
+
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
     
     # Wait netris is fully initialized
     sleep 120
