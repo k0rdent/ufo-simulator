@@ -1,0 +1,80 @@
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: Gateway
+metadata:
+  name: kcm-system.internet-0
+  namespace: kcm-system
+spec:
+  enable: True
+  gateway_mode: Static BGP
+  tenant: kcm-system.internet
+  neighbor_ip_address: '192.167.3.1'
+  neighbor_as_number: 64513
+  source_ip_address: 192.167.3.253
+  local_as_number: 64512
+  keepalive_timer: 60
+  hold_timer: 180
+  connect_timer: 120
+  advertisement_interval: 30
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: GatewayProfile
+metadata:
+  name: kcm-system.internet-0
+  namespace: kcm-system
+spec:
+  enable: true
+  external_gateways:
+  - enable: true
+    gateway: kcm-system.internet-0
+    source_ip_mask: 192.167.3.253/24
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: Switchport
+metadata:
+  name: ext-leaf-0-eth1-4
+  namespace: kcm-system
+spec:
+  name: "eth1/4@ext-leaf-0"
+  ethernet_port_profile: ""
+  gateway_port_profile: "kcm-system.internet-0"
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: Gateway
+metadata:
+  name: kcm-system.internet-1
+  namespace: kcm-system
+spec:
+  enable: True
+  gateway_mode: Static BGP
+  tenant: kcm-system.internet
+  neighbor_ip_address: '192.167.3.1'
+  neighbor_as_number: 64513
+  source_ip_address: 192.167.3.252
+  local_as_number: 64512
+  keepalive_timer: 60
+  hold_timer: 180
+  connect_timer: 120
+  advertisement_interval: 30
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: GatewayProfile
+metadata:
+  name: kcm-system.internet-1
+  namespace: kcm-system
+spec:
+  enable: true
+  external_gateways:
+  - enable: true
+    gateway: kcm-system.internet-1
+    source_ip_mask: 192.167.3.252/24
+---
+apiVersion: verity.mirantis.com/v1alpha1
+kind: Switchport
+metadata:
+  name: ext-leaf-1-eth1-4
+  namespace: kcm-system
+spec:
+  name: "eth1/4@ext-leaf-1"
+  ethernet_port_profile: ""
+  gateway_port_profile: "kcm-system.internet-1"
