@@ -168,9 +168,9 @@
       {% if 'cmps' in group_names %}
             routes:
               - to: {{ cats_mgmt_cidr }}
-                via: {{ ext_base_gateway_switch_gtw }}
+                via: {{ fabric_gateway_ip }}
               - to: {{ dogs_mgmt_cidr }}
-                via: {{ ext_base_gateway_switch_gtw }}
+                via: {{ fabric_gateway_ip }}
       {% endif %}
 
 # Clear addresses still bound in the kernel after cloud-init netplan was pruned (ignored if iface missing).

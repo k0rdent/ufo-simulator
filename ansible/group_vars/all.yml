@@ -172,6 +172,7 @@ ext_nat: "{{ ext_base_sg }}.0"
 ext_base_switch: "{{ ext_base }}.3"
 ext_base_gateway_switch_gtw: "{{ ext_base_switch }}.1"
 ext_base_gateway_switch: "{{ ext_base_switch }}.254"
+fabric_gateway_ip: "{{ ext_base_switch }}.100"
 
 pxe_base: 172.16.81
 
@@ -232,7 +233,7 @@ cats_mgmt_cidr: "10.11.0.0/24"
 dogs_mgmt_cidr: "10.12.0.0/24"
 
 external_gateway_bgp:
-  local_ip: "{{ ext_base_switch }}.100/{{ ext_sg_netmask }}"
+  local_ip: "{{ fabric_gateway_ip }}/{{ ext_sg_netmask }}"
   remote_ip: "{{ ext_base_gateway_switch_gtw }}/{{ ext_sg_netmask }}"
   prefix_list_outbound:
     - "permit {{ cats_mgmt_cidr }}"
