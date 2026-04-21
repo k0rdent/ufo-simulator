@@ -102,8 +102,14 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
+
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/cats/cats-namespace.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/cats/cats-vpc.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/dogs/dogs-namespace.yaml
+    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/dogs/dogs-vpc.yaml
+
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/vpc-internet.yaml
-    
+
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
         # Wait ipam to be handled before applying other resources
