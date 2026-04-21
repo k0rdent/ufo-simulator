@@ -1,16 +1,3 @@
----
-apiVersion: ufo.mirantis.com/v1alpha1
-kind: VpcPeeringPolicy
-metadata:
-  name: allow-from-dogs
-  namespace: kcm-system
-spec:
-  local_vpc:
-    name: internet
-  allowed_vpcs:
-    - vpcName: '*'
-      vpcNamespace: dogs
----
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: VpcPeering
 metadata:
