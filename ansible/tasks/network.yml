@@ -171,6 +171,8 @@
                 via: {{ ext_base_gateway_switch_gtw }}
               - to: {{ dogs_mgmt_cidr }}
                 via: {{ ext_base_gateway_switch_gtw }}
+              - to: {{ child_public_cidr }}
+                via: {{ ext_base_gateway_switch_gtw }}
       {% endif %}
 
 # Clear addresses still bound in the kernel after cloud-init netplan was pruned (ignored if iface missing).

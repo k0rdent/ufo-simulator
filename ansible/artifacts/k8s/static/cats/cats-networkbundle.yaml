@@ -19,13 +19,19 @@ spec:
         subnetpool: default
         subnet: cats-data-subnet
         network: cats-data-net
+      - name: cats-public-subnet
+        prefixLength: 28
+        subnetpool: public
+        subnet: cats-public-subnet
+        network: cats-mgmt-net
+        gateway: true
     networks:
       - name: cats-mgmt-net
         type: evpn
         evpn:
           type: l2
         vlan:
-          id: "auto"
+          id: "10"
         dnsServers:
         - "4.2.2.1"
       - name: cats-data-net
@@ -33,7 +39,7 @@ spec:
         evpn:
           type: l2
         vlan:
-          id: "auto"
+          id: "20"
         dnsServers:
         - "4.2.2.1"
   networkv2:

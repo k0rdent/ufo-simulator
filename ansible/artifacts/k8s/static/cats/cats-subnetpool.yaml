@@ -1,3 +1,4 @@
+---
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: SubnetPool
 metadata:
@@ -11,4 +12,17 @@ spec:
     - 10.11.0.0/16
   tags:
     - default
-
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetPool
+metadata:
+  name: public
+  namespace: cats
+spec:
+  ip_version: 4
+  min_prefix: 25
+  max_prefix: 28
+  prefixes:
+    - 192.167.100.0/24
+  tags:
+    - public

@@ -1,0 +1,11 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default
+  namespace: metallb
+spec:
+  addresses:
+  # Exclude gtw address from the pool
+  - 192.167.100.1-192.167.100.13
+  autoAssign: true
+  avoidBuggyIPs: true
