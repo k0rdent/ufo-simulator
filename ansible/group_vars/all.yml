@@ -117,6 +117,9 @@ topology:
     - { local: "spine-0", local_port: "{{ switch_port_name_prefix }}4", remote: "ext-leaf-1", remote_port: "{{ switch_port_name_prefix }}1" }
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}3", remote: "ext-leaf-0", remote_port: "{{ switch_port_name_prefix }}2" }
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}4", remote: "ext-leaf-1", remote_port: "{{ switch_port_name_prefix }}2" }
+
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}27", remote: "leaf-1", remote_port: "{{ switch_port_name_prefix }}27" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}28", remote: "leaf-1", remote_port: "{{ switch_port_name_prefix }}28" }
 # Cumulus default credentials
 cumulus_user: cumulus
 cumulus_default_password: cumulus
