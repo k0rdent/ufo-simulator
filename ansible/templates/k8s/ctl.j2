@@ -20,16 +20,16 @@ metadata:
   name: {{ server_name }}-eth1
 spec:
   ports:
-  - swp27@leaf-0
+  - swp29@leaf-0
   - eth1@{{ server_name }}
 ---
 apiVersion: k8s.netris.ai/v1alpha1
 kind: LinkAttachment
 metadata:
-  name: swp27-leaf-0-pxe
+  name: swp29-leaf-0-pxe
   namespace: kcm-system
 spec:
-  name: swp27@leaf-0
+  name: swp29@leaf-0
   vnet: pxe
   untagged: true
 {%- endif %}
@@ -49,9 +49,9 @@ spec:
 apiVersion: verity.mirantis.com/v1alpha1
 kind: Switchport
 metadata:
-  name: eth1-27-leaf-0
+  name: eth1-29-leaf-0
 spec:
-  name: "eth1/27@leaf-0"
+  name: "eth1/29@leaf-0"
   ethernet_port_profile: "ctl-pxe"
   gateway_port_profile: ""
 {%- endif %}
