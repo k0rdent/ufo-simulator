@@ -75,7 +75,7 @@ spec:
     bonds:
       bond0:
        parameters:
-         mode: active-backup
+         mode: 802.3ad
        interfaces:
         - eth1
         - eth2
@@ -92,7 +92,7 @@ spec:
              name: cats-mgmt-net
       bond1:
        parameters:
-         mode: active-backup
+         mode: 802.3ad
        interfaces:
         - eth3
         - eth4
