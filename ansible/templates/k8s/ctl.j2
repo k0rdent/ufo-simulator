@@ -39,6 +39,7 @@ apiVersion: verity.mirantis.com/v1alpha1
 kind: EthPortProfile
 metadata:
   name: ctl-pxe
+  namespace: kcm-system
 spec:
   enable: true
   services:
@@ -50,6 +51,7 @@ apiVersion: verity.mirantis.com/v1alpha1
 kind: Switchport
 metadata:
   name: eth1-29-leaf-0
+  namespace: kcm-system
 spec:
   name: "eth1/29@leaf-0"
   ethernet_port_profile: "ctl-pxe"
