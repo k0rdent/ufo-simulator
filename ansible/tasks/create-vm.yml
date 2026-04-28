@@ -49,7 +49,7 @@
     {% for link in vm_links %}
     {% set vm_mac = vm_base_mac ~ ':' ~ ('%02x' | format((vm_base_offset | int + loop.index0) // 256)) ~ ':' ~ ('%02x' | format((vm_base_offset | int + loop.index0) % 256)) %}
     --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
-    --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }},mac={{ vm_mac }}'
+    --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }},mac={{ vm_mac }},speed=10000,duplex=full'
     {% endfor %}
   when: vm_exists.rc != 0
 
