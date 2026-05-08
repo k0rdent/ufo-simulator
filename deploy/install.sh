@@ -57,7 +57,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     sleep 120
 fi
 
-ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/setup-network.yml --limit ${HOSTNAME}
+ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/linux.yml --limit ${HOSTNAME}
 
 if [[ ${NODE_TYPE} == "gtw" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/frr.yml --limit ${HOSTNAME}
