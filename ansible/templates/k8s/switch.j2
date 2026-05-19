@@ -1,0 +1,18 @@
+{%- set server_ports = [] %}
+{%- for link in links %}
+{%-   if link.local == switch_name and link.remote.startswith('vm-') %}
+{%-     set _ = server_ports.append(link.local_port) %}
+{%-   endif %}
+{%- endfor %}
+{% if server_ports %}
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Switch
+metadata:
+  name: {{ switch_name }}
+  namespace: kcm-system
+spec:
+  server_ports: {{ server_ports | join(',') }}
+  provisioning_network:
+    name: pxe
+{% endif %}

@@ -132,6 +132,14 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     fi
 
     kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
+
+    leaf_switches=(
+        leaf-0
+        leaf-1
+    )
+    for leaf in "${leaf_switches[@]}"; do
+        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/switch_${leaf}.yaml
+    done
     
     # Wait netris is fully initialized
     sleep 120
