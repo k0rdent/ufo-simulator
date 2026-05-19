@@ -18,5 +18,5 @@ ufo_chart_version: 0.0.11-d7b67ae
 ufo_image_tag: 0.0.11-d7b67ae.1777314295
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
-verity_operator_chart_version: 0.0.1-454c669
-verity_operator_image_tag: 0.0.1-454c669.1777311005
+verity_operator_chart_version: 0.0.5-82f70ed
+verity_operator_image_tag: 0.0.5-82f70ed.1779200190
