@@ -1,28 +1,36 @@
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
-kind: SubnetPool
+kind: SubnetPoolAllocation
 metadata:
   name: default
-  namespace: cats
+  namespace: kcm-system
 spec:
   ip_version: 4
-  min_prefix: 19
-  max_prefix: 24
-  prefixes:
-    - 10.11.0.0/16
-  tags:
-    - default
+  prefix_length: 23
+  source:
+    subnetpool:
+      name: default
+  target:
+    subnetpool:
+      name: default
+      namespace: cats
+      tags:
+        - default
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
-kind: SubnetPool
+kind: SubnetPoolAllocation
 metadata:
   name: public
-  namespace: cats
+  namespace: kcm-system
 spec:
   ip_version: 4
-  min_prefix: 25
-  max_prefix: 28
-  prefixes:
-    - 192.167.100.0/24
-  tags:
-    - public
+  prefix_length: 23
+  source:
+    subnetpool:
+      name: public
+  target:
+    subnetpool:
+      name: public
+      namespace: cats
+      tags:
+        - public
