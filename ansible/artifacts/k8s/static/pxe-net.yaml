@@ -16,11 +16,9 @@ metadata:
     ufo.mirantis.com/pxe: default
 spec:
   vpc: default
-  type: evpn
+  type: l2vpn
   vlan:
     id: "300"
-  evpn:
-    type: l2
   tags:
     - ufo.mirantis.com/pxe=default
   gateways: []

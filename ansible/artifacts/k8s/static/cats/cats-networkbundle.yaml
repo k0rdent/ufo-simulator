@@ -27,17 +27,13 @@ spec:
         gateway: true
     networks:
       - name: cats-mgmt-net
-        type: evpn
-        evpn:
-          type: l2
+        type: l2vpn
         vlan:
           id: "10"
         dnsServers:
         - "4.2.2.1"
       - name: cats-data-net
-        type: evpn
-        evpn:
-          type: l2
+        type: l2vpn
         vlan:
           id: "20"
         dnsServers:
