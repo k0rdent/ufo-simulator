@@ -14,8 +14,8 @@ netris_operator_chart_version: 0.0.1-f125b11
 netris_operator_image_tag: 0.0.1-f125b11.1775730529
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.0.12-a803321
-ufo_image_tag: 0.0.12-a803321.1779463775
+ufo_chart_version: 0.0.12-fb270e4
+ufo_image_tag: 0.0.12-fb270e4.1779713723
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
 verity_operator_chart_version: 0.0.5-58b641c
