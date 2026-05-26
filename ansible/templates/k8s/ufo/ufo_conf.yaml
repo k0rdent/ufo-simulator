@@ -1,0 +1,13 @@
+backends:
+  fabric_default: {{ ufo_fabric_backend }}
+  fabric:
+    noop:
+      enabled: false
+    netris:
+      enabled: {{ 'true' if ufo_fabric_backend == 'netris' else 'false' }}
+      config:
+        defaultTenant: Admin
+        defaultSites:
+          - default
+    verity:
+      enabled: {{ 'true' if ufo_fabric_backend == 'verity' else 'false' }}

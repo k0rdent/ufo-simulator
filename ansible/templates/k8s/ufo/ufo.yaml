@@ -2,16 +2,4 @@ image:
   repository: registry.ci.mirantis.com/k0rdent-bm/images/unified-fabric-operator
   tag: {{ ufo_image_tag }}
 ufoConfig:
-  backends:
-    fabric_default: {{ ufo_fabric_backend }}
-    fabric:
-      noop:
-        enabled: false
-      netris:
-        enabled: {{ 'true' if ufo_fabric_backend == 'netris' else 'false' }}
-        config:
-          defaultTenant: Admin
-          defaultSites:
-            - default
-      verity:
-        enabled: {{ 'true' if ufo_fabric_backend == 'verity' else 'false' }}
+{% filter indent(2, first=True) %}{% include 'k8s/ufo/ufo_conf.yaml' %}{% endfilter %}
