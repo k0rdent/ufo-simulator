@@ -76,6 +76,7 @@
                 dest: "{{ k8s_artifacts_dir }}/ufo/{{ item }}"
               with_items:
                - "ufo.yaml"
+               - "ufo_conf.yaml"
     
         - name: Deploy/upgrade ufo controller helm release
           kubernetes.core.helm:
