@@ -7,11 +7,18 @@
   gather_facts: true
   become: true
 
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
   vars:
     workspace: /opt/ufo_lab/
     infra_controller_repo: https://github.com/ya-isakov/infra-controller
     infra_controller_dir: "{{ workspace }}/infra-controller"
     infra_controller_rest_api_dir: "{{ infra_controller_dir }}/rest-api"
+    containerd_config_path: /etc/containerd/config.toml
+    containerd_apt_packages:
+      - containerd
     nico_rest_apt_packages:
       - make
       - jq
@@ -27,6 +34,11 @@
     kind_version: "0.27.0"
 
   handlers:
+    - name: Restart containerd
+      ansible.builtin.service:
+        name: containerd
+        state: restarted
+
     - name: Restart Docker
       ansible.builtin.service:
         name: docker
@@ -38,6 +50,24 @@
         name: "{{ nico_rest_apt_packages }}"
         state: present
         update_cache: true
+
+    - name: Install containerd
+      ansible.builtin.apt:
+        name: "{{ containerd_apt_packages }}"
+        state: present
+
+    - name: Ensure containerd config directory
+      ansible.builtin.file:
+        path: "{{ containerd_config_path | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Configure containerd
+      ansible.builtin.template:
+        src: nico-rest/containerd.toml.j2
+        dest: "{{ containerd_config_path }}"
+        mode: "0644"
+      notify: Restart containerd
 
     - name: Ensure Docker config directory
       ansible.builtin.file:
@@ -56,6 +86,9 @@
       ansible.builtin.apt:
         name: "{{ docker_apt_packages }}"
         state: present
+
+    - name: Apply containerd and Docker configuration
+      ansible.builtin.meta: flush_handlers
 
     - name: Install kind
       ansible.builtin.get_url:
