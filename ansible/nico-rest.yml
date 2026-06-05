@@ -1,0 +1,81 @@
+---
+# Install build/dev tools on gateway nodes.
+#   ansible-playbook -i inventory.yml nico-rest.yml
+
+- name: Install nico-rest packages on gateway nodes
+  hosts: gtws
+  gather_facts: true
+  become: true
+
+  vars:
+    workspace: /opt/ufo_lab/
+    infra_controller_repo: https://github.com/NVIDIA/infra-controller
+    infra_controller_dir: "{{ workspace }}/infra-controller"
+    nico_rest_apt_packages:
+      - make
+      - jq
+      - git
+    docker_apt_packages:
+      - docker.io
+      - docker-buildx
+    docker_daemon_config_path: /etc/docker/daemon.json
+    docker_daemon_config:
+      default-address-pools:
+        - base: 10.20.0.0/16
+          size: 24
+    kind_version: "0.27.0"
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+
+  tasks:
+    - name: Install apt packages
+      ansible.builtin.apt:
+        name: "{{ nico_rest_apt_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker config directory
+      ansible.builtin.file:
+        path: "{{ docker_daemon_config_path | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Configure Docker daemon address pools
+      ansible.builtin.copy:
+        dest: "{{ docker_daemon_config_path }}"
+        content: "{{ docker_daemon_config | to_nice_json }}\n"
+        mode: "0644"
+      notify: Restart Docker
+
+    - name: Install Docker packages
+      ansible.builtin.apt:
+        name: "{{ docker_apt_packages }}"
+        state: present
+
+    - name: Install kind
+      ansible.builtin.get_url:
+        url: "https://kind.sigs.k8s.io/dl/v{{ kind_version }}/kind-linux-amd64"
+        dest: /usr/local/bin/kind
+        mode: "0755"
+
+    - name: Install Helm via official one-liner script
+      ansible.builtin.shell: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/helm
+      changed_when: false
+
+    - name: Ensure workspace directory
+      ansible.builtin.file:
+        path: "{{ workspace }}"
+        state: directory
+
+    - name: Clone infra-controller repository
+      ansible.builtin.git:
+        repo: "{{ infra_controller_repo }}"
+        dest: "{{ infra_controller_dir }}"
+        update: true
