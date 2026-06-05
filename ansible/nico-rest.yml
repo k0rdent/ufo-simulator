@@ -9,8 +9,9 @@
 
   vars:
     workspace: /opt/ufo_lab/
-    infra_controller_repo: https://github.com/NVIDIA/infra-controller
+    infra_controller_repo: https://github.com/ya-isakov/infra-controller
     infra_controller_dir: "{{ workspace }}/infra-controller"
+    infra_controller_rest_api_dir: "{{ infra_controller_dir }}/rest-api"
     nico_rest_apt_packages:
       - make
       - jq
@@ -88,3 +89,8 @@
         repo: "{{ infra_controller_repo }}"
         dest: "{{ infra_controller_dir }}"
         update: true
+
+    - name: Reset kind cluster for rest-api
+      ansible.builtin.command:
+        cmd: make kind-reset
+        chdir: "{{ infra_controller_rest_api_dir }}"
