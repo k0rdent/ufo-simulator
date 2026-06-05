@@ -15,6 +15,7 @@ export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
 export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
 export FABRIC_BACKEND=${FABRIC_BACKEND:-"netris"}
 export NODE_TYPE=${NODE_TYPE:-"cmp"}
+export NICO_ENABLE="true"
 
 BASE_INVENTORY=${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 ANSIBLE_INTENTORY_ARG="-i ${BASE_INVENTORY}"
@@ -61,6 +62,9 @@ ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/linux.yml
 
 if [[ ${NODE_TYPE} == "gtw" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/frr.yml --limit ${HOSTNAME}
+    if [[ ${NICO_ENABLE} == "true" ]]; then
+        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-rest.yml --limit ${HOSTNAME}
+    fi
 fi
 
 if [[ ${NODE_TYPE} == "cmp" ]]; then
