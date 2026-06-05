@@ -23,6 +23,7 @@
       - make
       - jq
       - git
+      - wget
     docker_apt_packages:
       - docker.io
       - docker-buildx
@@ -32,7 +33,7 @@
         - base: 10.20.0.0/16
           size: 24
     kind_version: "0.27.0"
-
+    go_version: 1.25.5
   handlers:
     - name: Restart containerd
       ansible.builtin.service:
@@ -111,6 +112,16 @@
         executable: /bin/bash
         creates: /usr/local/bin/helm
       changed_when: false
+
+    - name: Install recent Go from official tarball
+      ansible.builtin.shell: |
+        set -e
+        GO_VERSION="{{ go_version }}"
+        wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+        rm -rf /usr/local/go && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+        echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+      args:
+           creates: /usr/local/go/bin/go
 
     - name: Ensure workspace directory
       ansible.builtin.file:
