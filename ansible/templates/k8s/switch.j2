@@ -12,6 +12,7 @@ metadata:
   name: {{ switch_name }}
   namespace: kcm-system
 spec:
+  hostname: {{ switch_name }}
   server_ports: {{ server_ports | join(',') }}
   provisioning_network:
     name: pxe

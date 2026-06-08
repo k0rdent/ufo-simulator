@@ -9,6 +9,15 @@ metadata:
 spec: {}
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
+kind: Vpc
+metadata:
+  annotations:
+    ufo.mirantis.com/netris-adminTenant: "Admin"
+  name: cats-ew
+  namespace: cats
+spec: {}
+---
+apiVersion: ufo.mirantis.com/v1alpha1
 kind: VpcPeeringPolicy
 metadata:
   name: allow-from-kcm-system

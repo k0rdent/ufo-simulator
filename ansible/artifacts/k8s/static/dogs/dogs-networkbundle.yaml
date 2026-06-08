@@ -1,37 +1,63 @@
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: dogs-mgmt-net
+  namespace: dogs
+spec:
+  vpc: dogs
+  type: l2vpn
+  vlan:
+    id: "10"
+  dnsServers:
+    - "4.2.2.1"
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetAllocation
+metadata:
+  name: dogs-mgmt-subnet
+  namespace: dogs
+spec:
+  prefix_length: 24
+  subnetpool: default
+  subnet: dogs-mgmt-subnet
+  vpc: dogs
+  network: dogs-mgmt-net
+  gateway: true
+---
+ apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: dogs-data-net
+  namespace: dogs
+spec:
+  vpc: dogs
+  type: l2vpn
+  vlan:
+    id: "11"
+  dnsServers:
+    - "4.2.2.1"
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetAllocation
+metadata:
+  name: dogs-data-subnet
+  namespace: dogs
+spec:
+  prefix_length: 24
+  subnetpool: default
+  subnet: dogs-data-subnet
+  vpc: dogs
+  network: dogs-data-net
+  gateway: true
+---
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: NetworkBundle
 metadata:
   name: dogs
   namespace: dogs
 spec:
-  vpc: dogs
   clusterName: dogs-cluster
-  allocations:
-    subnetAllocations:
-      - name: dogs-mgmt-subnet
-        prefixLength: 24
-        subnetpool: default
-        subnet: dogs-mgmt-subnet
-        network: dogs-mgmt-net
-        gateway: true
-      - name: dogs-data-subnet
-        prefixLength: 24
-        subnetpool: default
-        subnet: dogs-data-subnet
-        network: dogs-data-net
-    networks:
-      - name: dogs-mgmt-net
-        type: l2vpn
-        vlan:
-          id: "auto"
-        dnsServers:
-        - "4.2.2.1"
-      - name: dogs-data-net
-        type: l2vpn
-        vlan:
-          id: "auto"
-        dnsServers:
-        - "4.2.2.1"
   networkv2:
     ethernets:
       eth1:
