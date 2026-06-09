@@ -21,7 +21,6 @@ spec:
     id: "300"
   tags:
     - ufo.mirantis.com/pxe=default
-  gateways: []
   dhcp:
     enabled: false
 ---
