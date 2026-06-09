@@ -138,3 +138,5 @@
       ansible.builtin.command:
         cmd: make kind-reset
         chdir: "{{ infra_controller_rest_api_dir }}"
+      environment:
+        EXTERNAL_IP: "{{ nico_rest_external_ip }}"
