@@ -217,6 +217,21 @@ verity_operator_image_tag: 0.0.1-408dd13.1774008551
 verity_api_username: admin
 verity_api_password: vnc1234
 
+nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator
+nico_operator_chart_version: 0.0.1
+nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
+nico_operator_image_tag: 0.0.1
+nico_rest_external_ip: 10.200.0.1
+nico_api_base_url: "http://{{ nico_rest_external_ip }}:8388"
+nico_api_org: test-org
+nico_token_url: "http://{{ nico_rest_external_ip }}:8082/realms/nico-dev/protocol/openid-connect/token"
+nico_client_id: nico-api
+nico_credentials_secret_name: nico-credentials
+nico_api_username: admin@example.com
+nico_api_password: adminpassword
+nico_client_secret: nico-local-secret
+nico_enabled: true
+
 netris_controller_ip: 10.172.1.100
 netris_web_frontend_ip: 10.172.1.101
 netris_web_api_url: "http://{{ netris_web_frontend_ip }}"

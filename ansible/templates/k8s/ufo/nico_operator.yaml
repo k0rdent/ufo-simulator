@@ -1,0 +1,16 @@
+image:
+  repository: {{ nico_operator_image }}
+  tag: {{ nico_operator_image_tag }}
+nico:
+  baseUrl: "{{ nico_api_base_url }}"
+  org: "{{ nico_api_org }}"
+  tokenUrl: "{{ nico_token_url }}"
+  clientId: "{{ nico_client_id }}"
+  credentialsSecret:
+    name: "{{ nico_credentials_secret_name }}"
+    tokenKey: NICO_TOKEN
+    usernameKey: NICO_USERNAME
+    passwordKey: NICO_PASSWORD
+    clientSecretKey: NICO_CLIENT_SECRET
+machineSync:
+  namespace: kcm-system
