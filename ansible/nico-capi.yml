@@ -1,0 +1,101 @@
+---
+- name: Install NICO CAPI provider
+  hosts: cmps
+  connection: local
+  become: true
+  gather_facts: true
+  ignore_errors: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  vars:
+    workspace: /opt/ufo_lab/
+
+  tasks:
+    - name: Install NICO CAPI provider via helm chart
+      when: nico_capi_provider_enabled
+      block:
+        - name: Ensure target directory
+          file:
+            path: "{{ k8s_artifacts_dir }}/nico/"
+            state: directory
+
+        - name: Handle NICO CAPI provider templates
+          block:
+            - name: Render templates
+              ansible.builtin.template:
+                src: "k8s/nico/{{ item }}"
+                dest: "{{ k8s_artifacts_dir }}/nico/{{ item }}"
+              with_items:
+                - "nico_capi_provider.yaml"
+
+        - name: Deploy/upgrade NICO CAPI provider helm release
+          kubernetes.core.helm:
+            name: cluster-api-provider-carbide
+            kubeconfig: "{{ kubeconfig_path }}"
+            chart_ref: "{{ nico_capi_provider_chart_repo }}"
+            chart_version: "{{ nico_capi_provider_chart_version }}"
+            release_namespace: "{{ nico_capi_provider_namespace }}"
+            create_namespace: true
+            values_files:
+              - "{{ k8s_artifacts_dir }}/nico/nico_capi_provider.yaml"
+            state: present
+            wait: true
+            wait_timeout: 300s
+
+        - name: Deploy external-secrets operator
+          kubernetes.core.helm:
+            name: external-secrets
+            kubeconfig: "{{ kubeconfig_path }}"
+            chart_ref: external-secrets
+            chart_repo_url: "{{ external_secrets_chart_repo }}"
+            chart_version: "{{ external_secrets_chart_version }}"
+            release_namespace: "{{ external_secrets_namespace }}"
+            create_namespace: true
+            state: present
+            wait: true
+            wait_timeout: 300s
+
+        - name: Create Keycloak credentials secret for NICO CAPI token generation
+          kubernetes.core.k8s:
+            kubeconfig: "{{ kubeconfig_path }}"
+            state: present
+            definition:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: "{{ nico_credentials_secret_name }}"
+                namespace: "{{ nico_capi_provider_namespace }}"
+                labels:
+                  external-secrets.io/type: webhook
+              type: Opaque
+              stringData:
+                client_id: "{{ nico_client_id }}"
+                client_secret: "{{ nico_client_secret }}"
+                username: "{{ nico_api_username }}"
+                password: "{{ nico_api_password }}"
+
+        - name: Render NICO CAPI credentials manifests
+          ansible.builtin.template:
+            src: k8s/nico/nico_capi_credentials.yaml.j2
+            dest: "{{ k8s_artifacts_dir }}/nico/nico_capi_credentials.yaml"
+
+        - name: Apply NICO CAPI credentials manifests
+          ansible.builtin.command:
+            cmd: kubectl --kubeconfig {{ kubeconfig_path }} apply -f {{ k8s_artifacts_dir }}/nico/nico_capi_credentials.yaml
+
+        - name: Wait for carbide access token ExternalSecret
+          ansible.builtin.command:
+            cmd: >
+              kubectl --kubeconfig {{ kubeconfig_path }}
+              wait --for=condition=Ready
+              --timeout=120s
+              -n {{ nico_capi_provider_namespace }}
+              externalsecret/carbide-access-token
+          register: carbide_credentials_wait
+          retries: 5
+          delay: 15
+          until: carbide_credentials_wait.rc == 0
+          changed_when: false

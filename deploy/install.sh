@@ -85,6 +85,10 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     fi
     
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml --limit ${HOSTNAME}
+
+    if [[ ${NICO_ENABLE} == "true" ]]; then
+        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-capi.yml --limit ${HOSTNAME}
+    fi
     
     if [[ ${FABRIC_BACKEND} == "verity" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/verity.yml --limit ${HOSTNAME}
