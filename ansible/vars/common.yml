@@ -22,6 +22,6 @@ verity_operator_chart_version: 0.0.5-58b641c
 verity_operator_image_tag: 0.0.5-58b641c.1779263746
 
 nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator
-nico_operator_chart_version: 0.0.1-117998a
+nico_operator_chart_version: 0.0.1-398a20b
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
-nico_operator_image_tag: 0.0.1-117998a.1780931595
+nico_operator_image_tag: 0.0.1-398a20b.1780994144
