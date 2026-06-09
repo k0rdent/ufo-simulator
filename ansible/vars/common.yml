@@ -25,3 +25,8 @@ nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-
 nico_operator_chart_version: 0.0.1-398a20b
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
 nico_operator_image_tag: 0.0.1-398a20b.1780994144
+
+nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-carbide
+nico_capi_provider_chart_version: v0.1.0-alpha.7-17-gfc7b7b4e3a21c8
+nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-carbide
+nico_capi_provider_image_tag: v0.1.0-alpha.7-17-gfc7b7b4e3a21c8

@@ -1,0 +1,4 @@
+manager:
+  image:
+    repository: {{ nico_capi_provider_image }}
+    tag: {{ nico_capi_provider_image_tag }}
