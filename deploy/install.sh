@@ -88,6 +88,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
 
     if [[ ${NICO_ENABLE} == "true" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-capi.yml --limit ${HOSTNAME}
+#        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-nico-artifacts.yml --limit ${HOSTNAME}
     fi
     
     if [[ ${FABRIC_BACKEND} == "verity" ]]; then

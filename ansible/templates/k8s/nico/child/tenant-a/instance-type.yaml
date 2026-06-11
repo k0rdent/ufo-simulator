@@ -1,0 +1,14 @@
+apiVersion: nico.mirantis.com/v1alpha1
+kind: InstanceType
+metadata:
+  name: gpu-a100
+  namespace: tenant-a
+spec:
+  description: A100 nodes
+  machineIds:
+    - bySerialNumber: "DPG5NS621A0000"
+    - bySerialNumber: "DPG5NS621A0001"
+    - bySerialNumber: "DPG5NS621A0002"
+    - bySerialNumber: "DPG5NS621A0003"
+    - bySerialNumber: "DPG5NS621A0004"
+    - bySerialNumber: "DPG5NS621A0005"

@@ -1,0 +1,160 @@
+---
+- name: Request NICO OIDC access token
+  ansible.builtin.uri:
+    url: "{{ nico_token_url }}"
+    method: POST
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body_format: form-urlencoded
+    body:
+      client_id: "{{ nico_client_id }}"
+      client_secret: "{{ nico_client_secret }}"
+      grant_type: password
+      username: "{{ nico_api_username }}"
+      password: "{{ nico_api_password }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_token_response
+
+- name: Set NICO access token fact
+  ansible.builtin.set_fact:
+    nico_access_token: "{{ nico_token_response.json.access_token }}"
+    nico_rest_headers:
+      Authorization: "Bearer {{ nico_token_response.json.access_token }}"
+      Accept: application/json
+
+- name: Fetch NICO sites from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/site"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_sites
+
+- name: Fetch NICO current tenant for org from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/tenant/current"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_tenant_current
+
+- name: Fetch NICO VPCs from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/vpc"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_vpcs
+
+- name: Fetch NICO instance types from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/instance/type"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_instance_types
+
+- name: Fetch NICO operating systems from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/operating-system"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_operating_systems
+
+- name: Fetch NICO SSH key groups from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/sshkeygroup"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_ssh_key_groups
+
+- name: Set NICO resource IDs for child cluster rendering
+  ansible.builtin.set_fact:
+    nico_site_id: >-
+      {{
+        nico_rest_sites.json
+        | selectattr('name', 'equalto', nico_site_name)
+        | map(attribute='id')
+        | first
+        | default('')
+      }}
+    nico_tenant_id: "{{ nico_rest_tenant_current.json.id | default('') }}"
+    nico_vpc_id: >-
+      {{
+        nico_rest_vpcs.json
+        | selectattr('name', 'equalto', nico_vpc_name)
+        | map(attribute='id')
+        | first
+        | default('')
+      }}
+    nico_instance_type_id: >-
+      {{
+        nico_rest_instance_types.json
+        | selectattr('name', 'equalto', nico_prepovision_instance_type_name)
+        | map(attribute='id')
+        | first
+        | default('')
+      }}
+    nico_operating_system_id: >-
+      {{
+        nico_rest_operating_systems.json
+        | selectattr('name', 'equalto', nico_prepovision_operating_system_name)
+        | map(attribute='id')
+        | first
+        | default('')
+      }}
+    nico_ssh_key_group_ids:
+      - >-
+        {{
+          nico_rest_ssh_key_groups.json
+          | selectattr('name', 'equalto', nico_prepovision_ssh_key_group_name)
+          | map(attribute='id')
+          | first
+          | default('')
+        }}
+
+- name: Ensure required NICO resource IDs are available
+  ansible.builtin.assert:
+    that:
+      - nico_site_id | length > 0
+      - nico_tenant_id | length > 0
+      - nico_vpc_id | length > 0
+      - nico_instance_type_id | length > 0
+      - nico_operating_system_id | length > 0
+      - nico_ssh_key_group_ids | length > 0
+      - nico_ssh_key_group_ids[0] | length > 0
+    fail_msg: >-
+      Failed to resolve one or more NICO resource IDs via REST API.
+      site '{{ nico_site_name }}' (available: {{
+        nico_rest_sites.json | map(attribute='name') | list | join(', ')
+      }}),
+      tenant for org '{{ nico_api_org }}' via /tenant/current,
+      vpc '{{ nico_vpc_name }}' (available: {{
+        nico_rest_vpcs.json | map(attribute='name') | list | join(', ')
+      }}),
+      instance type '{{ nico_prepovision_instance_type_name }}' (available: {{
+        nico_rest_instance_types.json | map(attribute='name') | list | join(', ')
+      }}),
+      operating system '{{ nico_prepovision_operating_system_name }}' (available: {{
+        nico_rest_operating_systems.json | map(attribute='name') | list | join(', ')
+      }}),
+      ssh key group '{{ nico_prepovision_ssh_key_group_name }}' (available: {{
+        nico_rest_ssh_key_groups.json | map(attribute='name') | list | join(', ')
+      }}).
+      Ensure prepovision resources exist in NICo and name variables match.
