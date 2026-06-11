@@ -1,0 +1,56 @@
+---
+- name: Render NICO Kubernetes artifacts
+  hosts: cmps
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  tasks:
+    - name: Ensure artifacts directory exists
+      ansible.builtin.file:
+        path: "{{ k8s_artifacts_dir }}"
+        state: directory
+        recurse: true
+
+    - name: Render NICO CAPI child cluster artifacts
+      when: nico_capi_provider_enabled | bool
+      block:
+        - name: Ensure NICO artifact directories exist
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+          loop:
+            - "{{ k8s_artifacts_dir }}/nico/child/provider_admin"
+            - "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}"
+
+        - name: Render NICO provider admin manifests
+          ansible.builtin.template:
+            src: "k8s/nico/child/provider_admin/{{ item }}"
+            dest: "{{ k8s_artifacts_dir }}/nico/child/provider_admin/{{ item }}"
+          loop:
+            - subnetpool.yaml
+            - "{{ nico_child_tenant }}-vpc.yaml"
+            - "{{ nico_child_tenant }}-subnetpoolallocation.yaml"
+
+        - name: Render NICO tenant prepovision manifests
+          ansible.builtin.template:
+            src: "k8s/nico/child/{{ nico_child_tenant }}/{{ item }}"
+            dest: "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}/{{ item }}"
+          loop:
+            - instance-type.yaml
+            - operating-system.yaml
+            - ssh-key.yaml
+            - networks.yaml
+            - networkbundle.yaml
+
+        - name: Fetch NICO resource IDs from REST API
+          ansible.builtin.include_tasks: tasks/nico_fetch_resources_id.yml
+
+        - name: Render NICO child cluster template
+          ansible.builtin.template:
+            src: "k8s/nico/child/{{ nico_child_tenant }}/cluster.yaml.j2"
+            dest: "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}/cluster.yaml"

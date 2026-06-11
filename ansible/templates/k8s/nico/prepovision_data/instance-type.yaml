@@ -1,8 +1,0 @@
-apiVersion: nico.mirantis.com/v1alpha1
-kind: InstanceType
-metadata:
-  name: gpu-a100
-spec:
-  description: A100 nodes
-  machineIds:
-    - bySerialNumber: "J1050ACR"

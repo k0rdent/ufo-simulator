@@ -239,6 +239,16 @@ nico_capi_provider_chart_version: 0.0.1
 nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-carbide
 nico_capi_provider_image_tag: 0.0.1
 nico_capi_identity_secret_name: carbide-credentials
+nico_capi_identity_secret_namespaces:
+  - tenant-a
+  - tenant-b
+  - "{{ nico_capi_provider_namespace }}"
+nico_child_tenant: tenant-a
+nico_site_name: local-dev-site
+nico_vpc_name: "tenant-b-tenant-b"
+nico_prepovision_instance_type_name: gpu-a100
+nico_prepovision_operating_system_name: ubuntu-22.04
+nico_prepovision_ssh_key_group_name: dev-team-keys
 external_secrets_namespace: external-secrets
 external_secrets_chart_repo: https://charts.external-secrets.io
 external_secrets_chart_version: 0.16.1

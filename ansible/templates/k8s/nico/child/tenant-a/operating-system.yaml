@@ -2,6 +2,7 @@ apiVersion: nico.mirantis.com/v1alpha1
 kind: OperatingSystem
 metadata:
   name: ubuntu-22.04
+  namespace: tenant-a
 spec:
   description: Ubuntu 22.04 via iPXE
   ipxeScript: |
