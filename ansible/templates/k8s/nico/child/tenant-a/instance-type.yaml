@@ -12,3 +12,13 @@ spec:
     - bySerialNumber: "DPG5NS621A0003"
     - bySerialNumber: "DPG5NS621A0004"
     - bySerialNumber: "DPG5NS621A0005"
+---
+apiVersion: nico.mirantis.com/v1alpha1
+kind: InstanceTypeAllocation
+metadata:
+  name: gpu-tenant-alloc
+  namespace: tenant-a
+spec:
+  instanceTypeRef:
+    name: gpu-a100
+  reservedMachineCount: 6

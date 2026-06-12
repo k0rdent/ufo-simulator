@@ -65,7 +65,7 @@ metadata:
   namespace: tenant-a
 spec:
   interfaces:
-    - vpcPrefixId: 09c7cc76-428e-4943-a2db-5587918c5861
+    - vpcPrefixId: {{ nico_vpc_prefix_id }}
       isPhysical: true
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
