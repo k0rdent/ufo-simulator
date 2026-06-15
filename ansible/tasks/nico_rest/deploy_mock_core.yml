@@ -1,0 +1,15 @@
+---
+- name: Deploy nico-core-mock via Helm
+  ansible.builtin.command:
+    cmd: >-
+      helm upgrade --install {{ nico_core_mock_helm_release }}
+      helm/nico-rest-mock-core/
+      --namespace {{ nico_core_mock_helm_namespace }}
+      --set image.repository={{ nico_core_mock_image_repo }}
+      --set image.tag={{ nico_core_mock_image_tag }}
+      --set image.pullPolicy=Never
+      --set libvirt.enabled={{ nico_core_mock_libvirt_enabled | bool | lower }}
+      --set libvirt.endpoint={{ nico_core_mock_libvirt_endpoint }}
+    chdir: "{{ nico_core_mock_dir }}"
+  register: nico_core_mock_helm_deploy
+  changed_when: "'has been upgraded' in nico_core_mock_helm_deploy.stdout or 'has been installed' in nico_core_mock_helm_deploy.stdout"

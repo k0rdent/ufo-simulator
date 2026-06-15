@@ -1,0 +1,17 @@
+---
+- name: Ensure workspace directory
+  ansible.builtin.file:
+    path: "{{ nico_rest_workspace }}"
+    state: directory
+
+- name: Clone infra-controller repository
+  ansible.builtin.git:
+    repo: "{{ nico_rest_infra_controller_repo }}"
+    dest: "{{ nico_rest_infra_controller_dir }}"
+    update: true
+
+- name: Clone nico-core-mock repository
+  ansible.builtin.git:
+    repo: "{{ nico_core_mock_repo }}"
+    dest: "{{ nico_core_mock_dir }}"
+    update: true

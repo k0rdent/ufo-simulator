@@ -1,0 +1,8 @@
+---
+- name: Reset kind cluster for NICO REST API
+  ansible.builtin.command:
+    cmd: make kind-reset
+    chdir: "{{ nico_rest_infra_controller_rest_api_dir }}"
+  environment:
+    EXTERNAL_IP: "{{ nico_rest_external_ip }}"
+    INSTALL_MOCK_CORE: "false"

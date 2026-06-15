@@ -1,0 +1,6 @@
+---
+- name: Load nico-core-mock image into kind cluster
+  ansible.builtin.command:
+    cmd: >-
+      kind load docker-image {{ nico_core_mock_image }}
+      --name {{ nico_kind_cluster_name }}

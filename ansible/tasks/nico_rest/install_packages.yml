@@ -1,0 +1,77 @@
+---
+- name: Install apt packages
+  ansible.builtin.apt:
+    name: "{{ nico_rest_apt_packages }}"
+    state: present
+    update_cache: true
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: "{{ containerd_apt_packages }}"
+    state: present
+
+- name: Ensure containerd config directory
+  ansible.builtin.file:
+    path: "{{ containerd_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Configure containerd
+  ansible.builtin.template:
+    src: nico-rest/containerd.toml.j2
+    dest: "{{ containerd_config_path }}"
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Ensure Docker config directory
+  ansible.builtin.file:
+    path: "{{ docker_daemon_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Configure Docker daemon address pools
+  ansible.builtin.copy:
+    dest: "{{ docker_daemon_config_path }}"
+    content: "{{ docker_daemon_config | to_nice_json }}\n"
+    mode: "0644"
+  notify: Restart Docker
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name: "{{ docker_apt_packages }}"
+    state: present
+
+- name: Apply containerd and Docker configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Install kind
+  ansible.builtin.get_url:
+    url: "https://kind.sigs.k8s.io/dl/v{{ kind_version }}/kind-linux-amd64"
+    dest: /usr/local/bin/kind
+    mode: "0755"
+
+- name: Install kubectl latest stable
+  ansible.builtin.shell: |
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    rm -f kubectl
+  args:
+    creates: /usr/local/bin/kubectl
+  changed_when: false
+
+- name: Install Helm via official one-liner script
+  ansible.builtin.shell: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/helm
+  changed_when: false
+
+- name: Install recent Go from official tarball
+  ansible.builtin.shell: |
+    set -e
+    GO_VERSION="{{ go_version }}"
+    wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+    echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+  args:
+    creates: /usr/local/go/bin/go
