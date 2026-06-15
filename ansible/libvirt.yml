@@ -34,21 +34,24 @@
             msg: "Running on {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_architecture }})"
 
   handlers:
+    - name: Restart libvirtd with TCP socket
+      ansible.builtin.shell: |
+        systemctl stop libvirtd.service libvirtd-tcp.socket || true
+        systemctl enable --now libvirtd-tcp.socket
+        systemctl start libvirtd.service
+      when:
+        - ansible_service_mgr == 'systemd'
+        - ansible_distribution == "Ubuntu"
+      changed_when: true
+
     - name: Restart libvirtd
       systemd:
         name: libvirtd
         state: restarted
         daemon_reload: yes
-      when: ansible_service_mgr == 'systemd'
-
-    - name: Restart libvirtd-tcp socket
-      systemd:
-        name: libvirtd-tcp.socket
-        state: restarted
-        daemon_reload: yes
       when:
         - ansible_service_mgr == 'systemd'
-        - ansible_distribution == "Ubuntu"
+        - ansible_distribution != "Ubuntu"
 
     - name: Restart sushy-emulator
       systemd:
@@ -97,12 +100,6 @@
 
     - name: Configure libvirt
       block:
-        - name: Enable libvirtd service
-          service:
-            name: libvirtd
-            enabled: yes
-            state: started
-
         - name: Configure libvirt QEMU
           copy:
             dest: /etc/libvirt/qemu.conf
@@ -132,22 +129,45 @@
             dest: /etc/libvirt/libvirtd.conf
             mode: "0644"
 
-        - name: Disable libvirt TLS socket
-          ansible.builtin.systemd:
-            name: libvirtd-tls.socket
-            enabled: false
-            state: stopped
-            daemon_reload: true
-          failed_when: false
+        - name: Enable libvirt TCP on Ubuntu Jammy
           when: ansible_distribution == "Ubuntu"
+          block:
+            - name: Stop libvirtd and TCP socket before enabling TCP listener
+              ansible.builtin.systemd:
+                name: "{{ item }}"
+                state: stopped
+              loop:
+                - libvirtd.service
+                - libvirtd-tcp.socket
+              failed_when: false
 
-        - name: Enable libvirt TCP socket
-          ansible.builtin.systemd:
-            name: libvirtd-tcp.socket
+            - name: Disable libvirt TLS socket
+              ansible.builtin.systemd:
+                name: libvirtd-tls.socket
+                enabled: false
+                state: stopped
+                daemon_reload: true
+              failed_when: false
+
+            - name: Enable and start libvirt TCP socket
+              ansible.builtin.systemd:
+                name: libvirtd-tcp.socket
+                enabled: true
+                state: started
+                daemon_reload: true
+
+            - name: Enable and start libvirtd service
+              ansible.builtin.systemd:
+                name: libvirtd.service
+                enabled: true
+                state: started
+
+        - name: Enable libvirtd service on Debian
+          ansible.builtin.service:
+            name: libvirtd
             enabled: true
             state: started
-            daemon_reload: true
-          when: ansible_distribution == "Ubuntu"
+          when: ansible_distribution == "Debian"
 
         - name: Destroy images libvirt pool
           community.libvirt.virt_pool:
@@ -177,8 +197,8 @@
             autostart: yes
 
       notify:
+        - Restart libvirtd with TCP socket
         - Restart libvirtd
-        - Restart libvirtd-tcp socket
 
     - name: Install and configure Sushy Tools Redfish Emulator
       block:
