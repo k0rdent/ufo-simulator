@@ -1,10 +1,11 @@
 ---
-# Source: capm3-standalone-cp/templates/cluster.yaml
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: tenant-a-cluster
   namespace: tenant-a
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
   clusterNetwork:
     apiServerPort: 6443
@@ -14,97 +15,114 @@ spec:
     services:
       cidrBlocks:
       - 10.95.0.0/16
-  controlPlaneEndpoint:
-    host: 10.11.0.250
-    port: 6443
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    apiGroup: controlplane.cluster.x-k8s.io
     kind: K0smotronControlPlane
     name: tenant-a-cluster-cp
-    namespace: tenant-a
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    apiGroup: infrastructure.cluster.x-k8s.io
     kind: CarbideCluster
     name: tenant-a-cluster
-    namespace: tenant-a
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: CarbideCluster
 metadata:
   name: tenant-a-cluster
   namespace: tenant-a
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
   identityRef:
-    name: carbide-credentials              # -> Secret above
+    name: carbide-credentials
     orgId: {{ nico_api_org }}
     apiEndpoint: {{ nico_api_base_url }}
     siteId: {{ nico_site_id }}
----
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-kind: CarbideMachine
-metadata:
-  name: tenant-a-cluster-machine-0
-  namespace: tenant-a
-  labels:
-    cluster.x-k8s.io/cluster-name: tenant-a-cluster
-    ufo.mirantis.com/networkbundle: test
-spec:
-  instanceTypeId: {{ nico_instance_type_id }}
-  tenantId: {{ nico_tenant_id }}
-  vpcId: {{ nico_vpc_id }}
-  operatingSystemId: {{ nico_operating_system_id }}
-  sshKeyGroupIds:
-{% for ssh_key_group_id in nico_ssh_key_group_ids %}
-    - {{ ssh_key_group_id }}
-{% endfor %}
----
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-kind: CarbideNetworkConfig
-metadata:
-  name: tenant-a-cluster-machine-0
-  namespace: tenant-a
-spec:
-  interfaces:
-    - vpcPrefixId: {{ nico_vpc_prefix_id }}
-      isPhysical: true
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: K0smotronControlPlane
 metadata:
   name: tenant-a-cluster-cp
   namespace: tenant-a
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
-  version: v1.31.1-k0s.0          # k0s version
-  replicas: 1                      # 3 for HA
+  version: v1.36.1
+  replicas: 1
   service:
-    type: LoadBalancer             # or NodePort if no LB
+    type: LoadBalancer
   persistence:
     type: emptyDir
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-kind: K0sWorkerConfig
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: CarbideMachineTemplate
 metadata:
-  name: tenant-a-cluster-machine-0
+  name: tenant-a-cluster-default-cmt
   namespace: tenant-a
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
-  version: v1.31.1+k0s.0
+  template:
+    spec:
+      instanceTypeId: {{ nico_instance_type_id }}
+      operatingSystemId: {{ nico_operating_system_id }}
+      tenantId: {{ nico_tenant_id }}
+      vpcId: {{ nico_vpc_id }}
+      sshKeyGroupIds:
+{% for ssh_key_group_id in nico_ssh_key_group_ids %}
+      - {{ ssh_key_group_id }}
+{% endfor %}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: K0sWorkerConfigTemplate
+metadata:
+  name: tenant-a-cluster-default-wct
+  namespace: tenant-a
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-a-cluster
+spec:
+  template:
+    spec:
+      version: v1.36.1
+      preStartCommands:
+        - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+        - sudo mkdir -vp /home/rescue/.ssh/
+        - sudo chown rescue /home/rescue/.ssh/authorized_keys
+        - /usr/bin/sleep 180
+      files:
+      - content: |
+          PasswordAuthentication yes
+        path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
+        permissions: "0644"
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
-kind: Machine
+kind: MachineDeployment
 metadata:
-  name: tenant-a-cluster-machine-0
+  name: tenant-a-cluster-default-md
   namespace: tenant-a
   labels:
     cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
   clusterName: tenant-a-cluster
-  version: v1.31.1
-  bootstrap:
-    configRef:
-      apiGroup: bootstrap.cluster.x-k8s.io
-      kind: K0sWorkerConfig
-      name: tenant-a-cluster-machine-0
-  infrastructureRef:
-    apiGroup: infrastructure.cluster.x-k8s.io
-    kind: CarbideMachine
-    name: tenant-a-cluster-machine-0
+  replicas: 3
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: tenant-a-cluster
+      cluster.x-k8s.io/worker-name: tenant-a-cluster-default-md
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: tenant-a-cluster
+        cluster.x-k8s.io/worker-name: tenant-a-cluster-default-md
+        ufo.mirantis.com/networkbundle: tenant-a-networkbundle
+    spec:
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: K0sWorkerConfigTemplate
+          name: tenant-a-cluster-default-wct
+      clusterName: tenant-a-cluster
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: CarbideMachineTemplate
+        name: tenant-a-cluster-default-cmt
+      version: v1.36.1
