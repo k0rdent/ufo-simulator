@@ -1,0 +1,19 @@
+apiVersion: nico.mirantis.com/v1alpha1
+kind: Instance
+metadata:
+  name: gpu-worker-02
+  namespace: tenant-a
+spec:
+  description: GPU worker with direct NICo IDs
+  machineId:
+    bySerialNumber: "DPG5NS621A0001"
+  vpcId:
+    byVpcName: tenant-a-tenant-a
+  sshKeyGroupIds:
+    - bySshKeyGroupName: dev-team-keys 
+  labels:
+    team: ml-platform
+  vpcPrefixId:
+    byVpcPrefixName: tenant-a-tenant-a-ns-subnet-vpcprefix
+  operatingSystemId:
+    byOperatingSystemName: ubuntu-22.04
