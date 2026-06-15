@@ -40,6 +40,7 @@
       include_tasks: tasks/create-vm.yml
       vars:
         vm_name: "{{ item.0.name }}"
+        vm_uuid: "00000000-0000-4000-8000-00000000000{{ vm_index }}"
         vm_index: "{{ item.1 }}"
         vm_base_offset: "{{ vm_index | int * vm_port_count }}"
         ssh_port: "{{ mgmt_ssh_base_port + vm_index | int }}"
