@@ -5,9 +5,12 @@ metadata:
   namespace: tenant-a
 spec:
   description: Ubuntu 22.04 via iPXE
-  ipxeScript: |
-    #!ipxe
-    kernel ...
+  imageUrl: https://binary-mirantis-com.s3.amazonaws.com/openstack/bin/ubuntu/24.04/noble-server-cloudimg-amd64-20251026.img
+  imageSha: 85743244cc8f2f47384480c81dbb677585d20ed693127667dbfb116f1682f793
+  rootFsLabel: Ubuntu-Server
   userData: |
-    #cloud-config
-    ...
+    #cloud-config:
+    password: 'qalab'
+    chpasswd:
+      expire: false
+    ssh_pwauth: true
