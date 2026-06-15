@@ -41,6 +41,15 @@
         daemon_reload: yes
       when: ansible_service_mgr == 'systemd'
 
+    - name: Restart libvirtd-tcp socket
+      systemd:
+        name: libvirtd-tcp.socket
+        state: restarted
+        daemon_reload: yes
+      when:
+        - ansible_service_mgr == 'systemd'
+        - ansible_distribution == "Ubuntu"
+
     - name: Restart sushy-emulator
       systemd:
         name: sushy-emulator
@@ -117,6 +126,29 @@
               dynamic_ownership = 0
           when: ansible_distribution == "Debian"
 
+        - name: Configure libvirtd
+          ansible.builtin.template:
+            src: libvirt/libvirtd.conf.j2
+            dest: /etc/libvirt/libvirtd.conf
+            mode: "0644"
+
+        - name: Disable libvirt TLS socket
+          ansible.builtin.systemd:
+            name: libvirtd-tls.socket
+            enabled: false
+            state: stopped
+            daemon_reload: true
+          failed_when: false
+          when: ansible_distribution == "Ubuntu"
+
+        - name: Enable libvirt TCP socket
+          ansible.builtin.systemd:
+            name: libvirtd-tcp.socket
+            enabled: true
+            state: started
+            daemon_reload: true
+          when: ansible_distribution == "Ubuntu"
+
         - name: Destroy images libvirt pool
           community.libvirt.virt_pool:
             name: images
@@ -144,7 +176,9 @@
             state: present
             autostart: yes
 
-      notify: Restart libvirtd
+      notify:
+        - Restart libvirtd
+        - Restart libvirtd-tcp socket
 
     - name: Install and configure Sushy Tools Redfish Emulator
       block:
