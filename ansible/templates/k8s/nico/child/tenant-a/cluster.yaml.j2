@@ -66,7 +66,6 @@ spec:
       instanceTypeId: {{ nico_instance_type_id }}
       operatingSystemId: {{ nico_operating_system_id }}
       tenantId: {{ nico_tenant_id }}
-      vpcId: {{ nico_vpc_id }}
       sshKeyGroupIds:
 {% for ssh_key_group_id in nico_ssh_key_group_ids %}
       - {{ ssh_key_group_id }}
