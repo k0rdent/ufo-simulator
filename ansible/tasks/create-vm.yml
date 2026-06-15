@@ -31,6 +31,7 @@
 - name: Create VMs with virt-install
   ansible.builtin.command: >
     virt-install
+    --metadata uuid="{{ vm_uuid }}"
     --name "{{ vm_name }}"
     --vcpus "{{ vm_vcpus }}"
     --ram "{{ vm_ram }}"
@@ -62,16 +63,11 @@
   ansible.builtin.debug:
     var: vm_list.stdout_lines
 
-- name: VM uuid
-  ansible.builtin.shell: virsh domuuid {{ vm_name }}
-  register: vm_uuid
-  changed_when: false
-
 - name: Render metal3 bmhs templates
   vars:
     server_name: "{{ vm_name }}"
     pxe_mac: "{{vm_base_mac }}:{{ '%02x' | format(vm_base_offset | int // 256) }}:{{ '%02x' | format(vm_base_offset | int % 256) }}"
-    server_uuid: '{{ vm_uuid.stdout | regex_replace("\s","") }}'
+    server_uuid: '{{ vm_uuid | regex_replace("\s","") }}'
     links: "{{ topology.links }}"
   ansible.builtin.template:
     src: "k8s/metal3_bmh.j2"
