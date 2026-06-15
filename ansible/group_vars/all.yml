@@ -222,6 +222,20 @@ nico_operator_chart_version: 0.0.1
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
 nico_operator_image_tag: 0.0.1
 nico_rest_external_ip: 10.200.0.1
+nico_rest_workspace: /opt/ufo_lab/
+nico_rest_infra_controller_repo: https://github.com/ya-isakov/infra-controller
+nico_rest_infra_controller_dir: "{{ nico_rest_workspace }}infra-controller"
+nico_rest_infra_controller_rest_api_dir: "{{ nico_rest_infra_controller_dir }}/rest-api"
+nico_core_mock_repo: https://github.com/jumpojoy/nico-core-mock
+nico_core_mock_dir: "{{ nico_rest_workspace }}nico-core-mock"
+nico_core_mock_image_repo: localhost:5000/nico-core-mock
+nico_core_mock_image_tag: latest
+nico_core_mock_image: "{{ nico_core_mock_image_repo }}:{{ nico_core_mock_image_tag }}"
+nico_kind_cluster_name: nico-rest-local
+nico_core_mock_helm_release: nico-rest-mock-core
+nico_core_mock_helm_namespace: nico-rest
+nico_core_mock_libvirt_enabled: true
+nico_core_mock_libvirt_endpoint: qemu+tcp://10.200.0.254/system
 nico_api_base_url: "http://{{ nico_rest_external_ip }}:8388"
 nico_api_org: test-org
 nico_token_url: "http://{{ nico_rest_external_ip }}:8082/realms/nico-dev/protocol/openid-connect/token"
