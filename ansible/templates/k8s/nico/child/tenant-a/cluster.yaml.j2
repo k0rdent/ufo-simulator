@@ -62,6 +62,9 @@ metadata:
     cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
   template:
+    metadata:
+      annotations:
+        carbide.infrastructure.cluster.x-k8s.io/scheduler: 'random-instance-type'
     spec:
       instanceTypeId: {{ nico_instance_type_id }}
       operatingSystemId: {{ nico_operating_system_id }}
