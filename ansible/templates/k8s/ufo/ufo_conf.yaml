@@ -22,6 +22,3 @@ backends:
     metal3:
       driver: metal3
       enabled: true
-    nico:
-      driver: nico
-      enabled: {{ 'true' if nico_enabled else 'false' }}
