@@ -109,9 +109,9 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/site-default.yaml
     fi
     
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/vpc-internet.yaml
+    #kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/pxe-net.yaml
+    #kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/subnetpool-default.yaml
+    #kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/static/vpc-internet.yaml
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
@@ -140,22 +140,22 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/bgp-external-gateway.yaml
     fi
 
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
+    #kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
 
     leaf_switches=(
         leaf-0
         leaf-1
     )
-    for leaf in "${leaf_switches[@]}"; do
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/switch_${leaf}.yaml
-    done
+    #for leaf in "${leaf_switches[@]}"; do
+    #    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/switch_${leaf}.yaml
+    #done
     
     # Wait netris is fully initialized
     sleep 120
     
-    for i in {0..5}; do
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-${i}_bmh.yaml
-    done
+    #for i in {0..5}; do
+    #    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-${i}_bmh.yaml
+    #done
     
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         # Wait for bmhs are
