@@ -1,0 +1,11 @@
+{
+  "default-address-pools": [
+    {
+      "base": "10.20.0.0/16",
+      "size": 24
+    }
+  ]{% if docker_image_proxy | length > 0 %},
+  "registry-mirrors": [
+    "{{ docker_image_proxy }}"
+  ]{% endif %}
+}

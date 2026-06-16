@@ -24,23 +24,8 @@
       - docker.io
       - docker-buildx
     docker_daemon_config_path: /etc/docker/daemon.json
-    docker_daemon_config:
-      default-address-pools:
-        - base: 10.20.0.0/16
-          size: 24
     kind_version: "0.27.0"
     go_version: 1.25.5
-
-  handlers:
-    - name: Restart containerd
-      ansible.builtin.service:
-        name: containerd
-        state: restarted
-
-    - name: Restart Docker
-      ansible.builtin.service:
-        name: docker
-        state: restarted
 
   tasks:
     - name: Install packages and tooling
@@ -58,6 +43,34 @@
   tasks:
     - name: Clone repositories
       ansible.builtin.include_tasks: tasks/nico_rest/clone_repos.yml
+
+- name: Configure Docker and containerd registry mirrors
+  hosts: gtws
+  gather_facts: false
+  become: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  vars:
+    containerd_config_path: /etc/containerd/config.toml
+    docker_daemon_config_path: /etc/docker/daemon.json
+
+  handlers:
+    - name: Restart containerd
+      ansible.builtin.service:
+        name: containerd
+        state: restarted
+
+    - name: Restart Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+
+  tasks:
+    - name: Configure registry mirrors
+      ansible.builtin.include_tasks: tasks/nico_rest/configure_registry.yml
 
 - name: Deploy NICO REST infrastructure
   hosts: gtws
