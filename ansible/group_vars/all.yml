@@ -277,6 +277,15 @@ netris_web_api_url: "http://{{ netris_web_frontend_ip }}"
 kubeconfig_path: "/root/.kube/config"
 
 docker_image_proxy: https://dockerproxy.artifactory-eu.mcp.mirantis.net
+containerd_certs_d_path: /etc/containerd/certs.d
+nico_kind_certs_d_dir: "{{ nico_rest_infra_controller_dir }}/rest-api/deploy/kind/certs.d"
+containerd_registry_hosts:
+  - name: docker.io
+    server: https://registry-1.docker.io
+  - name: registry-1.docker.io
+    server: https://registry-1.docker.io
+  - name: gcr.io
+    server: https://gcr.io
 
 frr:
   enabled: true

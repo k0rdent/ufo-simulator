@@ -10,39 +10,10 @@
     name: "{{ containerd_apt_packages }}"
     state: present
 
-- name: Ensure containerd config directory
-  ansible.builtin.file:
-    path: "{{ containerd_config_path | dirname }}"
-    state: directory
-    mode: "0755"
-
-- name: Configure containerd
-  ansible.builtin.template:
-    src: nico-rest/containerd.toml.j2
-    dest: "{{ containerd_config_path }}"
-    mode: "0644"
-  notify: Restart containerd
-
-- name: Ensure Docker config directory
-  ansible.builtin.file:
-    path: "{{ docker_daemon_config_path | dirname }}"
-    state: directory
-    mode: "0755"
-
-- name: Configure Docker daemon address pools
-  ansible.builtin.copy:
-    dest: "{{ docker_daemon_config_path }}"
-    content: "{{ docker_daemon_config | to_nice_json }}\n"
-    mode: "0644"
-  notify: Restart Docker
-
 - name: Install Docker packages
   ansible.builtin.apt:
     name: "{{ docker_apt_packages }}"
     state: present
-
-- name: Apply containerd and Docker configuration
-  ansible.builtin.meta: flush_handlers
 
 - name: Install kind
   ansible.builtin.get_url:

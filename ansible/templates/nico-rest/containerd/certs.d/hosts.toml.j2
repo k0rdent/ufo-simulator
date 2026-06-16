@@ -1,0 +1,4 @@
+server = "{{ registry_server }}"
+
+[host."{{ docker_image_proxy }}"]
+  capabilities = ["pull", "resolve"]

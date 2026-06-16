@@ -1,0 +1,66 @@
+---
+- name: Ensure containerd config directory
+  ansible.builtin.file:
+    path: "{{ containerd_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Ensure host containerd registry certs.d directories
+  ansible.builtin.file:
+    path: "{{ containerd_certs_d_path }}/{{ item.name }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ containerd_registry_hosts }}"
+  when: docker_image_proxy | length > 0
+
+- name: Configure host containerd registry hosts.toml files
+  ansible.builtin.template:
+    src: nico-rest/containerd/certs.d/hosts.toml.j2
+    dest: "{{ containerd_certs_d_path }}/{{ item.name }}/hosts.toml"
+    mode: "0644"
+  loop: "{{ containerd_registry_hosts }}"
+  vars:
+    registry_server: "{{ item.server }}"
+  when: docker_image_proxy | length > 0
+  notify: Restart containerd
+
+- name: Configure containerd
+  ansible.builtin.template:
+    src: nico-rest/containerd.toml.j2
+    dest: "{{ containerd_config_path }}"
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Ensure kind cluster containerd registry certs.d directories
+  ansible.builtin.file:
+    path: "{{ nico_kind_certs_d_dir }}/{{ item.name }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ containerd_registry_hosts }}"
+  when: docker_image_proxy | length > 0
+
+- name: Configure kind cluster containerd registry hosts.toml files
+  ansible.builtin.template:
+    src: nico-rest/containerd/certs.d/hosts.toml.j2
+    dest: "{{ nico_kind_certs_d_dir }}/{{ item.name }}/hosts.toml"
+    mode: "0644"
+  loop: "{{ containerd_registry_hosts }}"
+  vars:
+    registry_server: "{{ item.server }}"
+  when: docker_image_proxy | length > 0
+
+- name: Ensure Docker config directory
+  ansible.builtin.file:
+    path: "{{ docker_daemon_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Configure Docker daemon
+  ansible.builtin.template:
+    src: nico-rest/daemon.json.j2
+    dest: "{{ docker_daemon_config_path }}"
+    mode: "0644"
+  notify: Restart Docker
+
+- name: Apply containerd and Docker registry configuration
+  ansible.builtin.meta: flush_handlers
