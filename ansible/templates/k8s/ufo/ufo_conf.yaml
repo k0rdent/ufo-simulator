@@ -3,11 +3,25 @@ backends:
   fabric:
     noop:
       enabled: false
+      driver: noop
     netris:
       enabled: {{ 'true' if ufo_fabric_backend == 'netris' else 'false' }}
+      driver: netris
       config:
         defaultTenant: Admin
         defaultSites:
           - default
     verity:
       enabled: {{ 'true' if ufo_fabric_backend == 'verity' else 'false' }}
+      driver: verity
+    nico:
+      enabled: {{ 'true' if nico_enabled else 'false' }}
+      driver: nico
+  provision_default: metal3
+  provision:
+    metal3:
+      driver: metal3
+      enabled: true
+    nico:
+      driver: nico
+      enabled: {{ 'true' if nico_enabled else 'false' }}
