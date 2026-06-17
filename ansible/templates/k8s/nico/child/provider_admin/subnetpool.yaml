@@ -7,7 +7,7 @@ metadata:
 spec:
   ip_version: 4
   min_prefix: 19
-  max_prefix: 24
+  max_prefix: 32
   prefixes:
     - 10.20.0.0/16
   tags:
@@ -21,7 +21,7 @@ metadata:
 spec:
   ip_version: 4
   min_prefix: 19
-  max_prefix: 24
+  max_prefix: 32
   prefixes:
     - 192.168.100.0/16
   tags:
