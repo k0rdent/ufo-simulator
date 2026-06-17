@@ -13,3 +13,13 @@
     chdir: "{{ nico_core_mock_dir }}"
   register: nico_core_mock_helm_deploy
   changed_when: "'has been upgraded' in nico_core_mock_helm_deploy.stdout or 'has been installed' in nico_core_mock_helm_deploy.stdout"
+
+- name: Run nico-core-mock post-deployment config
+  ansible.builtin.command:
+    cmd: bash scripts/post-deployment-config.sh
+    chdir: "{{ nico_core_mock_dir }}"
+  environment:
+    NAMESPACE: "{{ nico_core_mock_helm_namespace }}"
+    KEYCLOAK_URL: "http://{{ nico_rest_external_ip }}:8082"
+    API_URL: "{{ nico_api_base_url }}"
+    ORG: "{{ nico_api_org }}"
