@@ -22,9 +22,9 @@ verity_operator_chart_version: 0.1.1-4800d53
 verity_operator_image_tag: 0.1.1-4800d53.1781785038
 
 nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator
-nico_operator_chart_version: 0.0.1-4a84096
+nico_operator_chart_version: 0.0.1-49a5d4c
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
-nico_operator_image_tag: 0.0.1-4a84096.1781611660
+nico_operator_image_tag: 0.0.1-49a5d4c.1781783713
 
 nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-carbide
 nico_capi_provider_chart_version: v0.1.0-alpha.7-17-gfc7b7b4e3a21c8

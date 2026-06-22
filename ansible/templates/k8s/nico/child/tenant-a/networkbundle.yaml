@@ -23,13 +23,7 @@ spec:
       ibpf1:
         connectToNetwork:
           name: ib-network
-      ibpf2:
+    nvlinks:
+      nvlink1:
         connectToNetwork:
-          name: ib-network
-      ibpf3:
-        connectToNetwork:
-          name: ib-network
-            #    nvlinks:
-            #      nvlink1:
-            #        connectToNetwork:
-            #          name: nvlink-partition
+          name: nvlink-partition
