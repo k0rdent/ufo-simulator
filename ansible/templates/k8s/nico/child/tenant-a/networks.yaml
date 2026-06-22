@@ -27,21 +27,16 @@ metadata:
 spec:
   vpc: tenant-a
   type: infiniband
-  infiniband:
-    partitionName: "ib-network-partition"
-
 ---
 # NVLink partition network
-#apiVersion: ufo.mirantis.com/v1alpha1
-#kind: Network
-#metadata:
-#  name: nvlink-partition
-#  namespace: tenant-a
-#spec:
-#  vpc: tenant-a
-#  type: nvlink
-#  nvlink:
-#    partitionName: "nvlink-partition"
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: nvlink-partition
+  namespace: tenant-a
+spec:
+  vpc: tenant-a
+  type: nvlink
 ---
 # Will create VPCPrefixes in NICO and corresponding Subnets in UFO
 
