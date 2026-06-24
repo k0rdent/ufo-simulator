@@ -16,4 +16,16 @@ spec:
   server_ports: {{ server_ports | join(',') }}
   provisioning_network:
     name: pxe
+{% if switch.plane_id is defined %}
+  plane_id: {{ switch.plane_id }}
+{% endif %}
+{% if switch.pod_id is defined %}
+  pod_id: {{ switch.pod_id }}
+{% endif %}
+{% if switch.su_id is defined %}
+  su_id: {{ switch.su_id }}
+{% endif %}
+{% if switch.rail_id is defined %}
+  rail_id: {{ switch.rail_id }}
+{% endif %}
 {% endif %}

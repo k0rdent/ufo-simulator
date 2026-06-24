@@ -153,14 +153,18 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     # Wait netris is fully initialized
     sleep 120
     
-    for i in {0..5}; do
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-${i}_bmh.yaml
-    done
-    
-    if [[ ${FABRIC_BACKEND} == "netris" ]]; then
-        # Wait for bmhs are
+    if [[ ${NICO_ENABLE} != "true" ]]; then
         for i in {0..5}; do
-            kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
+            kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-${i}_bmh.yaml
         done
+
+        if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+            # Wait for bmhs are
+            for i in {0..5}; do
+                kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
+            done
+        fi
+    else
+        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/links/
     fi
 fi

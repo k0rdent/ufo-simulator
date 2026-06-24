@@ -1,0 +1,44 @@
+{%- set node_names = all_nodes | map(attribute='name') | list %}
+{% for link in links %}
+{% if link.local == switch_name and link.remote in node_names %}
+{%   set vm = all_nodes | selectattr('name', 'equalto', link.remote) | first | default({}) %}
+{%   set is_data = link.role == 'data' %}
+{%   set has_location = is_data and (switch.plane_id is defined or switch.pod_id is defined
+                          or switch.su_id is defined or switch.rail_id is defined
+                          or vm.host_id is defined) %}
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Link
+metadata:
+  name: {{ link.remote }}-{{ link.remote_port }}
+  namespace: kcm-system
+spec:
+  switch:
+    name: {{ switch_name }}
+    portName: {{ link.local_port }}
+  peer:
+    type: machine.nico.mirantis.com
+    name: {{ link.remote }}
+    portName: {{ link.remote_port }}
+  roles:
+    - {{ link.role }}
+{%   if has_location %}
+  location:
+{%     if switch.plane_id is defined %}
+    plane_id: {{ switch.plane_id }}
+{%     endif %}
+{%     if switch.pod_id is defined %}
+    pod_id: {{ switch.pod_id }}
+{%     endif %}
+{%     if switch.su_id is defined %}
+    su_id: {{ switch.su_id }}
+{%     endif %}
+{%     if switch.rail_id is defined %}
+    rail_id: {{ switch.rail_id }}
+{%     endif %}
+{%     if vm.host_id is defined %}
+    host_id: {{ vm.host_id }}
+{%     endif %}
+{%   endif %}
+{% endif %}
+{% endfor %}

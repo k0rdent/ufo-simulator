@@ -38,19 +38,33 @@ topology:
   leafs:
     - name: leaf-0
       mgmt_ip: 10.200.0.100
+      plane_id: 0
+      pod_id: 1
+      su_id: 2
+      rail_id: 0
     - name: leaf-1
       mgmt_ip: 10.200.0.101
+      plane_id: 0
+      pod_id: 1
+      su_id: 2
+      rail_id: 1
     - name: ext-leaf-0
       mgmt_ip: 10.200.0.102
     - name: ext-leaf-1
       mgmt_ip: 10.200.0.103
   nodes:
     - name: vm-0
+      host_id: 0
     - name: vm-1
+      host_id: 1
     - name: vm-2
+      host_id: 2
     - name: vm-3
+      host_id: 3
     - name: vm-4
+      host_id: 4
     - name: vm-5
+      host_id: 5
   softgates:
     - name: sg-0
       role: general
