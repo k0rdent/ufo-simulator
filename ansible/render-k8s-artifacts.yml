@@ -97,10 +97,30 @@
     - name: Render switch templates
       vars:
         switch_name: "{{ item.0.name }}"
+        switch: "{{ item.0 }}"
         links: "{{ topology.links }}"
       ansible.builtin.template:
         src: "k8s/switch.j2"
         dest: "{{ k8s_artifacts_dir }}/switch_{{ switch_name }}.yaml"
       loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
+      loop_control:
+        loop_var: item
+
+    - name: Ensure links artifacts directory exists
+      ansible.builtin.file:
+        path: "{{ k8s_artifacts_dir }}/links"
+        state: directory
+        recurse: true
+
+    - name: Render UFO link templates
+      vars:
+        switch_name: "{{ item.0.name }}"
+        switch: "{{ item.0 }}"
+        links: "{{ topology.links }}"
+        all_nodes: "{{ topology.nodes }}"
+      ansible.builtin.template:
+        src: "k8s/ufo_link.j2"
+        dest: "{{ k8s_artifacts_dir }}/links/{{ switch_name }}.yaml"
+      loop: "{{ topology.leafs | zip(range(topology.leafs | length)) | list }}"
       loop_control:
         loop_var: item
