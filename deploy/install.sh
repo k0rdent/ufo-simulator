@@ -83,13 +83,13 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml --limit ${HOSTNAME}
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml --limit ${HOSTNAME}
     fi
-    
-    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml --limit ${HOSTNAME}
 
     if [[ ${NICO_ENABLE} == "true" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-capi.yml --limit ${HOSTNAME}
 #        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-nico-artifacts.yml --limit ${HOSTNAME}
     fi
+
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml --limit ${HOSTNAME}
     
     if [[ ${FABRIC_BACKEND} == "verity" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/verity.yml --limit ${HOSTNAME}

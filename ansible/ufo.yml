@@ -65,36 +65,19 @@
           debug:
             msg: "{{ info_msg.split('\n') }}"
 
-    - name: Install Unified fabric operator via helm chart
-      when: not ufo_dev_mode
-      block:
-        - name: Handle ufo templates
-          block:
-            - name: Render templates
-              ansible.builtin.template:
-                src: "k8s/ufo/{{ item }}"
-                dest: "{{ k8s_artifacts_dir }}/ufo/{{ item }}"
-              with_items:
-               - "ufo.yaml"
-               - "ufo_conf.yaml"
-    
-        - name: Deploy/upgrade ufo controller helm release
-          kubernetes.core.helm:
-            name: ufo
-            kubeconfig: "{{ kubeconfig_path }}"
-            chart_ref: "{{ ufo_chart_repo }}"
-            chart_version: "{{ ufo_chart_version }}"
-            release_namespace: ufo
-            create_namespace: true
-            values_files:
-              - "{{ k8s_artifacts_dir }}/ufo/ufo.yaml"
-            state: present
-            wait: true
-            wait_timeout: 300s
-
     - name: Install NICO operator via helm chart
-      when: nico_enabled
+      when: nico_enabled and not ufo_dev_mode
       block:
+        - name: Ensure ufo namespace exists
+          kubernetes.core.k8s:
+            state: present
+            kubeconfig: "{{ kubeconfig_path }}"
+            definition:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: ufo
+
         - name: Create Kubernetes secret for NICo REST credentials
           kubernetes.core.k8s:
             state: present
@@ -130,6 +113,33 @@
             create_namespace: true
             values_files:
               - "{{ k8s_artifacts_dir }}/ufo/nico_operator.yaml"
+            state: present
+            wait: true
+            wait_timeout: 300s
+
+    - name: Install Unified fabric operator via helm chart
+      when: not ufo_dev_mode
+      block:
+        - name: Handle ufo templates
+          block:
+            - name: Render templates
+              ansible.builtin.template:
+                src: "k8s/ufo/{{ item }}"
+                dest: "{{ k8s_artifacts_dir }}/ufo/{{ item }}"
+              with_items:
+               - "ufo.yaml"
+               - "ufo_conf.yaml"
+
+        - name: Deploy/upgrade ufo controller helm release
+          kubernetes.core.helm:
+            name: ufo
+            kubeconfig: "{{ kubeconfig_path }}"
+            chart_ref: "{{ ufo_chart_repo }}"
+            chart_version: "{{ ufo_chart_version }}"
+            release_namespace: ufo
+            create_namespace: true
+            values_files:
+              - "{{ k8s_artifacts_dir }}/ufo/ufo.yaml"
             state: present
             wait: true
             wait_timeout: 300s
