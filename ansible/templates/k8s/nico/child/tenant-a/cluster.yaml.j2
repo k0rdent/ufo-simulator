@@ -21,11 +21,11 @@ spec:
     name: tenant-a-cluster-cp
   infrastructureRef:
     apiGroup: infrastructure.cluster.x-k8s.io
-    kind: CarbideCluster
+    kind: NicoCluster
     name: tenant-a-cluster
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-kind: CarbideCluster
+kind: NicoCluster
 metadata:
   name: tenant-a-cluster
   namespace: tenant-a
@@ -33,7 +33,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: tenant-a-cluster
 spec:
   identityRef:
-    name: carbide-credentials
+    name: nico-credentials
     orgId: {{ nico_api_org }}
     apiEndpoint: {{ nico_api_base_url }}
 ---
@@ -53,7 +53,7 @@ spec:
     type: emptyDir
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-kind: CarbideMachineTemplate
+kind: NicoMachineTemplate
 metadata:
   name: tenant-a-cluster-default-cmt
   namespace: tenant-a
@@ -63,7 +63,7 @@ spec:
   template:
     metadata:
       annotations:
-        carbide.infrastructure.cluster.x-k8s.io/scheduler: 'random-instance-type'
+        nico.infrastructure.cluster.x-k8s.io/scheduler: 'random-instance-type'
     spec:
       instanceTypeId: {{ nico_instance_type_id }}
       operatingSystemId: {{ nico_operating_system_id }}
@@ -124,6 +124,6 @@ spec:
       clusterName: tenant-a-cluster
       infrastructureRef:
         apiGroup: infrastructure.cluster.x-k8s.io
-        kind: CarbideMachineTemplate
+        kind: NicoMachineTemplate
         name: tenant-a-cluster-default-cmt
       version: v1.36.1

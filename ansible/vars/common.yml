@@ -14,19 +14,19 @@ netris_operator_chart_version: 0.0.1-f125b11
 netris_operator_image_tag: 0.0.1-f125b11.1775730529
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.1.1-4bdeab1
-ufo_image_tag: 0.1.1-4bdeab1.1782139906
+ufo_chart_version: 0.1.1-6783640
+ufo_image_tag: 0.1.1-6783640.1783340305
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
-verity_operator_chart_version: 0.1.1-4800d53
-verity_operator_image_tag: 0.1.1-4800d53.1781785038
+verity_operator_chart_version: 0.1.1-09c55d2
+verity_operator_image_tag: 0.1.1-09c55d2.1782218730
 
 nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator
-nico_operator_chart_version: 0.0.1-49a5d4c
+nico_operator_chart_version: 0.0.1-324953a
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
-nico_operator_image_tag: 0.0.1-49a5d4c.1781783713
+nico_operator_image_tag: 0.0.1-324953a.1783322727
 
-nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-carbide
-nico_capi_provider_chart_version: v0.1.0-alpha.7-45-g9c750757867829
-nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-carbide
-nico_capi_provider_image_tag: v0.1.0-alpha.7-45-g9c750757867829
+nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-nico
+nico_capi_provider_chart_version: v0.1.0-alpha.7-72-ga8e691af8e86eb
+nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-nico
+nico_capi_provider_image_tag: v0.1.0-alpha.7-72-ga8e691af8e86eb

@@ -262,11 +262,11 @@ nico_enabled: true
 
 nico_capi_provider_enabled: true
 nico_capi_provider_namespace: nico-capi
-nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-carbide
+nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-nico
 nico_capi_provider_chart_version: 0.0.1
-nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-carbide
+nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-nico
 nico_capi_provider_image_tag: 0.0.1
-nico_capi_identity_secret_name: carbide-credentials
+nico_capi_identity_secret_name: nico-credentials
 nico_capi_identity_secret_namespaces:
   - tenant-a
   - tenant-b
