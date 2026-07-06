@@ -164,7 +164,5 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
                 kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
             done
         fi
-    else
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/links/
     fi
 fi
