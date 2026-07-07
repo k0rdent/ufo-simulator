@@ -285,7 +285,7 @@ nico_prepovision_operating_system_name: ubuntu-22.04
 nico_prepovision_ssh_key_group_name: dev-team-keys
 external_secrets_namespace: external-secrets
 external_secrets_chart_repo: https://charts.external-secrets.io
-external_secrets_chart_version: 0.16.1
+external_secrets_chart_version: 2.7.0
 
 netris_controller_ip: 10.172.1.100
 netris_web_frontend_ip: 10.172.1.101

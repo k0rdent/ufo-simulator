@@ -11,19 +11,3 @@ spec:
       eth-pf0:
         connectToNetwork:
           name: ns-network
-      eth-vf0:
-        link: eth-pf0
-        addresses:
-          - ipFromSubnet:
-              name: ns-subnet
-    infinibands:
-      ibpf0:
-        connectToNetwork:
-          name: ib-network
-      ibpf1:
-        connectToNetwork:
-          name: ib-network
-    nvlinks:
-      nvlink1:
-        connectToNetwork:
-          name: nvlink-partition
