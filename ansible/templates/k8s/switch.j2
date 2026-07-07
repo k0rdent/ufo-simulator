@@ -1,7 +1,14 @@
 {%- set server_ports = [] %}
+{%- set rail_ports = {} %}
 {%- for link in links %}
 {%-   if link.local == switch_name and link.remote.startswith('vm-') %}
 {%-     set _ = server_ports.append(link.local_port) %}
+{%-     if link.rail_id is defined %}
+{%-       if link.rail_id not in rail_ports %}
+{%-         set _ = rail_ports.update({link.rail_id: []}) %}
+{%-       endif %}
+{%-       set _ = rail_ports[link.rail_id].append(link.local_port) %}
+{%-     endif %}
 {%-   endif %}
 {%- endfor %}
 {% if server_ports %}
@@ -27,5 +34,12 @@ spec:
 {% endif %}
 {% if switch.rail_id is defined %}
   rail_id: {{ switch.rail_id }}
+{% endif %}
+{% if rail_ports %}
+  rail_groups:
+{% for rail_id, ports in rail_ports.items() %}
+    - ports: "{{ ports | join(',') }}"
+      rail_id: {{ rail_id }}
+{% endfor %}
 {% endif %}
 {% endif %}
