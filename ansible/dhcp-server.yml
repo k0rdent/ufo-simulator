@@ -1,0 +1,45 @@
+---
+# Host DHCP server on the PXE bridge (br-pxe).
+# Runs when topology.north_south.fabric_type is "bridge" (see br_pxe_dhcp.enabled).
+# Run after linux.yml so the bridge and address are configured.
+
+- name: Enable DHCP server on br-pxe
+  hosts: cmps
+  connection: local
+  gather_facts: true
+  become: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  handlers:
+    - name: Restart dnsmasq
+      ansible.builtin.service:
+        name: dnsmasq
+        state: restarted
+
+  tasks:
+    - name: Enable br-pxe DHCP server
+      when: br_pxe_dhcp.enabled | default(false) | bool
+      block:
+        - name: Install dnsmasq
+          ansible.builtin.apt:
+            name: dnsmasq
+            state: present
+            update_cache: false
+
+        - name: Deploy br-pxe dnsmasq configuration
+          ansible.builtin.template:
+            src: dnsmasq/br-pxe.conf.j2
+            dest: /etc/dnsmasq.d/br-pxe.conf
+            owner: root
+            group: root
+            mode: "0644"
+          notify: Restart dnsmasq
+
+        - name: Enable and start dnsmasq
+          ansible.builtin.service:
+            name: dnsmasq
+            state: started
+            enabled: true

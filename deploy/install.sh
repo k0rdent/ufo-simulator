@@ -60,6 +60,10 @@ fi
 
 ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/linux.yml --limit ${HOSTNAME}
 
+if [[ ${NODE_TYPE} == "cmp" ]]; then
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/dhcp-server.yml --limit ${HOSTNAME}
+fi
+
 if [[ ${NODE_TYPE} == "gtw" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/frr.yml --limit ${HOSTNAME}
     if [[ ${NICO_ENABLE} == "true" ]]; then

@@ -1,0 +1,9 @@
+# Managed by Ansible (dhcp-server.yml) — DHCP only on {{ br_pxe_name }}.
+port=0
+interface={{ br_pxe_name }}
+bind-interfaces
+except-interface=lo
+dhcp-range={{ br_pxe_dhcp.range_start }},{{ br_pxe_dhcp.range_end }},{{ br_pxe_dhcp.netmask }},{{ br_pxe_dhcp.lease_time }}
+dhcp-option=option:router,{{ br_pxe_ip }}
+dhcp-option=option:dns-server,{{ br_pxe_ip }}
+dhcp-option=option:ntp-server,{{ br_pxe_ip }}

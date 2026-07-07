@@ -207,6 +207,13 @@ br_pxe_ip: 172.16.81.254
 br_pxe_netmask: 24
 br_pxe_phys_interface: ""
 
+br_pxe_dhcp:
+  enabled: "{{ topology.north_south.fabric_type | default('') == 'bridge' }}"
+  range_start: "{{ pxe_base }}.100"
+  range_end: "{{ pxe_base }}.200"
+  netmask: 255.255.255.0
+  lease_time: 1h
+
 br_mgmt_name: br-mgmt
 
 br_mgmt_netmask: 24
