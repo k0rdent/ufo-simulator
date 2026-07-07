@@ -2,9 +2,10 @@
 {% for link in links %}
 {% if link.local == switch_name and link.remote in node_names %}
 {%   set vm = all_nodes | selectattr('name', 'equalto', link.remote) | first | default({}) %}
-{%   set is_rail = link.role.startswith('rail') %}
+{%   set is_rail = link.rail_id is defined %}
+{%   set link_rail_id = link.rail_id if is_rail else switch.rail_id %}
 {%   set has_location = is_rail and (switch.plane_id is defined or switch.pod_id is defined
-                          or switch.su_id is defined or switch.rail_id is defined
+                          or switch.su_id is defined or link_rail_id is defined
                           or vm.host_id is defined) %}
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
@@ -33,8 +34,8 @@ spec:
 {%     if switch.su_id is defined %}
     su_id: {{ switch.su_id }}
 {%     endif %}
-{%     if switch.rail_id is defined %}
-    rail_id: {{ switch.rail_id }}
+{%     if link_rail_id is defined %}
+    rail_id: {{ link_rail_id }}
 {%     endif %}
 {%     if vm.host_id is defined %}
     host_id: {{ vm.host_id }}
