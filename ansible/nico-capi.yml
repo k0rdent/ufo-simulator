@@ -96,18 +96,3 @@
         - name: Apply NICO CAPI credentials manifests
           ansible.builtin.command:
             cmd: kubectl --kubeconfig {{ kubeconfig_path }} apply -f {{ k8s_artifacts_dir }}/nico/nico_capi_credentials.yaml
-
-        - name: Wait for nico access token ExternalSecrets
-          ansible.builtin.command:
-            cmd: >
-              kubectl --kubeconfig {{ kubeconfig_path }}
-              wait --for=condition=Ready
-              --timeout=120s
-              -n {{ item }}
-              externalsecret/nico-access-token
-          loop: "{{ nico_capi_identity_secret_namespaces | unique | list }}"
-          register: nico_credentials_wait
-          retries: 5
-          delay: 15
-          until: nico_credentials_wait.rc == 0
-          changed_when: false
