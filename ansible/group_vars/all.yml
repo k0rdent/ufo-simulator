@@ -337,6 +337,7 @@ external_gateway_bgp:
 host_masquerade_cidrs:
   - "{{ management_base_sg }}.0/{{ br_mgmt_netmask }}"
   - "{{ ext_base_sg }}.0/{{ ext_sg_netmask }}"
+  - "{{ pxe_base }}.0/{{ br_pxe_netmask }}"
   - "{{ cats_mgmt_cidr }}"
   - "{{ dogs_mgmt_cidr }}"
 
