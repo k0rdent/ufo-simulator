@@ -52,6 +52,9 @@
     --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
     --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }},mac={{ vm_mac }},speed=10000,duplex=full'
     {% endfor %}
+    {% if topology.north_south.fabric_type == "bridge" %}
+    --network bridge={{ topology.north_south.bridge_name }},model=virtio
+    {% endif %}
   when: vm_exists.rc != 0
 
 - name: Get VM list

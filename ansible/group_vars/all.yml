@@ -30,6 +30,9 @@ switch_port_name_prefix: "swp" # For verity eth1/
 # Topology Definition
 # Simple leaf-spine topology for testing
 topology:
+  north_south:
+    fabric_type: bridge
+    bridge_name: br-pxe
   spines:
     - name: spine-0
       mgmt_ip: 10.200.0.110
