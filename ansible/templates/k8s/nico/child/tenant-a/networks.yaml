@@ -43,3 +43,13 @@ spec:
   prefix_length: 29
   subnetpool: public
   subnet: public-subnet
+---
+# NVLink partition network
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: nvlink-partition
+  namespace: tenant-a
+spec:
+  vpc: tenant-a
+  type: nvlink

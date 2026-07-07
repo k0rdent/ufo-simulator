@@ -8,6 +8,11 @@ spec:
   clusterName: tenant-a-cluster
   networkv2:
     ethernets:
-      eth-pf0:
+      enp1s0:
+        dhcp4: true
         connectToNetwork:
           name: ns-network
+    nvlinks:
+      nvlink1:
+        connectToNetwork:
+          name: nvlink-partition
