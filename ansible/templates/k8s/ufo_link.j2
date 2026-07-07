@@ -2,8 +2,8 @@
 {% for link in links %}
 {% if link.local == switch_name and link.remote in node_names %}
 {%   set vm = all_nodes | selectattr('name', 'equalto', link.remote) | first | default({}) %}
-{%   set is_data = link.role == 'data' %}
-{%   set has_location = is_data and (switch.plane_id is defined or switch.pod_id is defined
+{%   set is_rail = link.role.startswith('rail') %}
+{%   set has_location = is_rail and (switch.plane_id is defined or switch.pod_id is defined
                           or switch.su_id is defined or switch.rail_id is defined
                           or vm.host_id is defined) %}
 ---
