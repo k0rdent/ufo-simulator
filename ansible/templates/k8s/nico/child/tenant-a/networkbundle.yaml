@@ -12,6 +12,34 @@ spec:
         dhcp4: true
         connectToNetwork:
           name: ns-network
+            eth-ew0:
+        match:
+          fabricLocation:
+            railId: 0
+        addresses:
+          - ipFromSubnet:
+              name: ew-subnet
+      eth-ew1:
+        match:
+          fabricLocation:
+            railId: 1
+        addresses:
+          - ipFromSubnet:
+              name: ew-subnet
+      eth-ew2:
+        match:
+          fabricLocation:
+            railId: 2
+        addresses:
+          - ipFromSubnet:
+              name: ew-subnet
+      eth-ew3:
+        match:
+          fabricLocation:
+            railId: 3
+        addresses:
+          - ipFromSubnet:
+              name: ew-subnet
     nvlinks:
       nvlink1:
         connectToNetwork:

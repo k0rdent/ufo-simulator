@@ -13,3 +13,11 @@ metadata:
   namespace: tenant-a
 spec:
   backend: nico
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Vpc
+metadata:
+  name: tenant-a-ew
+  namespace: tenant-a
+spec:
+  backend: verity

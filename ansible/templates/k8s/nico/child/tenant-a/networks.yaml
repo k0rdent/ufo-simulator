@@ -12,10 +12,10 @@ spec:
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Network
 metadata:
-  name: public-network
+  name: ew-network
   namespace: tenant-a
 spec:
-  vpc: tenant-a
+  vpc: tenant-a-ew
   type: l3vpn
 ---
 # Will create VPCPrefixes in NICO and corresponding Subnets in UFO
@@ -31,19 +31,21 @@ spec:
   prefix_length: 27
   subnetpool: default
   subnet: ns-subnet
+
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
-kind: SubnetAllocation
+kind: Subnet
 metadata:
-  name: public-subnet
+  name: ew-subnet
   namespace: tenant-a
 spec:
-  vpc: tenant-a
-  network: public-network
-  prefix_length: 29
-  subnetpool: public
-  subnet: public-subnet
----
+  vpc: tenant-a-ew
+  network: ew-network
+  cidr: 10.0.0.0/8
+  addressAllocator:
+    backend: rail-optimised
+    gpuPlatform: GB300
+  ---
 # NVLink partition network
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Network
