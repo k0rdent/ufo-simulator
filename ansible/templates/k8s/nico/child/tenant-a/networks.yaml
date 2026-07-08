@@ -45,7 +45,7 @@ spec:
   addressAllocator:
     backend: rail-optimised
     gpuPlatform: GB300
-  ---
+---
 # NVLink partition network
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Network

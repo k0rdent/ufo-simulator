@@ -12,7 +12,7 @@ spec:
         dhcp4: true
         connectToNetwork:
           name: ns-network
-            eth-ew0:
+      eth-ew0:
         match:
           fabricLocation:
             railId: 0
