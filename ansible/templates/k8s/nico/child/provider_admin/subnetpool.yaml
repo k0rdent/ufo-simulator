@@ -1,4 +1,3 @@
----
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: SubnetPool
 metadata:
@@ -9,20 +8,6 @@ spec:
   min_prefix: 19
   max_prefix: 32
   prefixes:
-    - 10.20.0.0/16
+    - 20.20.0.0/16
   tags:
     - default
----
-apiVersion: ufo.mirantis.com/v1alpha1
-kind: SubnetPool
-metadata:
-  name: global-public
-  namespace: kcm-system
-spec:
-  ip_version: 4
-  min_prefix: 19
-  max_prefix: 32
-  prefixes:
-    - 192.168.100.0/16
-  tags:
-    - public
