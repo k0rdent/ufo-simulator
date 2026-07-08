@@ -13,7 +13,7 @@
   vars:
     workspace: /opt/ufo_lab/
     kcm_chart_repo: oci://ghcr.io/k0rdent/kcm/charts/kcm
-    kcm_chart_version: 1.5.0
+    kcm_chart_version: 1.10.0
 
   tasks:
     - name: Deploy/upgrade kcm chart
