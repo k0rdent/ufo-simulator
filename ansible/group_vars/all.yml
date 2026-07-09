@@ -41,13 +41,11 @@ topology:
   leafs:
     - name: leaf-0
       mgmt_ip: 10.200.0.100
-      plane_id: 0
       pod_id: 1
       su_id: 2
       rail_id: 0
     - name: leaf-1
       mgmt_ip: 10.200.0.101
-      plane_id: 0
       pod_id: 1
       su_id: 2
       rail_id: 1
