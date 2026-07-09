@@ -12,6 +12,16 @@ spec:
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Network
 metadata:
+  name: public-network
+  namespace: tenant-a
+spec:
+  vpc: tenant-a
+  type: l3vpn
+---
+# Ethernet network
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
   name: ew-network
   namespace: tenant-a
 spec:
@@ -31,7 +41,18 @@ spec:
   prefix_length: 27
   subnetpool: default
   subnet: ns-subnet
-
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetAllocation
+metadata:
+  name: public-subnet
+  namespace: tenant-a
+spec:
+  vpc: tenant-a
+  network: public-network
+  prefix_length: 29
+  subnetpool: public
+  subnet: public-subnet
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Subnet
@@ -44,7 +65,7 @@ spec:
   cidr: 10.0.0.0/8
   addressAllocator:
     backend: rail-optimised
-    gpuPlatform: GB300
+    gpuPlatform: B200
 ---
 # NVLink partition network
 apiVersion: ufo.mirantis.com/v1alpha1

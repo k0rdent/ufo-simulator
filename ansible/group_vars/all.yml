@@ -280,6 +280,7 @@ nico_capi_identity_secret_name: nico-credentials
 nico_capi_identity_secret_namespaces:
   - tenant-a
   - tenant-b
+  - platform-admin
   - "{{ nico_capi_provider_namespace }}"
 nico_child_tenant: tenant-a
 nico_child_vpc: "{{ nico_child_tenant }}"
