@@ -23,6 +23,9 @@ spec:
   server_ports: {{ server_ports | join(',') }}
   provisioning_network:
     name: pxe
+{% if switch.type is defined %}
+  type: {{ switch.type }}
+{% endif %}
 {% if switch.plane_id is defined %}
   plane_id: {{ switch.plane_id }}
 {% endif %}

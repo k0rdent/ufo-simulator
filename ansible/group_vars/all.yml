@@ -44,11 +44,13 @@ topology:
       pod_id: 1
       su_id: 2
       rail_id: 0
+      type: spectrum-x
     - name: leaf-1
       mgmt_ip: 10.200.0.101
       pod_id: 1
       su_id: 2
       rail_id: 1
+      type: spectrum-x
     - name: ext-leaf-0
       mgmt_ip: 10.200.0.102
     - name: ext-leaf-1
