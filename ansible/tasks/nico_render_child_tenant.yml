@@ -1,0 +1,41 @@
+---
+- name: Derive NICO VPC identifiers for this tenant
+  ansible.builtin.set_fact:
+    nico_child_vpc: "{{ nico_child_tenant }}"
+
+- name: Derive NICO VPC name and prefix name for this tenant
+  ansible.builtin.set_fact:
+    nico_vpc_name: "{{ nico_child_tenant }}-{{ nico_child_vpc }}"
+    nico_vpc_prefix_name: "{{ nico_child_tenant }}-{{ nico_child_vpc }}-{{ nico_cluster_physical_subnet }}-vpcprefix"
+
+- name: Ensure NICO child tenant artifact directory exists
+  ansible.builtin.file:
+    path: "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}"
+    state: directory
+
+- name: Render NICO provider admin manifests for tenant
+  ansible.builtin.template:
+    src: "k8s/nico/child/provider_admin/{{ item }}"
+    dest: "{{ k8s_artifacts_dir }}/nico/child/provider_admin/{{ item }}"
+  loop:
+    - "{{ nico_child_tenant }}-vpc.yaml"
+    - "{{ nico_child_tenant }}-subnetpoolallocation.yaml"
+
+- name: Render NICO tenant prepovision manifests
+  ansible.builtin.template:
+    src: "k8s/nico/child/{{ nico_child_tenant }}/{{ item }}"
+    dest: "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}/{{ item }}"
+  loop:
+    - instance-type.yaml
+    - operating-system.yaml
+    - ssh-key.yaml
+    - networks.yaml
+    - networkbundle.yaml
+
+- name: Fetch NICO resource IDs from REST API
+  ansible.builtin.include_tasks: tasks/nico_fetch_resources_id.yml
+
+- name: Render NICO child cluster template
+  ansible.builtin.template:
+    src: "k8s/nico/child/{{ nico_child_tenant }}/cluster.yaml.j2"
+    dest: "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}/cluster.yaml"

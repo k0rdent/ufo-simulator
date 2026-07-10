@@ -1,0 +1,36 @@
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetPoolAllocation
+metadata:
+  name: global-default-tenant-b
+  namespace: kcm-system
+spec:
+  ip_version: 4
+  prefix_length: 27
+  source:
+    subnetpool:
+      name:  global-default
+  target:
+    subnetpool:
+      name: default
+      namespace: tenant-b
+      max_prefix: 27
+      min_prefix: 27
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetPoolAllocation
+metadata:
+  name: public-default-tenant-b
+  namespace: kcm-system
+spec:
+  ip_version: 4
+  prefix_length: 29
+  source:
+    subnetpool:
+      name:  global-public
+  target:
+    subnetpool:
+      name: public
+      namespace: tenant-b
+      max_prefix: 29
+      min_prefix: 29

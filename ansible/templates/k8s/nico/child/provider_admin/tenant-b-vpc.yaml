@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-b
+spec: {}
+---
+# Tenant VPC pinned to a specific fabric backend.
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Vpc
+metadata:
+  name: tenant-b
+  namespace: tenant-b
+spec:
+  backend: nico

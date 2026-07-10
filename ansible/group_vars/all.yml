@@ -282,11 +282,10 @@ nico_capi_identity_secret_namespaces:
   - tenant-b
   - platform-admin
   - "{{ nico_capi_provider_namespace }}"
-nico_child_tenant: tenant-a
-nico_child_vpc: "{{ nico_child_tenant }}"
-nico_vpc_name: "{{ nico_child_tenant }}-{{ nico_child_vpc }}"
+nico_child_tenants:
+  - tenant-a
+  - tenant-b
 nico_cluster_physical_subnet: ns-subnet
-nico_vpc_prefix_name: "{{ nico_vpc_name }}-{{ nico_cluster_physical_subnet }}-vpcprefix"
 nico_site_name: local-dev-site
 nico_prepovision_instance_type_name: gpu-a100
 nico_prepovision_operating_system_name: ubuntu-22.04
