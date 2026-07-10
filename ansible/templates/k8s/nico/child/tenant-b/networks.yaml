@@ -1,0 +1,65 @@
+# Ethernet network
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: ns-network
+  namespace: tenant-b
+spec:
+  vpc: tenant-b
+  type: l3vpn
+---
+# Ethernet network
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: public-network
+  namespace: tenant-b
+spec:
+  vpc: tenant-b
+  type: l3vpn
+---
+# Infiniband partition network
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: ib-network
+  namespace: tenant-b
+spec:
+  vpc: tenant-b
+  type: infiniband
+---
+# NVLink partition network
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: Network
+metadata:
+  name: nvlink-partition
+  namespace: tenant-b
+spec:
+  vpc: tenant-b
+  type: nvlink
+---
+# Will create VPCPrefixes in NICO and corresponding Subnets in UFO
+
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetAllocation
+metadata:
+  name: ns-subnet
+  namespace: tenant-b
+spec:
+  vpc: tenant-b
+  network: ns-network
+  prefix_length: 27
+  subnetpool: default
+  subnet: ns-subnet
+---
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: SubnetAllocation
+metadata:
+  name: public-subnet
+  namespace: tenant-b
+spec:
+  vpc: tenant-b
+  network: public-network
+  prefix_length: 29
+  subnetpool: public
+  subnet: public-subnet

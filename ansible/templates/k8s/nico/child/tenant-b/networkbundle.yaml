@@ -1,0 +1,31 @@
+# NetworkBundle for NICO backend.
+apiVersion: ufo.mirantis.com/v1alpha1
+kind: NetworkBundle
+metadata:
+  name: tenant-b-networkbundle
+  namespace: tenant-b
+spec:
+  clusterName: tenant-b-cluster
+  networkv2:
+    ethernets:
+      enp1s0:
+        dhcp4: true
+        connectToNetwork:
+          name: ns-network
+    infinibands:
+      ibpf0:
+        connectToNetwork:
+          name: ib-network
+      ibpf1:
+        connectToNetwork:
+          name: ib-network
+      ibpf2:
+        connectToNetwork:
+          name: ib-network
+      ibpf3:
+        connectToNetwork:
+          name: ib-network
+    nvlinks:
+      nvlink1:
+        connectToNetwork:
+          name: nvlink-partition

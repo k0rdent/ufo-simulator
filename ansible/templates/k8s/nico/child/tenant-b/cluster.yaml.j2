@@ -1,0 +1,129 @@
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: tenant-b-cluster
+  namespace: tenant-b
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-b-cluster
+spec:
+  clusterNetwork:
+    apiServerPort: 6443
+    pods:
+      cidrBlocks:
+      - 10.243.0.0/16
+    services:
+      cidrBlocks:
+      - 10.95.0.0/16
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: K0smotronControlPlane
+    name: tenant-b-cluster-cp
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: NicoCluster
+    name: tenant-b-cluster
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: NicoCluster
+metadata:
+  name: tenant-b-cluster
+  namespace: tenant-b
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-b-cluster
+spec:
+  identityRef:
+    name: nico-token
+    orgId: {{ nico_api_org }}
+    apiEndpoint: {{ nico_api_base_url }}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: K0smotronControlPlane
+metadata:
+  name: tenant-b-cluster-cp
+  namespace: tenant-b
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-b-cluster
+spec:
+  version: v1.36.1
+  replicas: 1
+  service:
+    type: LoadBalancer
+  persistence:
+    type: emptyDir
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: NicoMachineTemplate
+metadata:
+  name: tenant-b-cluster-default-cmt
+  namespace: tenant-b
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-b-cluster
+spec:
+  template:
+    metadata:
+      annotations:
+        nico.infrastructure.cluster.x-k8s.io/scheduler: 'random-instance-type'
+    spec:
+      instanceTypeId: {{ nico_instance_type_id }}
+      operatingSystemId: {{ nico_operating_system_id }}
+      tenantId: {{ nico_tenant_id }}
+      sshKeyGroupIds:
+{% for ssh_key_group_id in nico_ssh_key_group_ids %}
+      - {{ ssh_key_group_id }}
+{% endfor %}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: K0sWorkerConfigTemplate
+metadata:
+  name: tenant-b-cluster-default-wct
+  namespace: tenant-b
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-b-cluster
+spec:
+  template:
+    spec:
+      version: v1.36.1
+      preStartCommands:
+        - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+        - sudo mkdir -vp /home/rescue/.ssh/
+        - sudo chown rescue /home/rescue/.ssh/authorized_keys
+        - /usr/bin/sleep 180
+      files:
+      - content: |
+          PasswordAuthentication yes
+        path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
+        permissions: "0644"
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: tenant-b-cluster-default-md
+  namespace: tenant-b
+  labels:
+    cluster.x-k8s.io/cluster-name: tenant-b-cluster
+spec:
+  clusterName: tenant-b-cluster
+  replicas: 3
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: tenant-b-cluster
+      cluster.x-k8s.io/worker-name: tenant-b-cluster-default-md
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: tenant-b-cluster
+        cluster.x-k8s.io/worker-name: tenant-b-cluster-default-md
+        ufo.mirantis.com/networkbundle: tenant-b-networkbundle
+    spec:
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: K0sWorkerConfigTemplate
+          name: tenant-b-cluster-default-wct
+      clusterName: tenant-b-cluster
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: NicoMachineTemplate
+        name: tenant-b-cluster-default-cmt
+      version: v1.36.1
