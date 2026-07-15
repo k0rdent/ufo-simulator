@@ -1,5 +1,5 @@
 ---
-- name: Install NICO CAPI provider
+- name: Configure NICO CAPI provider credentials
   hosts: cmps
   connection: local
   become: true
@@ -14,36 +14,13 @@
     workspace: /opt/ufo_lab/
 
   tasks:
-    - name: Install NICO CAPI provider via helm chart
+    - name: Configure NICO CAPI provider credentials
       when: nico_capi_provider_enabled
       block:
         - name: Ensure target directory
           file:
             path: "{{ k8s_artifacts_dir }}/nico/"
             state: directory
-
-        - name: Handle NICO CAPI provider templates
-          block:
-            - name: Render templates
-              ansible.builtin.template:
-                src: "k8s/nico/{{ item }}"
-                dest: "{{ k8s_artifacts_dir }}/nico/{{ item }}"
-              with_items:
-                - "nico_capi_provider.yaml"
-
-        - name: Deploy/upgrade NICO CAPI provider helm release
-          kubernetes.core.helm:
-            name: cluster-api-provider-nico
-            kubeconfig: "{{ kubeconfig_path }}"
-            chart_ref: "{{ nico_capi_provider_chart_repo }}"
-            chart_version: "{{ nico_capi_provider_chart_version }}"
-            release_namespace: "{{ nico_capi_provider_namespace }}"
-            create_namespace: true
-            values_files:
-              - "{{ k8s_artifacts_dir }}/nico/nico_capi_provider.yaml"
-            state: present
-            wait: true
-            wait_timeout: 300s
 
         - name: Deploy external-secrets operator
           kubernetes.core.helm:
