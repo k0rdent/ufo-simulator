@@ -42,18 +42,16 @@
         state: directory
 
     - name: Handle kcm templates
+      vars:
+        kcm_templates: "{{ ['management.yml', 'metal3-provider.yml'] + (['nico-provider.yml'] if (nico_capi_provider_enabled | bool) else []) }}"
       block:
         - name: Render templates
           ansible.builtin.template:
             src: "k8s/kcm/{{ item }}"
             dest: "{{ k8s_artifacts_dir }}/kcm/{{ item }}"
-          with_items:
-           - "management.yml"
-           - "metal3-provider.yml"
-          
+          with_items: "{{ kcm_templates }}"
+
         - name: Apply Management object
           ansible.builtin.command:
             cmd: kubectl --kubeconfig {{ kubeconfig_path }} apply -f "{{ k8s_artifacts_dir }}/kcm/{{ item }}"
-          with_items:
-           - "management.yml"
-           - "metal3-provider.yml"
+          with_items: "{{ kcm_templates }}"

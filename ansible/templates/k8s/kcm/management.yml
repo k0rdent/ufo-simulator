@@ -97,4 +97,15 @@ spec:
           ipAddress: {{ br_pxe_ip }}
     name: cluster-api-provider-metal3
     template: cluster-api-provider-metal3-0.5.0
+{% if nico_capi_provider_enabled | bool %}
+  - config:
+      manager:
+        image:
+          repository: {{ nico_capi_provider_image }}
+          tag: {{ nico_capi_provider_image_tag }}
+      nicoClient:
+        insecureSkipTLSVerify: true
+    name: cluster-api-provider-nico
+    template: cluster-api-provider-nico-{{ nico_capi_provider_chart_version }}
+{% endif %}
   release: kcm-1-10-0
