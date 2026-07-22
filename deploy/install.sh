@@ -114,7 +114,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
             echo "SSH in, set k0rdent_apis_pull_secret_{username,password} in ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml,"
             echo "then run: ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit \$(hostname -s)"
         else
-            ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit ${HOSTNAME}
+            ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit ${HOSTNAME} || exit 1
         fi
     fi
 
