@@ -45,6 +45,39 @@
             - ssh-key.yaml
             - security-group.yaml
 
+        - name: Apply NICO platform admin manifests
+          kubernetes.core.k8s:
+            kubeconfig: "{{ kubeconfig_path }}"
+            state: present
+            src: "{{ k8s_artifacts_dir }}/nico/child/platform_admin/{{ item }}"
+          loop:
+            - ssh-key.yaml
+            - security-group.yaml
+
+        - name: Wait for platform-admin SSHKeyGroup to be reconciled into NICO
+          kubernetes.core.k8s_info:
+            kubeconfig: "{{ kubeconfig_path }}"
+            api_version: nico.mirantis.com/v1alpha1
+            kind: SSHKeyGroup
+            namespace: platform-admin
+            name: "{{ nico_prepovision_platform_admin_ssh_key_group_name }}"
+          register: nico_platform_admin_ssh_key_group_cr
+          until: (nico_platform_admin_ssh_key_group_cr.resources[0].status.id | default('')) | length > 0
+          retries: 30
+          delay: 5
+
+        - name: Wait for platform-admin NetworkSecurityGroup to be reconciled into NICO
+          kubernetes.core.k8s_info:
+            kubeconfig: "{{ kubeconfig_path }}"
+            api_version: nico.mirantis.com/v1alpha1
+            kind: NetworkSecurityGroup
+            namespace: platform-admin
+            name: "{{ nico_prepovision_network_security_group_name }}"
+          register: nico_platform_admin_nsg_cr
+          until: (nico_platform_admin_nsg_cr.resources[0].status.id | default('')) | length > 0
+          retries: 30
+          delay: 5
+
         - name: Render NICO tenant prepovision manifests
           ansible.builtin.template:
             src: "k8s/nico/child/{{ nico_child_tenant }}/{{ item }}"
