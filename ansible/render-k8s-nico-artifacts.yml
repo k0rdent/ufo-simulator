@@ -25,6 +25,7 @@
             state: directory
           loop:
             - "{{ k8s_artifacts_dir }}/nico/child/provider_admin"
+            - "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
             - "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}"
 
         - name: Render NICO provider admin manifests
@@ -35,6 +36,14 @@
             - subnetpool.yaml
             - "{{ nico_child_tenant }}-vpc.yaml"
             - "{{ nico_child_tenant }}-subnetpoolallocation.yaml"
+
+        - name: Render NICO platform admin manifests
+          ansible.builtin.template:
+            src: "k8s/nico/child/platform_admin/{{ item }}"
+            dest: "{{ k8s_artifacts_dir }}/nico/child/platform_admin/{{ item }}"
+          loop:
+            - ssh-key.yaml
+            - security-group.yaml
 
         - name: Render NICO tenant prepovision manifests
           ansible.builtin.template:
