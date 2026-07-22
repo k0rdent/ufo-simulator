@@ -84,6 +84,16 @@
     return_content: true
   register: nico_rest_ssh_key_groups
 
+- name: Fetch NICO network security groups from REST API
+  ansible.builtin.uri:
+    url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/network-security-group"
+    method: GET
+    headers: "{{ nico_rest_headers }}"
+    validate_certs: false
+    status_code: 200
+    return_content: true
+  register: nico_rest_network_security_groups
+
 - name: Fetch NICO VPC prefixes from REST API
   ansible.builtin.uri:
     url: "{{ nico_api_base_url }}/v2/org/{{ nico_api_org }}/nico/vpc-prefix"
@@ -138,6 +148,14 @@
           | first
           | default('')
         }}
+    nico_network_security_group_id: >-
+      {{
+        nico_rest_network_security_groups.json
+        | selectattr('name', 'equalto', nico_prepovision_network_security_group_name)
+        | map(attribute='id')
+        | first
+        | default('')
+      }}
 
 - name: Set NICO VPC prefix ID for child cluster rendering
   ansible.builtin.set_fact:
@@ -161,6 +179,7 @@
       - nico_operating_system_id | length > 0
       - nico_ssh_key_group_ids | length > 0
       - nico_ssh_key_group_ids[0] | length > 0
+      - nico_network_security_group_id | length > 0
       - nico_vpc_prefix_id | length > 0
     fail_msg: >-
       Failed to resolve one or more NICO resource IDs via REST API.
@@ -179,6 +198,9 @@
       }}),
       ssh key group '{{ nico_prepovision_ssh_key_group_name }}' (available: {{
         nico_rest_ssh_key_groups.json | map(attribute='name') | list | join(', ')
+      }}),
+      network security group '{{ nico_prepovision_network_security_group_name }}' (available: {{
+        nico_rest_network_security_groups.json | map(attribute='name') | list | join(', ')
       }}),
       vpc prefix '{{ nico_vpc_prefix_name }}' for vpc '{{ nico_vpc_name }}' (available: {{
         nico_rest_vpc_prefixes.json
