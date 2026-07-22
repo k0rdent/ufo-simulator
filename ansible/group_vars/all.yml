@@ -290,7 +290,6 @@ nico_site_name: local-dev-site
 nico_prepovision_instance_type_name: gpu-a100
 nico_prepovision_operating_system_name: ubuntu-22.04
 nico_prepovision_ssh_key_group_name: platform-admin-keys
-nico_prepovision_platform_admin_ssh_key_group_name: platform-admin-keys
 nico_prepovision_network_security_group_name: allow-all
 external_secrets_namespace: external-secrets
 external_secrets_chart_repo: https://charts.external-secrets.io
