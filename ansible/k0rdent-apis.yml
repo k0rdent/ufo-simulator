@@ -1,0 +1,216 @@
+---
+- name: Install k0rdent-apis
+  hosts: cmps
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  vars:
+    workspace: /opt/ufo_lab/
+    k0rdent_apis_repo: https://github.com/k0rdent/k0rdent-apis
+    k0rdent_apis_dir: "{{ workspace }}k0rdent-apis"
+    k0rdent_apis_namespace: k0rdent-apis
+    k0rdent_apis_values_path: /tmp/values-socks-overrides.yaml
+    k0rdent_apis_patch_path: "{{ k0rdent_apis_dir }}/k0rdent-apis.patch"
+    k0rdent_apis_pull_secret_name: ghcr-pull-secret
+    k0rdent_apis_pull_secret_server: registry.ci.mirantis.com
+    k0rdent_apis_nico_sa_secret: nico-service-account
+    k0rdent_apis_nico_sa_password: "{{ nico_client_secret }}"
+    k0rdent_apis_provision_env: kindmock
+    k0rdent_apis_helm_timeout: 15m
+    k0rdent_apis_extras_helm_timeout: 3m
+
+  tasks:
+    - name: Ensure workspace exists
+      ansible.builtin.file:
+        path: "{{ workspace }}"
+        state: directory
+
+    - name: Clone k0rdent-apis repo
+      ansible.builtin.git:
+        repo: "{{ k0rdent_apis_repo }}"
+        dest: "{{ k0rdent_apis_dir }}"
+
+    - name: Stage k0rdent-apis patch
+      ansible.builtin.copy:
+        src: files/k0rdent-apis/k0rdent-apis.patch
+        dest: "{{ k0rdent_apis_patch_path }}"
+      register: k0rdent_apis_patch_copy
+
+    - name: Apply k0rdent-apis patch (skip if already applied)
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          if git apply --reverse --check "{{ k0rdent_apis_patch_path }}" >/dev/null 2>&1; then
+            echo "already-applied"
+            exit 0
+          fi
+          git apply "{{ k0rdent_apis_patch_path }}"
+          echo "applied"
+        chdir: "{{ k0rdent_apis_dir }}"
+        executable: /bin/bash
+      register: k0rdent_apis_patch_apply
+      changed_when: "'applied' == k0rdent_apis_patch_apply.stdout"
+
+    - name: Ensure k0rdent-apis namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ k0rdent_apis_namespace }}"
+
+    - name: Apply mailpit manifest
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        namespace: "{{ k0rdent_apis_namespace }}"
+        src: "{{ k0rdent_apis_dir }}/deploy/k8s/mailpit/mailpit.yaml"
+
+    - name: Ensure image pull secret exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: kubernetes.io/dockerconfigjson
+          metadata:
+            name: "{{ k0rdent_apis_pull_secret_name }}"
+            namespace: "{{ k0rdent_apis_namespace }}"
+          data:
+            .dockerconfigjson: >-
+              {{
+                {
+                  'auths': {
+                    k0rdent_apis_pull_secret_server: {
+                      'username': k0rdent_apis_pull_secret_username,
+                      'password': k0rdent_apis_pull_secret_password,
+                      'auth': (k0rdent_apis_pull_secret_username ~ ':' ~ k0rdent_apis_pull_secret_password) | b64encode
+                    }
+                  }
+                } | to_json | b64encode
+              }}
+
+    - name: Build k0rdent-apis helm chart dependencies
+      ansible.builtin.command:
+        cmd: make helm-dep-build
+        chdir: "{{ k0rdent_apis_dir }}"
+      register: k0rdent_apis_helm_dep
+      changed_when: true
+
+    - name: Ensure nico service-account secret exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            name: "{{ k0rdent_apis_nico_sa_secret }}"
+            namespace: "{{ k0rdent_apis_namespace }}"
+          stringData:
+            password: "{{ k0rdent_apis_nico_sa_password }}"
+
+    - name: Fetch NICO resource IDs from REST API
+      ansible.builtin.include_tasks: tasks/nico_fetch_resources_id.yml
+
+    - name: Render k0rdent-apis values overrides
+      ansible.builtin.template:
+        src: k0rdent-apis/values-socks-overrides.yaml.j2
+        dest: "{{ k0rdent_apis_values_path }}"
+
+    - name: Deploy/upgrade k0rdent-apis helm release
+      kubernetes.core.helm:
+        name: k0rdent-apis
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: "{{ k0rdent_apis_dir }}/deploy/helm/k0rdent-apis"
+        release_namespace: "{{ k0rdent_apis_namespace }}"
+        create_namespace: true
+        values_files:
+          - "{{ k0rdent_apis_dir }}/deploy/helm/k0rdent-apis/values-secret-kind.yaml"
+          - "{{ k0rdent_apis_values_path }}"
+        state: present
+        wait: true
+        wait_timeout: "{{ k0rdent_apis_helm_timeout }}"
+
+    - name: Deploy/upgrade k0rdent-kind-extras helm release
+      kubernetes.core.helm:
+        name: k0rdent-kind-extras
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: "{{ k0rdent_apis_dir }}/deploy/helm/k0rdent-kind-extras"
+        release_namespace: "{{ k0rdent_apis_namespace }}"
+        values:
+          global:
+            namespace: "{{ k0rdent_apis_namespace }}"
+        state: present
+        wait: true
+        wait_timeout: "{{ k0rdent_apis_extras_helm_timeout }}"
+
+    - name: Load provision-manifest content
+      ansible.builtin.slurp:
+        src: "{{ k0rdent_apis_dir }}/scripts/post-deploy/envs/{{ k0rdent_apis_provision_env }}/manifest.yaml"
+      register: k0rdent_apis_provision_manifest
+
+    - name: Ensure provision-manifest ConfigMap exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: provision-manifest
+            namespace: "{{ k0rdent_apis_namespace }}"
+          data:
+            manifest.yaml: "{{ k0rdent_apis_provision_manifest.content | b64decode }}"
+
+    - name: Ensure provision-manifest-secrets exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            name: provision-manifest-secrets
+            namespace: "{{ k0rdent_apis_namespace }}"
+          stringData:
+            KINDMOCK_IDP_SECRET: unused-placeholder
+
+    - name: Apply provision-apply job manifest
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        namespace: "{{ k0rdent_apis_namespace }}"
+        src: "{{ k0rdent_apis_dir }}/deploy/k8s/k0r-tools/provision-apply.yaml"
+
+    - name: Wait for provision-apply job to complete
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ k0rdent_apis_namespace }}"
+        name: provision-apply
+      register: k0rdent_apis_provision_job
+      until: >-
+        (k0rdent_apis_provision_job.resources[0].status.succeeded | default(0) | int) >= 1
+        or (k0rdent_apis_provision_job.resources[0].status.failed | default(0) | int) >= 1
+      retries: 60
+      delay: 10
+
+    - name: Fail if provision-apply did not succeed
+      ansible.builtin.assert:
+        that:
+          - (k0rdent_apis_provision_job.resources[0].status.succeeded | default(0) | int) >= 1
+        fail_msg: >-
+          provision-apply job did not complete successfully.
+          Check `kubectl -n {{ k0rdent_apis_namespace }} logs job/provision-apply`.

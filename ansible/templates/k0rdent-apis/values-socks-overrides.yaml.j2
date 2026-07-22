@@ -77,10 +77,9 @@ workflow:
       NICO_SERVICE_ACCOUNT_ID: "nico-api"
       DEFAULT_NICO_ORGANIZATION: "test-org"
       DEFAULT_NICO_SITE: "local-dev-site"
-      DEFAULT_NICO_SSH_KEY_GROUP_IDS: "d625cbcf-1508-4122-b808-6a15e837b4d4"
-      DEFAULT_NICO_TENANT_ID: "fc698209-cba5-4ef5-9600-8bae56bac6b6"
-      # Hardcoded in our mock
-      DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "00000000-0000-4000-8004-000000000000"
+      DEFAULT_NICO_SSH_KEY_GROUP_IDS: "{{ nico_platform_admin_ssh_key_group_id }}"
+      DEFAULT_NICO_TENANT_ID: "{{ nico_tenant_id }}"
+      DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "{{ nico_network_security_group_id }}"
 
     envSecretRef:
       NICO_SERVICE_ACCOUNT_PASSWORD:

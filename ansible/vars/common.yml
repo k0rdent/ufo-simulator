@@ -5,6 +5,8 @@ netris_admin_password: "<NETRIS_ADMIN_PASSWORD>1!"
 redfish_password: "<REDFISH_PASSWORD>"
 ctl_public_ip: "<CTL_PUBLIC_IP>"
 netris_license: "<NETRIS_LICENSE>"
+k0rdent_apis_pull_secret_username: "<K0RDENT_APIS_PULL_SECRET_USERNAME>"
+k0rdent_apis_pull_secret_password: "<K0RDENT_APIS_PULL_SECRET_PASSWORD>"
 sdn_provider: netris
 
 
