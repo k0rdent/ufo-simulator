@@ -1,0 +1,39 @@
+---
+# Install and configure Squid HTTP proxy on gateway nodes.
+
+- name: Deploy Squid
+  hosts: "gtws"
+  gather_facts: true
+  become: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  handlers:
+    - name: Restart Squid
+      ansible.builtin.service:
+        name: squid
+        state: restarted
+
+  tasks:
+    - name: Install Squid package
+      ansible.builtin.package:
+        name: squid
+        state: present
+
+    - name: Deploy Squid configuration
+      ansible.builtin.template:
+        src: squid/squid.conf.j2
+        dest: /etc/squid/squid.conf
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      notify: Restart Squid
+
+    - name: Enable and start Squid
+      ansible.builtin.service:
+        name: squid
+        state: started
+        enabled: true

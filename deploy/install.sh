@@ -66,6 +66,7 @@ fi
 
 if [[ ${NODE_TYPE} == "gtw" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/frr.yml --limit ${HOSTNAME}
+    ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/squid.yml --limit ${HOSTNAME}
     if [[ ${NICO_ENABLE} == "true" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-rest.yml --limit ${HOSTNAME}
     fi

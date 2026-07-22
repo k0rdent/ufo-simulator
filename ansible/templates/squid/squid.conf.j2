@@ -1,0 +1,15 @@
+# Squid listening port (default is 3128)
+http_port 3128
+
+# Allow access from any IP (change this for security!)
+http_access allow all
+
+# Deny everything else (this line should be near the end)
+http_access deny all
+
+# Basic caching settings (optional but recommended)
+cache_dir ufs /var/spool/squid 100 16 256
+coredump_dir /var/spool/squid
+
+# Logging
+access_log daemon:/var/log/squid/access.log squid
