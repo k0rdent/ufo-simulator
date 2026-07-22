@@ -1,0 +1,221 @@
+diff --git a/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml b/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml
+index e329a215e..a0d2759ac 100644
+--- a/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml
++++ b/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml
+@@ -486,6 +486,20 @@ data:
+                 {{- else }} []
+                 {{- end }}
+         routes:
++        {{- /*
++          internalHosts (dual-auth support): when set, restrict the internal
++          route match to requests whose Host header is in the list. Kong strips
++          the port when comparing, so a caller reaching `http://kong-internal:8100`
++          matches `kong-internal`. External callers hit the public gateway
++          under a different Host, so the same URL falls through to the external
++          route (which carries no `hosts` filter) and runs external authz. The
++          plugin's listener_mode=internal + internal_listener_port check stays
++          in front as defense-in-depth against a spoofed Host: kong-internal
++          on the external port (mismatched port → 403 "wrong listener"). Each
++          entry is passed through `tpl` so values.yaml can use {{ printf "{{ .Release.Namespace }}" }}
++          / {{ printf "{{ .Values.global.region }}" }} inline. Absent = legacy
++          behavior (no host filter, route matches on path/method only).
++        */}}
+         {{- range $i, $path := $route.paths }}
+           - name: {{ $name }}-internal-{{ $i }}
+             paths:
+@@ -495,6 +509,12 @@ data:
+             {{- if $route.routePriority }}
+             regex_priority: {{ $route.routePriority }}
+             {{- end }}
++            {{- if $route.internalHosts }}
++            hosts:
++              {{- range $route.internalHosts }}
++              - {{ tpl . $ | quote }}
++              {{- end }}
++            {{- end }}
+         {{- end }}
+     {{- end }}{{/* end range internalRoutes */}}
+     {{- end }}{{/* end if k0rdentAuthz.enabled */}}
+diff --git a/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml b/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml
+index 24ad7011f..14d11c35d 100644
+--- a/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml
++++ b/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml
+@@ -83,6 +83,8 @@ rules:
+     - "subnetpools"
+     - "subnetpoolallocations"
+     - "networkbundles"
++    - "niconetworkconfigs"
++    - "niconetworkconfigallocations"
+   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+ # Metal3 BareMetalHost lifecycle for the bare-metal-host-{create,provision,
+ # release} workflows. Activities are registered at worker boot regardless of
+diff --git a/deploy/helm/k0rdent-apis/values.yaml b/deploy/helm/k0rdent-apis/values.yaml
+index 78340beec..a4aa0d037 100644
+--- a/deploy/helm/k0rdent-apis/values.yaml
++++ b/deploy/helm/k0rdent-apis/values.yaml
+@@ -1726,6 +1726,62 @@ kong:
+       authz:
+         allowedCallers:
+           - 'svc-{{ .Values.global.region | default "local" }}-reconciler'
++    # ── Infrastructure server sub-resources (KCS-678 companion) ──
++    # The ProvisionReservations child workflow (services/workflow/cmd/
++    # workflow-worker/workflows/child-workflows/management-apis/infrastructure/
++    # provision_reservation.go), invoked by instance-group-create (KCS-932,
++    # `provision-hosts` step; sole caller today — cluster-deployment-create-v3
++    # only reads server PSD, it doesn't patch it), hits three server-scoped
++    # endpoints on the infrastructure service after the reservation lands:
++    #   1. PATCH /servers/{slug}/providerSpecificData   (write NIC interfaces)
++    #   2. POST  /servers/{slug}/cloudConfig            (write node cloud-config)
++    #   3. GET   /servers/{slug}                        (poll provisioning state)
++    # All three are dual-auth in the Go handler (services/infrastructure/cmd/
++    # infrastructure/routes.go:210-221; endpoints introduced in KCS-678 / #565)
++    # but their internal-listener companion was never added. Worker calls fall
++    # through to the external `infrastructure` route (path prefix ~/.../servers,
++    # above) whose k0rdent-authz runs in listener_mode=external and 403s the
++    # client_credentials service JWT (no k0r claim — the Keycloak SPI
++    # deliberately skips svc-* clients per K0rdentClaimEnricher.java:190-194).
++    #
++    # Dual-auth via a Host filter: the SAME three paths need to serve BOTH the
++    # worker (internal listener, service JWT, InternalOnly middleware) AND
++    # external operators (public gateway, user JWT, RBAC via
++    # infrastructure.resources.read/update). The k0rdent-authz plugin's
++    # listener_mode is binary, so one route can't do both. We ship an internal
++    # route ALONGSIDE the existing external `infrastructure` route: both match
++    # the same paths, but the internal route carries a Host filter so it ONLY
++    # matches requests to Host: kong-internal(:8100) — which is how every
++    # internal caller in the repo reaches Kong (deploy/helm/charts/services/*/
++    # values.yaml WORKFLOW_API_ENDPOINT / INTERNAL_API_BASE_URL). External
++    # users hit a different Host and fall through to the external route.
++    #
++    # No routePriority is needed. Kong ranks routes with a Host filter above
++    # equivalent routes without one when the Host matches, so the worker's
++    # calls (Host: kong-internal) hit the internal route and external users
++    # (Host: <public gateway>) hit the external route deterministically
++    # without any regex_priority tiebreaker.
++    #
++    # Defense-in-depth: the plugin's listener_mode=internal +
++    # internal_listener_port gate stays in front. A spoofed Host: kong-internal
++    # on the external port still 403s with "wrong listener" — the Host filter
++    # is only for route disambiguation, not the security boundary.
++    infrastructure-server-subresources:
++      service: infrastructure
++      paths:
++        - ~/v1/regions/{{ .Values.global.region | default "local" }}/infrastructure/servers/[^/]+/providerSpecificData$
++        - ~/v1/regions/{{ .Values.global.region | default "local" }}/infrastructure/servers/[^/]+/cloudConfig$
++        - ~/v1/regions/{{ .Values.global.region | default "local" }}/infrastructure/servers/[^/]+$
++      # Kong strips the port when comparing Host, so `kong-internal` matches
++      # `kong-internal:8100`. FQDN forms are included defensively for future
++      # cross-namespace / fully-qualified callers.
++      internalHosts:
++        - kong-internal
++        - "kong-internal.{{ .Release.Namespace }}"
++        - "kong-internal.{{ .Release.Namespace }}.svc.cluster.local"
++      authz:
++        allowedCallers:
++          - 'svc-{{ .Values.global.region | default "local" }}-workflow-worker'
+     # ── Workflow (services/workflow/cmd/workflow/routes.go:56-63) ──
+     # Named "activities" because the /v1/workflow/internal subtree is
+     # the workflow-worker's activity/step callback surface (StepStarted,
+diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/provision-apply.yaml
+index 474e05af5..de752a877 100644
+--- a/deploy/k8s/k0r-tools/provision-apply.yaml
++++ b/deploy/k8s/k0r-tools/provision-apply.yaml
+@@ -37,6 +37,8 @@ spec:
+       restartPolicy: Never
+       # The tool only calls the platform's own HTTP APIs — no K8s API access.
+       automountServiceAccountToken: false
++      imagePullSecrets:
++        - name: ghcr-pull-secret
+       # Hardened pod context: run as the image's non-root user (uid 65532, set
+       # in build/Dockerfile.go-tools) and apply the default seccomp profile.
+       securityContext:
+@@ -54,8 +56,8 @@ spec:
+           # For a real cluster, pin a published tag here. For kind, build and load it
+           # locally (`make docker-build-k0r-tools`, then `kind load
+           # docker-image k0r-tools:latest`) — IfNotPresent keeps the loaded image.
+-          image: k0r-tools:latest
+-          imagePullPolicy: IfNotPresent
++          image: registry.ci.mirantis.com/k0rdent-apis/images/k0r-tools:main
++          imagePullPolicy: Always
+           # The image bundles multiple tool binaries (no ENTRYPOINT); select
+           # the provision tool explicitly.
+           command: ["/usr/local/bin/provision"]
+@@ -82,11 +84,11 @@ spec:
+               value: "http://kong-internal:8100"
+             # --- manifest secret refs: add one entry per {env: NAME} in the
+             # manifest, sourced from your env's Secret. Example:
+-            # - name: VENDOR_IDP_CLIENT_SECRET
+-            #   valueFrom:
+-            #     secretKeyRef:
+-            #       name: provision-manifest-secrets
+-            #       key: VENDOR_IDP_CLIENT_SECRET
++            - name: KINDMOCK_IDP_SECRET
++              valueFrom:
++                secretKeyRef:
++                  name: provision-manifest-secrets
++                  key: KINDMOCK_IDP_SECRET
+           volumeMounts:
+             - name: manifest
+               mountPath: /etc/provision
+diff --git a/docs/k0rdent-authz/allowed-callers-matrix.md b/docs/k0rdent-authz/allowed-callers-matrix.md
+index 0fcb9688e..836f9fe01 100644
+--- a/docs/k0rdent-authz/allowed-callers-matrix.md
++++ b/docs/k0rdent-authz/allowed-callers-matrix.md
+@@ -108,6 +108,7 @@ Every route below corresponds to an entry in
+ | `compute-kubeconfigs` | POST | `/v1/internal/kubeconfigs/{id}/activate`, `/v1/internal/kubeconfigs/{id}/revoke`, `/v1/internal/kubeconfigs/{id}/fail` | compute | regional `svc-<region>-workflow-worker`; default `svc-local-workflow-worker` | Worker reports kubeconfig provisioning lifecycle back to compute (`activities/kubeconfig_callback_activities.go`). No other caller exists or is planned. |
+ | `infrastructure-reservations` | POST, GET | `~/v1/regions/{region}/infrastructure/reservations` (regex; covers `/{id}`, `/{id}/release`, `/{id}/provision`) | infrastructure | regional `svc-<region>-workflow-worker`; default `svc-local-workflow-worker` | KCS-513: the worker's `reserve-nodes` step (cluster-deployment-create-v3) reserves/polls/releases bare-metal servers via the infrastructure reservation API (`activities/reservation_activities.go`). These ops are `x-visibility: internal` and the infra service mounts them under `InternalOnly` (service identity, no user RBAC), so they ride the internal listener caller-gated to the worker. The public `infrastructure` route is narrowed to `machine-types` + `servers`, so it no longer covers `/reservations` and this is the sole route that matches it — no `regex_priority` shadow needed. `internal_mode` 403s external callers; `allowed_callers` admits the worker. No other caller is planned. |
+ | `infrastructure-nico-health` | GET, POST | `~/v1/regions/{region}/infrastructure/internal/nico-hosts` (regex prefix; covers the list-ready `GET /nico-hosts` and the apply-health `POST /nico-hosts/health`) | infrastructure | regional `svc-<region>-reconciler`; default `svc-local-reconciler` | KCS-947: the reconciler polls NICo and delivers bare-metal host health back through these internal-only routes (`services/infrastructure/cmd/infrastructure/routes.go` — `ListNicoServersForHealth`, `ApplyServerHealthBatch`). The infra service mounts them under `InternalOnly` (service identity, no user RBAC); `internal_mode` 403s external callers, `allowed_callers` admits the reconciler. This is the row the `svc-*-reconciler` kind in `INFRA_INTERNAL_ALLOWED_SERVICE_IDS` mirrors. No other caller is planned. |
++| `infrastructure-server-subresources` | GET, PATCH, POST | `~/v1/regions/{region}/infrastructure/servers/[^/]+/providerSpecificData$`, `~/v1/regions/{region}/infrastructure/servers/[^/]+/cloudConfig$`, `~/v1/regions/{region}/infrastructure/servers/[^/]+$` (three anchored regexes) | infrastructure | regional `svc-<region>-workflow-worker`; default `svc-local-workflow-worker` | KCS-678: the `ProvisionReservations` child workflow (`services/workflow/cmd/workflow-worker/workflows/child-workflows/management-apis/infrastructure/provision_reservation.go`), invoked today only by `instance-group-create` (KCS-932, `provision-hosts` step — `cluster-deployment-create-v3` only *reads* server PSD off the reservation, it doesn't patch it), hits three server-scoped endpoints after the reservation lands: `PATCH /servers/{slug}/providerSpecificData` (write NIC interfaces from the rendered NetworkConfig), `POST /servers/{slug}/cloudConfig` (write the node-specific cloud-config), and `GET /servers/{slug}` (poll `provisioned` in `GetServerProvisionState`). All three are dual-auth in the Go handler (`services/infrastructure/cmd/infrastructure/routes.go:210-221`; endpoints landed in KCS-678 / #565) but their internal-listener companion was never added — worker calls fell through to the external `infrastructure` route (path prefix `~/.../servers`, above) and were 403'd by `k0rdent-authz` in `listener_mode=external` (the `client_credentials` service JWT carries no `k0r` user claim; `K0rdentClaimEnricher.java:190-194` deliberately skips `svc-*` clients). Unlike `infrastructure-reservations` above, external RBAC access to these same three paths is a live use case (operators inspecting server state and NIC config), so this route can't just shadow the external `infrastructure` route the way reservations do — one Kong route with binary `listener_mode` can't serve both audiences. Instead this route ships an **`internalHosts` Host filter** (`kong-internal`, `kong-internal.<ns>`, `kong-internal.<ns>.svc.cluster.local`) and runs ALONGSIDE the external `infrastructure` route: the internal route only matches requests to `Host: kong-internal(:8100)` — which is how every internal caller in the repo reaches Kong (`deploy/helm/charts/services/*/values.yaml` `WORKFLOW_API_ENDPOINT` / `INTERNAL_API_BASE_URL`, all `http://kong-internal:8100`) — and external users hit a different Host and fall through to the external route. Kong ranks routes with a `hosts` filter above equivalent routes without one when the Host matches, so both audiences land on the right route deterministically without a `regex_priority` tiebreaker. Defense-in-depth: `listener_mode=internal` + `internal_listener_port` stays in front; a spoofed `Host: kong-internal` on the external port still 403s with "wrong listener". This is the row the `svc-*-workflow-worker` kind in `INFRA_INTERNAL_ALLOWED_SERVICE_IDS` mirrors (alongside `infrastructure-reservations`). No other caller is planned. |
+ | `workflow-activities` | POST | `/v1/workflow/internal/executions/{executionId}/steps/{stepName}/started`, `…/waiting`, `…/completed`, `…/failed`, `…/progress`, `/v1/workflow/internal/executions/{executionId}/human-tasks`, `/v1/workflow/internal/executions/{executionId}/status` | workflow | regional `svc-<region>-workflow-worker`; default `svc-local-workflow-worker` | Worker reports step, human-task, and execution status back to the workflow API (`activities/activities.go`, `workflows/reporter.go`). No other caller. |
+ | `workflow-workflows` | POST, GET | `/v1/workflow/workflows/{templateRef}`, `…/executions/{executionId}`, `…/executions/{executionId}/cancel`, `…/executions/{executionId}/retry`, `…/executions/{executionId}/signals/{signalName}` | workflow | in-cluster: regional `svc-<region>-{compute,infrastructure}` (default `svc-local-*`) + regional `svc-<region>-workflow-worker` (default `svc-local-workflow-worker`, KCS-68) + central `svc-organizations`; cross-cluster (regional render only): `svc-global-workflow-worker` | Compute / infrastructure / organizations kick off async work via `internal/workflow/workflow_client.go`. Pre-KCS-173 these calls hit the external listener with `X-API-Key`; KCS-173 moves them to the internal listener with `client_credentials` JWTs. Mixed caller class is intentional: compute and infrastructure are regional (region-scoped `svc-<region>-<service>` clients, minted per the KCS-1099 configured-secret derivation), organizations is central. **KCS-798**: on the **regional** render the route is marked `crossCluster` and its `allowedCallers` are replaced with the regional compute/infrastructure callers + the **global** workflow-worker (`svc-global-workflow-worker`) — the global `OrgDelete` worker dispatches the regional `org-resource-teardown` workflow across clusters via the regional gateway NodePort (KCS-68). crossCluster omits the internal-listener port check; `allowedCallers` + JWT/JWKS stays the gate. `svc-organizations` dispatches org-lifecycle workflows to the workflow service **in-cluster** (workflow runs on the global cluster too), never cross-cluster. |
+ | `workflow-templates` | GET | `/v1/workflow/templates`, `/v1/workflow/templates/{templateRef}` | workflow | same as `workflow-workflows` | Read-only template catalog used by the same callers before invoking a workflow. Kept as a separate Kong route so future divergence (e.g., portal-side template browsing) does not require splitting later. |
+diff --git a/scripts/post-deploy/envs/kindmock/manifest.yaml b/scripts/post-deploy/envs/kindmock/manifest.yaml
+index a38517178..75b4d525a 100644
+--- a/scripts/post-deploy/envs/kindmock/manifest.yaml
++++ b/scripts/post-deploy/envs/kindmock/manifest.yaml
+@@ -86,6 +86,22 @@ policies:
+     principal: {type: user, id: usr-acme-bob}
+     scope: {type: project, org: acme, project: acme-main}
+     displayName: Bob - compute-viewer (acme-main)
++  - role: iam-admin
++    principal: {type: user, id: usr-kindmockadmin}
++    scope:     {type: org, org: kindmock}
++    displayName: Kind Mock Admin - iam-admin
++  - role: infrastructure-admin
++    principal: {type: user, id: usr-kindmockadmin}
++    scope:     {type: platform}
++    displayName: Admin - infrastructure-admin (platform)
++  - role: cluster-admin
++    principal: {type: user, id: usr-kindmockadmin}
++    scope:     {type: platform}
++    displayName: Kind Mock Admin - cluster-admin (platform)
++  - role: compute-admin
++    principal: {type: user, id: usr-kindmockadmin}
++    scope: {type: platform}
++    displayName: Kind Mock Admin - compute-admin (platform)
+ 
+ identityProviders:
+   # In-cluster mock-oauth2-server (k0rdent-kind-extras). The host-side token
+@@ -131,10 +147,12 @@ portalClients:
+       - http://localhost:8083/*
+       - http://localhost:3000/*
+       - http://localhost:3010/*
++      - http://10.200.0.254:30080/*
+     webOrigins:
+       - http://localhost:8083
+       - http://localhost:3000
+       - http://localhost:3010
++      - http://10.200.0.254:30080
+   # customer-portal: the login client for customer users (alice, bob).
+   - clientId: customer-portal
+     displayName: Customer Portal (kind)
+@@ -145,7 +163,9 @@ portalClients:
+       - http://localhost:8083/*
+       - http://localhost:3000/*
+       - http://localhost:3010/*
++      - http://10.200.0.254:30080/*
+     webOrigins:
+       - http://localhost:8083
+       - http://localhost:3000
+       - http://localhost:3010
++      - http://10.200.0.254:30080
