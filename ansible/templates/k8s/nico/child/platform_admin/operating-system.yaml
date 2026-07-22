@@ -2,7 +2,7 @@ apiVersion: nico.mirantis.com/v1alpha1
 kind: OperatingSystem
 metadata:
   name: ubuntu-22.04
-  namespace: tenant-a
+  namespace: platform-admin
 spec:
   description: Ubuntu 22.04 via iPXE
   imageUrl: https://binary-mirantis-com.s3.amazonaws.com/openstack/bin/ubuntu/24.04/noble-server-cloudimg-amd64-20251026.img

@@ -3,7 +3,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: SubnetPoolAllocation
 metadata:
   name: global-default-tenant-a
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   ip_version: 4
   prefix_length: 27
@@ -21,7 +21,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: SubnetPoolAllocation
 metadata:
   name: public-default-tenant-a
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   ip_version: 4
   prefix_length: 29

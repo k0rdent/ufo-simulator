@@ -10,7 +10,7 @@ spec:
   vpcId:
     byVpcName: tenant-b-tenant-b
   sshKeyGroupIds:
-    - bySshKeyGroupName: dev-team-keys
+    - bySshKeyGroupName: platform-admin-keys
   labels:
     team: ml-platform
   vpcPrefixId:
