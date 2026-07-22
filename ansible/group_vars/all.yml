@@ -263,6 +263,9 @@ nico_core_mock_libvirt_endpoint: qemu+tcp://10.200.0.254/system
 nico_api_base_url: "http://{{ nico_rest_external_ip }}:8388"
 nico_api_org: test-org
 nico_keycloak_base_url: "http://{{ nico_rest_external_ip }}:8082"
+# Mirror of the realm seeded by infra-controller-core (Keycloak realm-configmap
+# + nico-rest-api chart). Changing this here alone will not rename the realm in
+# Keycloak — it must be changed upstream first.
 nico_keycloak_realm: nico-dev
 nico_token_url: "{{ nico_keycloak_base_url }}/realms/{{ nico_keycloak_realm }}/protocol/openid-connect/token"
 nico_client_id: nico-api

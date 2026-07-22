@@ -1,7 +1,7 @@
 global:
   # JWT iss claim + Kong allowedIss are auto-derived from this.
-  authIssuerUrl: "http://10.200.0.254:30080"
-  imagePullSecret: "ghcr-pull-secret"
+  authIssuerUrl: "{{ k0rdent_apis_base_url }}"
+  imagePullSecret: "{{ k0rdent_apis_pull_secret_name }}"
 
 auth:
   image:
@@ -9,7 +9,7 @@ auth:
     repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-auth-api"
   env:
     # OAuth callback after IdP login — must be a URL the browser can reach
-    AUTH_CALLBACK_URL: "http://10.200.0.254:30080/v1/regions/global/auth/callback"
+    AUTH_CALLBACK_URL: "{{ k0rdent_apis_base_url }}/v1/regions/global/auth/callback"
     # Drop the testing-site invite result page; set to your real URL if you serve one
     AUTH_INVITE_RESULT_URL: ""
 
@@ -70,20 +70,20 @@ workflow:
     env:
       # Where invite emails point. Workflow-worker exits at boot if empty,
       # so set it even if you don't send invites yet.
-      INVITE_BASE_URL: "http://10.200.0.254:30080"
-      NICO_REST_API_BASE_URL: "http://10.200.0.1:8388"   # ← fill in — not in your curl
-      NICO_KEYCLOAK_BASE_URL: "http://10.200.0.1:8082"
-      NICO_KEYCLOAK_REALM:   "nico-dev"
-      NICO_SERVICE_ACCOUNT_ID: "nico-api"
-      DEFAULT_NICO_ORGANIZATION: "test-org"
-      DEFAULT_NICO_SITE: "local-dev-site"
+      INVITE_BASE_URL: "{{ k0rdent_apis_base_url }}"
+      NICO_REST_API_BASE_URL: "{{ nico_api_base_url }}"
+      NICO_KEYCLOAK_BASE_URL: "{{ nico_keycloak_base_url }}"
+      NICO_KEYCLOAK_REALM:   "{{ nico_keycloak_realm }}"
+      NICO_SERVICE_ACCOUNT_ID: "{{ nico_client_id }}"
+      DEFAULT_NICO_ORGANIZATION: "{{ nico_api_org }}"
+      DEFAULT_NICO_SITE: "{{ nico_site_name }}"
       DEFAULT_NICO_SSH_KEY_GROUP_IDS: "{{ nico_platform_admin_ssh_key_group_id }}"
       DEFAULT_NICO_TENANT_ID: "{{ nico_tenant_id }}"
       DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "{{ nico_network_security_group_id }}"
 
     envSecretRef:
       NICO_SERVICE_ACCOUNT_PASSWORD:
-        secretName: nico-service-account
+        secretName: "{{ k0rdent_apis_nico_sa_secret }}"
         key: password
   config:
     worker:
@@ -106,7 +106,7 @@ kong:
     # Browser's Origin header will be http://<UFO_IP>:30080 — Kong rejects
     # anything else for cross-origin requests.
     origins:
-      - "http://10.200.0.254:30080"
+      - "{{ k0rdent_apis_base_url }}"
   k0rdentAuthz:
     # allowedIss is auto-derived from global.authIssuerUrl + /realms/<realm>,
     # so changing authIssuerUrl above is enough. Keep this from the kind values:
