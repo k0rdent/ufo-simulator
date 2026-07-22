@@ -15,7 +15,7 @@
     k0rdent_apis_dir: "{{ workspace }}k0rdent-apis"
     k0rdent_apis_namespace: k0rdent-apis
     k0rdent_apis_values_path: /tmp/values-socks-overrides.yaml
-    k0rdent_apis_patch_path: "{{ k0rdent_apis_dir }}/k0rdent-apis.patch"
+    k0rdent_apis_patches_dir: "{{ k0rdent_apis_dir }}/ufo-patches"
     k0rdent_apis_pull_secret_name: ghcr-pull-secret
     k0rdent_apis_pull_secret_server: registry.ci.mirantis.com
     k0rdent_apis_nico_sa_secret: nico-service-account
@@ -37,26 +37,35 @@
         repo: "{{ k0rdent_apis_repo }}"
         dest: "{{ k0rdent_apis_dir }}"
 
-    - name: Stage k0rdent-apis patch
-      ansible.builtin.copy:
-        src: files/k0rdent-apis/k0rdent-apis.patch
-        dest: "{{ k0rdent_apis_patch_path }}"
-      register: k0rdent_apis_patch_copy
+    - name: Ensure patches staging directory exists
+      ansible.builtin.file:
+        path: "{{ k0rdent_apis_patches_dir }}"
+        state: directory
 
-    - name: Apply k0rdent-apis patch (skip if already applied)
+    - name: Stage k0rdent-apis patches
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ k0rdent_apis_patches_dir }}/{{ item | basename }}"
+      with_fileglob: "files/k0rdent-apis/patches/*.patch"
+
+    - name: Apply k0rdent-apis patches (skip any already applied)
       ansible.builtin.shell:
         cmd: |
           set -euo pipefail
-          if git apply --reverse --check "{{ k0rdent_apis_patch_path }}" >/dev/null 2>&1; then
-            echo "already-applied"
-            exit 0
-          fi
-          git apply "{{ k0rdent_apis_patch_path }}"
-          echo "applied"
+          shopt -s nullglob
+          for p in "{{ k0rdent_apis_patches_dir }}"/*.patch; do
+            name=$(basename "$p")
+            if git apply --reverse --check "$p" >/dev/null 2>&1; then
+              echo "SKIP $name"
+              continue
+            fi
+            git apply "$p"
+            echo "APPLY $name"
+          done
         chdir: "{{ k0rdent_apis_dir }}"
         executable: /bin/bash
       register: k0rdent_apis_patch_apply
-      changed_when: "'applied' == k0rdent_apis_patch_apply.stdout"
+      changed_when: "'APPLY ' in k0rdent_apis_patch_apply.stdout"
 
     - name: Ensure k0rdent-apis namespace exists
       kubernetes.core.k8s:

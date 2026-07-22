@@ -1,0 +1,13 @@
+diff --git a/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml b/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml
+index 24ad7011f..14d11c35d 100644
+--- a/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml
++++ b/deploy/helm/charts/services/workflow/templates/worker-clusterrole.yaml
+@@ -83,6 +83,8 @@ rules:
+     - "subnetpools"
+     - "subnetpoolallocations"
+     - "networkbundles"
++    - "niconetworkconfigs"
++    - "niconetworkconfigallocations"
+   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+ # Metal3 BareMetalHost lifecycle for the bare-metal-host-{create,provision,
+ # release} workflows. Activities are registered at worker boot regardless of

@@ -1,0 +1,68 @@
+diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/provision-apply.yaml
+index 474e05af5..de752a877 100644
+--- a/deploy/k8s/k0r-tools/provision-apply.yaml
++++ b/deploy/k8s/k0r-tools/provision-apply.yaml
+@@ -37,6 +37,8 @@ spec:
+       restartPolicy: Never
+       # The tool only calls the platform's own HTTP APIs — no K8s API access.
+       automountServiceAccountToken: false
++      imagePullSecrets:
++        - name: ghcr-pull-secret
+       # Hardened pod context: run as the image's non-root user (uid 65532, set
+       # in build/Dockerfile.go-tools) and apply the default seccomp profile.
+       securityContext:
+@@ -54,8 +56,8 @@ spec:
+           # For a real cluster, pin a published tag here. For kind, build and load it
+           # locally (`make docker-build-k0r-tools`, then `kind load
+           # docker-image k0r-tools:latest`) — IfNotPresent keeps the loaded image.
+-          image: k0r-tools:latest
+-          imagePullPolicy: IfNotPresent
++          image: registry.ci.mirantis.com/k0rdent-apis/images/k0r-tools:main
++          imagePullPolicy: Always
+           # The image bundles multiple tool binaries (no ENTRYPOINT); select
+           # the provision tool explicitly.
+           command: ["/usr/local/bin/provision"]
+@@ -82,11 +84,11 @@ spec:
+               value: "http://kong-internal:8100"
+             # --- manifest secret refs: add one entry per {env: NAME} in the
+             # manifest, sourced from your env's Secret. Example:
+-            # - name: VENDOR_IDP_CLIENT_SECRET
+-            #   valueFrom:
+-            #     secretKeyRef:
+-            #       name: provision-manifest-secrets
+-            #       key: VENDOR_IDP_CLIENT_SECRET
++            - name: KINDMOCK_IDP_SECRET
++              valueFrom:
++                secretKeyRef:
++                  name: provision-manifest-secrets
++                  key: KINDMOCK_IDP_SECRET
+           volumeMounts:
+             - name: manifest
+               mountPath: /etc/provision
+diff --git a/scripts/post-deploy/envs/kindmock/manifest.yaml b/scripts/post-deploy/envs/kindmock/manifest.yaml
+index a38517178..75b4d525a 100644
+--- a/scripts/post-deploy/envs/kindmock/manifest.yaml
++++ b/scripts/post-deploy/envs/kindmock/manifest.yaml
+@@ -131,10 +131,12 @@ portalClients:
+       - http://localhost:8083/*
+       - http://localhost:3000/*
+       - http://localhost:3010/*
++      - http://10.200.0.254:30080/*
+     webOrigins:
+       - http://localhost:8083
+       - http://localhost:3000
+       - http://localhost:3010
++      - http://10.200.0.254:30080
+   # customer-portal: the login client for customer users (alice, bob).
+   - clientId: customer-portal
+     displayName: Customer Portal (kind)
+@@ -145,7 +147,9 @@ portalClients:
+       - http://localhost:8083/*
+       - http://localhost:3000/*
+       - http://localhost:3010/*
++      - http://10.200.0.254:30080/*
+     webOrigins:
+       - http://localhost:8083
+       - http://localhost:3000
+       - http://localhost:3010
++      - http://10.200.0.254:30080
