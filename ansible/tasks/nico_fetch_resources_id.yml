@@ -148,6 +148,14 @@
           | first
           | default('')
         }}
+    nico_platform_admin_ssh_key_group_id: >-
+      {{
+        nico_rest_ssh_key_groups.json
+        | selectattr('name', 'equalto', nico_prepovision_platform_admin_ssh_key_group_name)
+        | map(attribute='id')
+        | first
+        | default('')
+      }}
     nico_network_security_group_id: >-
       {{
         nico_rest_network_security_groups.json
@@ -179,6 +187,7 @@
       - nico_operating_system_id | length > 0
       - nico_ssh_key_group_ids | length > 0
       - nico_ssh_key_group_ids[0] | length > 0
+      - nico_platform_admin_ssh_key_group_id | length > 0
       - nico_network_security_group_id | length > 0
       - nico_vpc_prefix_id | length > 0
     fail_msg: >-
@@ -197,6 +206,9 @@
         nico_rest_operating_systems.json | map(attribute='name') | list | join(', ')
       }}),
       ssh key group '{{ nico_prepovision_ssh_key_group_name }}' (available: {{
+        nico_rest_ssh_key_groups.json | map(attribute='name') | list | join(', ')
+      }}),
+      platform-admin ssh key group '{{ nico_prepovision_platform_admin_ssh_key_group_name }}' (available: {{
         nico_rest_ssh_key_groups.json | map(attribute='name') | list | join(', ')
       }}),
       network security group '{{ nico_prepovision_network_security_group_name }}' (available: {{
