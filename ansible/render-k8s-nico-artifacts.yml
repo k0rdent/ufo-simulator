@@ -54,7 +54,7 @@
             api_version: nico.mirantis.com/v1alpha1
             kind: SSHKeyGroup
             namespace: platform-admin
-            name: "{{ nico_prepovision_platform_admin_ssh_key_group_name }}"
+            name: "{{ nico_prepovision_ssh_key_group_name }}"
           register: nico_platform_admin_ssh_key_group_cr
           until: (nico_platform_admin_ssh_key_group_cr.resources[0].status.id | default('')) | length > 0
           retries: 30
