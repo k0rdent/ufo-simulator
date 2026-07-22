@@ -1,0 +1,22 @@
+---
+apiVersion: nico.mirantis.com/v1alpha1
+kind: NetworkSecurityGroup
+metadata:
+  name: allow-all
+  namespace: platform-admin
+spec:
+  description: Allow all ingress and egress traffic
+  statefulEgress: true
+  rules:
+    - name: allow-all-ingress
+      direction: INGRESS
+      protocol: ANY
+      action: PERMIT
+      sourcePrefix: 0.0.0.0/0
+      destinationPrefix: 0.0.0.0/0
+    - name: allow-all-egress
+      direction: EGRESS
+      protocol: ANY
+      action: PERMIT
+      sourcePrefix: 0.0.0.0/0
+      destinationPrefix: 0.0.0.0/0
