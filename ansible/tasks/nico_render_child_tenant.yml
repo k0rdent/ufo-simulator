@@ -15,8 +15,8 @@
 
 - name: Render NICO provider admin manifests for tenant
   ansible.builtin.template:
-    src: "k8s/nico/child/provider_admin/{{ item }}"
-    dest: "{{ k8s_artifacts_dir }}/nico/child/provider_admin/{{ item }}"
+    src: "k8s/nico/child/platform_admin/{{ item }}"
+    dest: "{{ k8s_artifacts_dir }}/nico/child/platform_admin/{{ item }}"
   loop:
     - "{{ nico_child_tenant }}-vpc.yaml"
     - "{{ nico_child_tenant }}-subnetpoolallocation.yaml"
@@ -26,9 +26,6 @@
     src: "k8s/nico/child/{{ nico_child_tenant }}/{{ item }}"
     dest: "{{ k8s_artifacts_dir }}/nico/child/{{ nico_child_tenant }}/{{ item }}"
   loop:
-    - instance-type.yaml
-    - operating-system.yaml
-    - ssh-key.yaml
     - networks.yaml
     - networkbundle.yaml
 

@@ -3,7 +3,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: SubnetPool
 metadata:
   name: global-default
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   ip_version: 4
   min_prefix: 19
@@ -17,7 +17,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: SubnetPool
 metadata:
   name: global-public
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   ip_version: 4
   min_prefix: 19

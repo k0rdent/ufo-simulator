@@ -24,21 +24,18 @@
             path: "{{ item }}"
             state: directory
           loop:
-            - "{{ k8s_artifacts_dir }}/nico/child/provider_admin"
             - "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
-
-        - name: Render NICO shared subnet pools
-          ansible.builtin.template:
-            src: "k8s/nico/child/provider_admin/subnetpool.yaml"
-            dest: "{{ k8s_artifacts_dir }}/nico/child/provider_admin/subnetpool.yaml"
 
         - name: Render NICO platform admin manifests
           ansible.builtin.template:
             src: "k8s/nico/child/platform_admin/{{ item }}"
             dest: "{{ k8s_artifacts_dir }}/nico/child/platform_admin/{{ item }}"
           loop:
+            - subnetpool.yaml
             - ssh-key.yaml
             - security-group.yaml
+            - operating-system.yaml
+            - instance-type.yaml
 
         - name: Apply NICO platform admin manifests
           kubernetes.core.k8s:
@@ -48,6 +45,8 @@
           loop:
             - ssh-key.yaml
             - security-group.yaml
+            - operating-system.yaml
+            - instance-type.yaml
 
         - name: Wait for platform-admin SSHKeyGroup to be reconciled into NICO
           kubernetes.core.k8s_info:

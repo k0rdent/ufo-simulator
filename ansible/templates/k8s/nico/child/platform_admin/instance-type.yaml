@@ -2,7 +2,7 @@ apiVersion: nico.mirantis.com/v1alpha1
 kind: InstanceType
 metadata:
   name: gpu-a100
-  namespace: tenant-a
+  namespace: platform-admin
 spec:
   description: A100 nodes
   machineIds:
@@ -13,8 +13,8 @@ spec:
 apiVersion: nico.mirantis.com/v1alpha1
 kind: InstanceTypeAllocation
 metadata:
-  name: gpu-tenant-alloc
-  namespace: tenant-a
+  name: gpu-platform-adminlloc
+  namespace: platform-admin
 spec:
   instanceTypeRef:
     name: gpu-a100
