@@ -262,7 +262,9 @@ nico_core_mock_libvirt_enabled: true
 nico_core_mock_libvirt_endpoint: qemu+tcp://10.200.0.254/system
 nico_api_base_url: "http://{{ nico_rest_external_ip }}:8388"
 nico_api_org: test-org
-nico_token_url: "http://{{ nico_rest_external_ip }}:8082/realms/nico-dev/protocol/openid-connect/token"
+nico_keycloak_base_url: "http://{{ nico_rest_external_ip }}:8082"
+nico_keycloak_realm: nico-dev
+nico_token_url: "{{ nico_keycloak_base_url }}/realms/{{ nico_keycloak_realm }}/protocol/openid-connect/token"
 nico_client_id: nico-api
 nico_credentials_secret_name: nico-credentials
 nico_api_username: admin@example.com
