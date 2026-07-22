@@ -23,6 +23,8 @@
     k0rdent_apis_provision_env: kindmock
     k0rdent_apis_helm_timeout: 15m
     k0rdent_apis_extras_helm_timeout: 3m
+    k0rdent_apis_base_url: "http://10.200.0.254:30080"
+    k0rdent_apis_nico_sync_path: "{{ k0rdent_apis_dir }}/nico-sync.sh"
 
   tasks:
     - name: Ensure workspace exists
@@ -214,3 +216,24 @@
         fail_msg: >-
           provision-apply job did not complete successfully.
           Check `kubectl -n {{ k0rdent_apis_namespace }} logs job/provision-apply`.
+
+    - name: Stage nico-sync script
+      ansible.builtin.copy:
+        src: files/k0rdent-apis/nico-sync.sh
+        dest: "{{ k0rdent_apis_nico_sync_path }}"
+        mode: "0755"
+
+    - name: Sync NICO servers into k0rdent-apis
+      ansible.builtin.command:
+        cmd: bash "{{ k0rdent_apis_nico_sync_path }}"
+      environment:
+        BASE: "{{ k0rdent_apis_base_url }}"
+        KUBECONFIG: "{{ kubeconfig_path }}"
+        K0R_LOGIN_ORG: "{{ k0rdent_apis_provision_env }}"
+        K0R_LOGIN_NAMESPACE: "{{ k0rdent_apis_namespace }}"
+        NICO_HOST: "{{ nico_rest_external_ip }}"
+        NICO_CLIENT_ID: "{{ nico_client_id }}"
+        NICO_CLIENT_SECRET: "{{ nico_client_secret }}"
+        NICO_USERNAME: "{{ nico_api_username }}"
+        NICO_PASSWORD: "{{ nico_api_password }}"
+        NICO_ORG: "{{ nico_api_org }}"
