@@ -18,4 +18,4 @@ metadata:
 spec:
   instanceTypeRef:
     name: gpu-a100
-  reservedMachineCount: 6
+  reservedMachineCount: 3
