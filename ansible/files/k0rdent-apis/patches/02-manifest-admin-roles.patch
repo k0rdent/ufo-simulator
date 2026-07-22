@@ -1,0 +1,27 @@
+diff --git a/scripts/post-deploy/envs/kindmock/manifest.yaml b/scripts/post-deploy/envs/kindmock/manifest.yaml
+index a38517178..75b4d525a 100644
+--- a/scripts/post-deploy/envs/kindmock/manifest.yaml
++++ b/scripts/post-deploy/envs/kindmock/manifest.yaml
+@@ -86,6 +86,22 @@ policies:
+     principal: {type: user, id: usr-acme-bob}
+     scope: {type: project, org: acme, project: acme-main}
+     displayName: Bob - compute-viewer (acme-main)
++  - role: iam-admin
++    principal: {type: user, id: usr-kindmock-admin}
++    scope:     {type: org, org: kindmock}
++    displayName: Kind Mock Admin - iam-admin
++  - role: infrastructure-admin
++    principal: {type: user, id: usr-kindmock-admin}
++    scope:     {type: platform}
++    displayName: Admin - infrastructure-admin (platform)
++  - role: cluster-admin
++    principal: {type: user, id: usr-kindmock-admin}
++    scope:     {type: platform}
++    displayName: Kind Mock Admin - cluster-admin (platform)
++  - role: compute-admin
++    principal: {type: user, id: usr-kindmock-admin}
++    scope: {type: platform}
++    displayName: Kind Mock Admin - compute-admin (platform)
+ 
+ identityProviders:
+   # In-cluster mock-oauth2-server (k0rdent-kind-extras). The host-side token
