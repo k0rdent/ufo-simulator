@@ -14,6 +14,12 @@ backends:
     verity:
       enabled: {{ 'true' if ufo_fabric_backend == 'verity' else 'false' }}
       driver: verity
+    verity-ewf:
+      enabled: {{ 'true' if ufo_fabric_backend == 'verity' else 'false' }}
+      driver: verity
+      config:
+        site: ewf
+        fabric_type: "Spectrum-X 2 Tier"
     nico:
       enabled: {{ 'true' if nico_enabled else 'false' }}
       driver: nico
