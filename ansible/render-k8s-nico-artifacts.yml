@@ -72,8 +72,8 @@
           retries: 30
           delay: 5
 
-        - name: Render per-tenant NICO child cluster artifacts
-          ansible.builtin.include_tasks: tasks/nico_render_child_tenant.yml
-          loop: "{{ nico_child_tenants }}"
-          loop_control:
-            loop_var: nico_child_tenant
+        # - name: Render per-tenant NICO child cluster artifacts
+        #   ansible.builtin.include_tasks: tasks/nico_render_child_tenant.yml
+        #   loop: "{{ nico_child_tenants }}"
+        #   loop_control:
+        #     loop_var: nico_child_tenant

@@ -16,6 +16,9 @@ export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
 export FABRIC_BACKEND=${FABRIC_BACKEND:-"netris"}
 export NODE_TYPE=${NODE_TYPE:-"cmp"}
 export NICO_ENABLE="true"
+export K0RDENT_APIS_ENABLE=${K0RDENT_APIS_ENABLE:-"false"}
+export K0RDENT_APIS_PULL_SECRET_USERNAME=${K0RDENT_APIS_PULL_SECRET_USERNAME:-''}
+export K0RDENT_APIS_PULL_SECRET_PASSWORD=${K0RDENT_APIS_PULL_SECRET_PASSWORD:-''}
 
 BASE_INVENTORY=${UFO_SIMULATOR_ANSIBLE_DIR}/inventory.yml
 ANSIBLE_INTENTORY_ARG="-i ${BASE_INVENTORY}"
@@ -45,6 +48,8 @@ sed -i "s/<NETRIS_ADMIN_PASSWORD>/${NETRIS_ADMIN_PASSWORD}/g" ${UFO_SIMULATOR_AN
 sed -i "s/<REDFISH_PASSWORD>/${REDFISH_PASSWORD}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
 sed -i "s/<CTL_PUBLIC_IP>/${CTL_PUBLIC_IP}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
 sed -i "s/<NETRIS_LICENSE>/${NETRIS_LICENSE}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
+sed -i "s|<K0RDENT_APIS_PULL_SECRET_USERNAME>|${K0RDENT_APIS_PULL_SECRET_USERNAME}|g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
+sed -i "s|<K0RDENT_APIS_PULL_SECRET_PASSWORD>|${K0RDENT_APIS_PULL_SECRET_PASSWORD}|g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
 sed -i "s/sdn_provider:.*$/sdn_provider: ${FABRIC_BACKEND}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
 
 # TODO: fix ugly hack
@@ -90,7 +95,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
 
     if [[ ${NICO_ENABLE} == "true" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-capi.yml --limit ${HOSTNAME}
-#        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-nico-artifacts.yml --limit ${HOSTNAME}
+        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-nico-artifacts.yml --limit ${HOSTNAME}
     fi
 
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml --limit ${HOSTNAME}
@@ -102,7 +107,17 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     # Wait everything is ready before moving forwad
     kubectl wait --for=condition=Ready=True management/kcm --timeout=1800s
     kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
-    
+
+    if [[ ${K0RDENT_APIS_ENABLE} == "true" ]]; then
+        if [ -z "$K0RDENT_APIS_PULL_SECRET_PASSWORD" ]; then
+            echo "k0rdent-apis pull secret not set — skipping k0rdent-apis.yml."
+            echo "SSH in, set k0rdent_apis_pull_secret_{username,password} in ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml,"
+            echo "then run: ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit \$(hostname -s)"
+        else
+            ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit ${HOSTNAME}
+        fi
+    fi
+
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml --limit 'all:!gtws'
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-sg.yml --limit 'all:!gtws'
