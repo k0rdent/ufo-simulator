@@ -13,4 +13,4 @@ nico:
     passwordKey: NICO_PASSWORD
     clientSecretKey: NICO_CLIENT_SECRET
 machineSync:
-  namespace: kcm-system
+  namespace: platform-admin

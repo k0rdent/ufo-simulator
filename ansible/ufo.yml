@@ -28,6 +28,16 @@
       args:
            creates: /usr/local/go/bin/go
 
+    - name: Ensure namespaces for nico identity secrets exist
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: platform-admin
+
     - name: Ensure target directory
       file:
         path: "{{ k8s_artifacts_dir }}/ufo/"
