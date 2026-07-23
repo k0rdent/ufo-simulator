@@ -3,7 +3,7 @@ apiVersion: metal3.io/v1alpha1
 kind: BareMetalHost
 metadata:
   name: {{ server_name }}
-  namespace: kcm-system
+  namespace: platform-admin
   labels:
     hostname: {{ server_name }}
   annotations:
@@ -28,7 +28,7 @@ kind: Secret
 type: Opaque
 metadata:
   name: {{ server_name }}-bmc
-  namespace: kcm-system
+  namespace: platform-admin
 data:
   password: {{ redfish_password | b64encode }}
   username: {{ redfish_username | b64encode }}
@@ -39,7 +39,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: Link
 metadata:
   name: {{ server_name }}-{{ link.remote_port }}
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   switch:
     portName: {{ link.local_port }}

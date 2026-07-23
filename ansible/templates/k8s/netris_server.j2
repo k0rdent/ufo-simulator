@@ -3,7 +3,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Server
 metadata:
   name: {{ server_name }}
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   tenant: Admin
   description: {{ server_name }}
@@ -25,7 +25,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Link 
 metadata: 
   name: {{ server_name }}-{{ link.remote_port }}
-  namespace: kcm-system
+  namespace: platform-admin
 spec: 
   ports: 
   - {{ link.local_port }}@{{ link.local }}

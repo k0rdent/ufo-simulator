@@ -12,7 +12,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: Link
 metadata:
   name: {{ link.remote }}-{{ link.remote_port }}
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   switch:
     name: {{ switch_name }}

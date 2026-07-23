@@ -4,7 +4,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Server
 metadata:
   name: {{ server_name }}
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   tenant: Admin
   description: {{ server_name }}
@@ -27,10 +27,10 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: LinkAttachment
 metadata:
   name: swp29-leaf-0-pxe
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   name: swp29@leaf-0
-  vnet: kcm-system-default-pxe-vnet
+  vnet: platform-admin-default-pxe-vnet
   untagged: true
 {%- endif %}
 {%- if sdn_provider == 'verity' %}
@@ -39,19 +39,19 @@ apiVersion: verity.mirantis.com/v1alpha1
 kind: EthPortProfile
 metadata:
   name: ctl-pxe
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   enable: true
   services:
     - row_num_enable: true
-      row_num_service: "kcm-system.pxe"
+      row_num_service: "platform-admin.pxe"
       row_num_external_vlan: 0
 ---
 apiVersion: verity.mirantis.com/v1alpha1
 kind: Switchport
 metadata:
   name: eth1-29-leaf-0
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   name: "eth1/29@leaf-0"
   ethernet_port_profile: "ctl-pxe"

@@ -17,7 +17,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: Switch
 metadata:
   name: {{ switch_name }}
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   hostname: {{ switch_name }}
   server_ports: {{ server_ports | join(',') }}

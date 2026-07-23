@@ -165,7 +165,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         if [[ ${FABRIC_BACKEND} == "netris" ]]; then
             # Wait for bmhs are
             for i in {0..5}; do
-                kubectl wait -n kcm-system --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
+                kubectl wait -n platform-admin --for=jsonpath='{.status.provisioning.state}'='available' baremetalhost/vm-${i}  --timeout=1800s
             done
         fi
     fi
