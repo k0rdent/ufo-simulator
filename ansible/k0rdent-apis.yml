@@ -11,7 +11,7 @@
 
   vars:
     workspace: /opt/ufo_lab/
-    k0rdent_apis_repo: https://github.com/k0rdent/k0rdent-apis
+    k0rdent_apis_repo: git@github.com:k0rdent/k0rdent-apis.git
     k0rdent_apis_dir: "{{ workspace }}k0rdent-apis"
     k0rdent_apis_namespace: k0rdent-apis
     k0rdent_apis_values_path: /tmp/values-socks-overrides.yaml
@@ -25,6 +25,7 @@
     k0rdent_apis_extras_helm_timeout: 3m
     k0rdent_apis_base_url: "http://10.200.0.254:30080"
     k0rdent_apis_nico_sync_path: "{{ k0rdent_apis_dir }}/nico-sync.sh"
+    k0rdent_apis_platform_admin_dir: "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
 
   tasks:
     - name: Ensure workspace exists
@@ -36,6 +37,7 @@
       ansible.builtin.git:
         repo: "{{ k0rdent_apis_repo }}"
         dest: "{{ k0rdent_apis_dir }}"
+        accept_hostkey: true
 
     - name: Ensure patches staging directory exists
       ansible.builtin.file:
@@ -130,8 +132,65 @@
           stringData:
             password: "{{ k0rdent_apis_nico_sa_password }}"
 
+    - name: Ensure platform-admin artifacts directory exists
+      ansible.builtin.file:
+        path: "{{ k0rdent_apis_platform_admin_dir }}"
+        state: directory
+        recurse: true
+
+    - name: Render NICO platform-admin manifests
+      ansible.builtin.template:
+        src: "k8s/nico/child/platform_admin/{{ item }}"
+        dest: "{{ k0rdent_apis_platform_admin_dir }}/{{ item }}"
+      loop:
+        - ssh-key.yaml
+        - security-group.yaml
+
+    - name: Apply NICO platform-admin manifests
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        src: "{{ k0rdent_apis_platform_admin_dir }}/{{ item }}"
+      loop:
+        - ssh-key.yaml
+        - security-group.yaml
+
+    - name: Wait for platform-admin SSHKeyGroup to be reconciled into NICO
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: nico.mirantis.com/v1alpha1
+        kind: SSHKeyGroup
+        namespace: platform-admin
+        name: "{{ nico_prepovision_ssh_key_group_name }}"
+      register: nico_platform_admin_ssh_key_group_cr
+      until: (nico_platform_admin_ssh_key_group_cr.resources[0].status.id | default('')) | length > 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for platform-admin NetworkSecurityGroup to be reconciled into NICO
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: nico.mirantis.com/v1alpha1
+        kind: NetworkSecurityGroup
+        namespace: platform-admin
+        name: "{{ nico_prepovision_network_security_group_name }}"
+      register: nico_platform_admin_nsg_cr
+      until: (nico_platform_admin_nsg_cr.resources[0].status.id | default('')) | length > 0
+      retries: 30
+      delay: 5
+
     - name: Fetch NICO resource IDs from REST API
-      ansible.builtin.include_tasks: tasks/nico_fetch_resources_id.yml
+      nico_fetch_resources:
+        api_base_url: "{{ nico_api_base_url }}"
+        org: "{{ nico_api_org }}"
+        token_url: "{{ nico_token_url }}"
+        client_id: "{{ nico_client_id }}"
+        client_secret: "{{ nico_client_secret }}"
+        username: "{{ nico_api_username }}"
+        password: "{{ nico_api_password }}"
+        ssh_key_group_name: "{{ nico_prepovision_ssh_key_group_name }}"
+        network_security_group_name: "{{ nico_prepovision_network_security_group_name }}"
+      register: nico_ids
 
     - name: Render k0rdent-apis values overrides
       ansible.builtin.template:
