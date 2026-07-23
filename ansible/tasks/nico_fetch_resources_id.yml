@@ -19,12 +19,50 @@
 
 - name: Expose NICO resource IDs as facts
   ansible.builtin.set_fact:
-    nico_site_id: "{{ nico_ids.site_id }}"
-    nico_tenant_id: "{{ nico_ids.tenant_id }}"
-    nico_vpc_id: "{{ nico_ids.vpc_id }}"
-    nico_vpc_prefix_id: "{{ nico_ids.vpc_prefix_id }}"
-    nico_instance_type_id: "{{ nico_ids.instance_type_id }}"
-    nico_operating_system_id: "{{ nico_ids.operating_system_id }}"
+    nico_site_id: "{{ nico_ids.site_id | default('') }}"
+    nico_tenant_id: "{{ nico_ids.tenant_id | default('') }}"
+    nico_vpc_id: "{{ nico_ids.vpc_id | default('') }}"
+    nico_vpc_prefix_id: "{{ nico_ids.vpc_prefix_id | default('') }}"
+    nico_instance_type_id: "{{ nico_ids.instance_type_id | default('') }}"
+    nico_operating_system_id: "{{ nico_ids.operating_system_id | default('') }}"
     nico_ssh_key_group_ids:
-      - "{{ nico_ids.ssh_key_group_id }}"
-    nico_network_security_group_id: "{{ nico_ids.network_security_group_id }}"
+      - "{{ nico_ids.ssh_key_group_id | default('') }}"
+    nico_network_security_group_id: "{{ nico_ids.network_security_group_id | default('') }}"
+
+- name: Ensure required NICO resource IDs are available
+  ansible.builtin.assert:
+    that:
+      - nico_site_id | length > 0
+      - nico_tenant_id | length > 0
+      - nico_vpc_id | length > 0
+      - nico_instance_type_id | length > 0
+      - nico_operating_system_id | length > 0
+      - nico_ssh_key_group_ids | length > 0
+      - nico_ssh_key_group_ids[0] | length > 0
+      - nico_network_security_group_id | length > 0
+      - nico_vpc_prefix_id | length > 0
+    fail_msg: >-
+      Failed to resolve one or more NICO resource IDs via REST API.
+      site '{{ nico_site_name }}' (available: {{
+        nico_ids.site_available | default([]) | join(', ')
+      }}),
+      tenant for org '{{ nico_api_org }}' via /tenant/current,
+      vpc '{{ nico_vpc_name }}' (available: {{
+        nico_ids.vpc_available | default([]) | join(', ')
+      }}),
+      instance type '{{ nico_prepovision_instance_type_name }}' (available: {{
+        nico_ids.instance_type_available | default([]) | join(', ')
+      }}),
+      operating system '{{ nico_prepovision_operating_system_name }}' (available: {{
+        nico_ids.operating_system_available | default([]) | join(', ')
+      }}),
+      ssh key group '{{ nico_prepovision_ssh_key_group_name }}' (available: {{
+        nico_ids.ssh_key_group_available | default([]) | join(', ')
+      }}),
+      network security group '{{ nico_prepovision_network_security_group_name }}' (available: {{
+        nico_ids.network_security_group_available | default([]) | join(', ')
+      }}),
+      vpc prefix '{{ nico_vpc_prefix_name }}' for vpc '{{ nico_vpc_name }}' (available: {{
+        nico_ids.vpc_prefix_available | default([]) | join(', ')
+      }}).
+      Ensure prepovision resources exist in NICo and name variables match.

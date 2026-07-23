@@ -192,6 +192,23 @@
         network_security_group_name: "{{ nico_prepovision_network_security_group_name }}"
       register: nico_ids
 
+    - name: Ensure required NICO resource IDs for k0rdent-apis are available
+      ansible.builtin.assert:
+        that:
+          - nico_ids.tenant_id | default('') | length > 0
+          - nico_ids.ssh_key_group_id | default('') | length > 0
+          - nico_ids.network_security_group_id | default('') | length > 0
+        fail_msg: >-
+          Failed to resolve one or more NICO resource IDs for k0rdent-apis.
+          tenant for org '{{ nico_api_org }}' via /tenant/current,
+          ssh key group '{{ nico_prepovision_ssh_key_group_name }}' (available: {{
+            nico_ids.ssh_key_group_available | default([]) | join(', ')
+          }}),
+          network security group '{{ nico_prepovision_network_security_group_name }}' (available: {{
+            nico_ids.network_security_group_available | default([]) | join(', ')
+          }}).
+          Ensure platform-admin CRs have reconciled and name variables match.
+
     - name: Render k0rdent-apis values overrides
       ansible.builtin.template:
         src: k0rdent-apis/values-socks-overrides.yaml.j2

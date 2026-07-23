@@ -139,12 +139,13 @@ from ansible.module_utils.basic import AnsibleModule
 
 
 ENDPOINTS = [
-    ("site_name", "/site", "site_id"),
-    ("vpc_name", "/vpc", "vpc_id"),
-    ("instance_type_name", "/instance/type", "instance_type_id"),
-    ("operating_system_name", "/operating-system", "operating_system_id"),
-    ("ssh_key_group_name", "/sshkeygroup", "ssh_key_group_id"),
-    ("network_security_group_name", "/network-security-group", "network_security_group_id"),
+    ("site_name", "/site", "site_id", "site_available"),
+    ("vpc_name", "/vpc", "vpc_id", "vpc_available"),
+    ("instance_type_name", "/instance/type", "instance_type_id", "instance_type_available"),
+    ("operating_system_name", "/operating-system", "operating_system_id", "operating_system_available"),
+    ("ssh_key_group_name", "/sshkeygroup", "ssh_key_group_id", "ssh_key_group_available"),
+    ("network_security_group_name", "/network-security-group",
+     "network_security_group_id", "network_security_group_available"),
 ]
 
 
@@ -238,34 +239,32 @@ def main():
         module.fail_json(msg="/tenant/current returned no id: %s" % tenant)
     result["tenant_id"] = tenant_id
 
-    for param, path, out_key in ENDPOINTS:
+    for param, path, out_key, avail_key in ENDPOINTS:
         name = p.get(param)
         if not name:
             continue
         items = _http(base + path, "GET", module, ssl_ctx, headers=api_headers)
         if not isinstance(items, list):
             module.fail_json(msg="%s returned non-list: %r" % (path, items))
+        result[avail_key] = [i.get("name") for i in items if isinstance(i, dict)]
         resolved = _find_by_name(items, name)
-        if not resolved:
-            available = [i.get("name") for i in items if isinstance(i, dict)]
-            module.fail_json(msg="%s: %r not found. Available names: %s" %
-                             (path, name, available))
-        result[out_key] = resolved
+        if resolved:
+            result[out_key] = resolved
 
     if p["vpc_prefix_name"]:
         items = _http(base + "/vpc-prefix", "GET", module, ssl_ctx, headers=api_headers)
         if not isinstance(items, list):
             module.fail_json(msg="/vpc-prefix returned non-list: %r" % items)
+        result["vpc_prefix_available"] = [
+            i.get("name") for i in items
+            if isinstance(i, dict) and i.get("vpcId") == result.get("vpc_id")
+        ]
         candidates = [i for i in items
                       if isinstance(i, dict)
                       and i.get("vpcId") == result.get("vpc_id")
                       and i.get("name") == p["vpc_prefix_name"]]
-        if not candidates:
-            available = [i.get("name") for i in items
-                         if isinstance(i, dict) and i.get("vpcId") == result.get("vpc_id")]
-            module.fail_json(msg="/vpc-prefix: %r for vpc %r not found. Available names: %s" %
-                             (p["vpc_prefix_name"], p["vpc_name"], available))
-        result["vpc_prefix_id"] = candidates[0]["id"]
+        if candidates:
+            result["vpc_prefix_id"] = candidates[0]["id"]
 
     module.exit_json(**result)
 
