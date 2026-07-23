@@ -25,7 +25,7 @@ metadata:
   name: ew-network
   namespace: tenant-a
 spec:
-  vpc: tenant-a-ew
+  vpc: tenant-a-ewf
   type: l3vpn
 ---
 # Will create VPCPrefixes in NICO and corresponding Subnets in UFO
@@ -60,7 +60,7 @@ metadata:
   name: ew-subnet
   namespace: tenant-a
 spec:
-  vpc: tenant-a-ew
+  vpc: tenant-a-ewf
   network: ew-network
   cidr: 10.0.0.0/8
   addressAllocator:

@@ -19,7 +19,8 @@ spec:
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Vpc
 metadata:
-  name: tenant-a-ew
+  name: tenant-a-ewf
   namespace: tenant-a
 spec:
-  backend: verity
+  backend: verity-ewf
+
