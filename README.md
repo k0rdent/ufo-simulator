@@ -95,3 +95,7 @@ bash deploy/install.sh
 
 ### Run playbooks
 Check install.sh and run playbooks sequentially
+
+### k0rdent-apis
+For installing k0rdent-apis on top of a provisioned CMP, see
+[ansible/README-k0rdent-apis.md](ansible/README-k0rdent-apis.md).
