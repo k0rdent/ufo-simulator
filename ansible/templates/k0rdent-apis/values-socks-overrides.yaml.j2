@@ -77,9 +77,9 @@ workflow:
       NICO_SERVICE_ACCOUNT_ID: "{{ nico_client_id }}"
       DEFAULT_NICO_ORGANIZATION: "{{ nico_api_org }}"
       DEFAULT_NICO_SITE: "{{ nico_site_name }}"
-      DEFAULT_NICO_SSH_KEY_GROUP_IDS: "{{ nico_ssh_key_group_ids[0] }}"
-      DEFAULT_NICO_TENANT_ID: "{{ nico_tenant_id }}"
-      DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "{{ nico_network_security_group_id }}"
+      DEFAULT_NICO_SSH_KEY_GROUP_IDS: "{{ nico_ids.ssh_key_group_id }}"
+      DEFAULT_NICO_TENANT_ID: "{{ nico_ids.tenant_id }}"
+      DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "{{ nico_ids.network_security_group_id }}"
 
     envSecretRef:
       NICO_SERVICE_ACCOUNT_PASSWORD:

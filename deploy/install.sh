@@ -95,7 +95,7 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
 
     if [[ ${NICO_ENABLE} == "true" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/nico-capi.yml --limit ${HOSTNAME}
-        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-nico-artifacts.yml --limit ${HOSTNAME}
+#        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/render-k8s-nico-artifacts.yml --limit ${HOSTNAME}
     fi
 
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/ufo.yml --limit ${HOSTNAME}
@@ -108,15 +108,15 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     kubectl wait --for=condition=Ready=True management/kcm --timeout=1800s
     kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
 
-    if [[ ${K0RDENT_APIS_ENABLE} == "true" ]]; then
-        if [ -z "$K0RDENT_APIS_PULL_SECRET_PASSWORD" ]; then
-            echo "k0rdent-apis pull secret not set — skipping k0rdent-apis.yml."
-            echo "SSH in, set k0rdent_apis_pull_secret_{username,password} in ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml,"
-            echo "then run: ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit \$(hostname -s)"
-        else
-            ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit ${HOSTNAME} || exit 1
-        fi
-    fi
+    # if [[ ${K0RDENT_APIS_ENABLE} == "true" ]]; then
+    #     if [ -z "$K0RDENT_APIS_PULL_SECRET_PASSWORD" ]; then
+    #         echo "k0rdent-apis pull secret not set — skipping k0rdent-apis.yml."
+    #         echo "SSH in, set k0rdent_apis_pull_secret_{username,password} in ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml,"
+    #         echo "then run: ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit \$(hostname -s)"
+    #     else
+    #         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/k0rdent-apis.yml --limit ${HOSTNAME} || exit 1
+    #     fi
+    # fi
 
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/configure-switches.yml --limit 'all:!gtws'
