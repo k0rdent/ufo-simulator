@@ -1,0 +1,105 @@
+diff --git a/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml b/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml
+index e329a215e..a0d2759ac 100644
+--- a/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml
++++ b/deploy/helm/charts/infra/kong/templates/configmap-kong.yaml
+@@ -486,6 +486,20 @@ data:
+                 {{- else }} []
+                 {{- end }}
+         routes:
++        {{- /*
++          internalHosts (dual-auth support): when set, restrict the internal
++          route match to requests whose Host header is in the list. Kong strips
++          the port when comparing, so a caller reaching `http://kong-internal:8100`
++          matches `kong-internal`. External callers hit the public gateway
++          under a different Host, so the same URL falls through to the external
++          route (which carries no `hosts` filter) and runs external authz. The
++          plugin's listener_mode=internal + internal_listener_port check stays
++          in front as defense-in-depth against a spoofed Host: kong-internal
++          on the external port (mismatched port → 403 "wrong listener"). Each
++          entry is passed through `tpl` so values.yaml can use {{ printf "{{ .Release.Namespace }}" }}
++          / {{ printf "{{ .Values.global.region }}" }} inline. Absent = legacy
++          behavior (no host filter, route matches on path/method only).
++        */}}
+         {{- range $i, $path := $route.paths }}
+           - name: {{ $name }}-internal-{{ $i }}
+             paths:
+@@ -495,6 +509,12 @@ data:
+             {{- if $route.routePriority }}
+             regex_priority: {{ $route.routePriority }}
+             {{- end }}
++            {{- if $route.internalHosts }}
++            hosts:
++              {{- range $route.internalHosts }}
++              - {{ tpl . $ | quote }}
++              {{- end }}
++            {{- end }}
+         {{- end }}
+     {{- end }}{{/* end range internalRoutes */}}
+     {{- end }}{{/* end if k0rdentAuthz.enabled */}}
+diff --git a/deploy/helm/k0rdent-apis/values.yaml b/deploy/helm/k0rdent-apis/values.yaml
+index 78340beec..a4aa0d037 100644
+--- a/deploy/helm/k0rdent-apis/values.yaml
++++ b/deploy/helm/k0rdent-apis/values.yaml
+@@ -1726,6 +1726,62 @@ kong:
+       authz:
+         allowedCallers:
+           - 'svc-{{ .Values.global.region | default "local" }}-reconciler'
++    # ── Infrastructure server sub-resources (KCS-678 companion) ──
++    # The ProvisionReservations child workflow (services/workflow/cmd/
++    # workflow-worker/workflows/child-workflows/management-apis/infrastructure/
++    # provision_reservation.go), invoked by instance-group-create (KCS-932,
++    # `provision-hosts` step; sole caller today — cluster-deployment-create-v3
++    # only reads server PSD, it doesn't patch it), hits three server-scoped
++    # endpoints on the infrastructure service after the reservation lands:
++    #   1. PATCH /servers/{slug}/providerSpecificData   (write NIC interfaces)
++    #   2. POST  /servers/{slug}/cloudConfig            (write node cloud-config)
++    #   3. GET   /servers/{slug}                        (poll provisioning state)
++    # All three are dual-auth in the Go handler (services/infrastructure/cmd/
++    # infrastructure/routes.go:210-221; endpoints introduced in KCS-678 / #565)
++    # but their internal-listener companion was never added. Worker calls fall
++    # through to the external `infrastructure` route (path prefix ~/.../servers,
++    # above) whose k0rdent-authz runs in listener_mode=external and 403s the
++    # client_credentials service JWT (no k0r claim — the Keycloak SPI
++    # deliberately skips svc-* clients per K0rdentClaimEnricher.java:190-194).
++    #
++    # Dual-auth via a Host filter: the SAME three paths need to serve BOTH the
++    # worker (internal listener, service JWT, InternalOnly middleware) AND
++    # external operators (public gateway, user JWT, RBAC via
++    # infrastructure.resources.read/update). The k0rdent-authz plugin's
++    # listener_mode is binary, so one route can't do both. We ship an internal
++    # route ALONGSIDE the existing external `infrastructure` route: both match
++    # the same paths, but the internal route carries a Host filter so it ONLY
++    # matches requests to Host: kong-internal(:8100) — which is how every
++    # internal caller in the repo reaches Kong (deploy/helm/charts/services/*/
++    # values.yaml WORKFLOW_API_ENDPOINT / INTERNAL_API_BASE_URL). External
++    # users hit a different Host and fall through to the external route.
++    #
++    # No routePriority is needed. Kong ranks routes with a Host filter above
++    # equivalent routes without one when the Host matches, so the worker's
++    # calls (Host: kong-internal) hit the internal route and external users
++    # (Host: <public gateway>) hit the external route deterministically
++    # without any regex_priority tiebreaker.
++    #
++    # Defense-in-depth: the plugin's listener_mode=internal +
++    # internal_listener_port gate stays in front. A spoofed Host: kong-internal
++    # on the external port still 403s with "wrong listener" — the Host filter
++    # is only for route disambiguation, not the security boundary.
++    infrastructure-server-subresources:
++      service: infrastructure
++      paths:
++        - ~/v1/regions/{{ .Values.global.region | default "local" }}/infrastructure/servers/[^/]+/providerSpecificData$
++        - ~/v1/regions/{{ .Values.global.region | default "local" }}/infrastructure/servers/[^/]+/cloudConfig$
++        - ~/v1/regions/{{ .Values.global.region | default "local" }}/infrastructure/servers/[^/]+$
++      # Kong strips the port when comparing Host, so `kong-internal` matches
++      # `kong-internal:8100`. FQDN forms are included defensively for future
++      # cross-namespace / fully-qualified callers.
++      internalHosts:
++        - kong-internal
++        - "kong-internal.{{ .Release.Namespace }}"
++        - "kong-internal.{{ .Release.Namespace }}.svc.cluster.local"
++      authz:
++        allowedCallers:
++          - 'svc-{{ .Values.global.region | default "local" }}-workflow-worker'
+     # ── Workflow (services/workflow/cmd/workflow/routes.go:56-63) ──
+     # Named "activities" because the /v1/workflow/internal subtree is
+     # the workflow-worker's activity/step callback surface (StepStarted,

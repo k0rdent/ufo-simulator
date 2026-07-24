@@ -1,0 +1,114 @@
+global:
+  # JWT iss claim + Kong allowedIss are auto-derived from this.
+  authIssuerUrl: "{{ k0rdent_apis_base_url }}"
+  imagePullSecret: "{{ k0rdent_apis_pull_secret_name }}"
+
+auth:
+  image:
+    pullPolicy: Always
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-auth-api"
+  env:
+    # OAuth callback after IdP login — must be a URL the browser can reach
+    AUTH_CALLBACK_URL: "{{ k0rdent_apis_base_url }}/v1/regions/global/auth/callback"
+    # Drop the testing-site invite result page; set to your real URL if you serve one
+    AUTH_INVITE_RESULT_URL: ""
+
+iam:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-iam-api"
+    pullPolicy: Always
+
+organizations:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-organizations-api"
+    pullPolicy: Always
+
+compute:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-compute-api"
+    pullPolicy: Always
+
+infrastructure:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-infrastructure-api"
+    pullPolicy: Always
+
+notifications:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-notifications-api"
+    pullPolicy: Always
+
+reconciler:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-reconciler-nico-api"
+    pullPolicy: Always
+
+workflow:
+  api:
+    image:
+      pullPolicy: Always
+      repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-workflow-api"
+    envSecretRef:
+      WORKFLOW_DB_USER:     { secret: db, key: WORKFLOW_DB_USER }
+      WORKFLOW_DB_PASSWORD: { secret: db, key: WORKFLOW_DB_PASSWORD }
+    fileSecretRef: null
+    env:
+      # Restore the $(VAR) DSN that env-mode uses; the kind overlay nulled it.
+      DATABASE_URL: "postgres://$(WORKFLOW_DB_USER):$(WORKFLOW_DB_PASSWORD)@postgres:5432/workflow?sslmode=disable"
+      DATABASE_URL_FILE: null
+  worker:
+    image:
+      pullPolicy: Always
+      repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-workflow-worker"
+    # Kind overlay puts the worker in SECRETS-ONLY file mode
+    # (values-secret-kind.yaml). We need envSecretRef here for
+    # NICO_SERVICE_ACCOUNT_PASSWORD (an out-of-band Secret, not one of the
+    # db|app|serviceAuth buckets that fileSecretRef supports), so drop file
+    # mode — same shape used for workflow.api above. Files XOR env, per
+    # generic-service _deployment.tpl.
+    fileSecretRef: null
+    env:
+      # Where invite emails point. Workflow-worker exits at boot if empty,
+      # so set it even if you don't send invites yet.
+      INVITE_BASE_URL: "{{ k0rdent_apis_base_url }}"
+      NICO_REST_API_BASE_URL: "{{ nico_api_base_url }}"
+      NICO_KEYCLOAK_BASE_URL: "{{ nico_keycloak_base_url }}"
+      NICO_KEYCLOAK_REALM:   "{{ nico_keycloak_realm }}"
+      NICO_SERVICE_ACCOUNT_ID: "{{ nico_client_id }}"
+      DEFAULT_NICO_ORGANIZATION: "{{ nico_api_org }}"
+      DEFAULT_NICO_SITE: "{{ nico_site_name }}"
+      DEFAULT_NICO_SSH_KEY_GROUP_IDS: "{{ nico_ids.ssh_key_group_id }}"
+      DEFAULT_NICO_TENANT_ID: "{{ nico_ids.tenant_id }}"
+      DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "{{ nico_ids.network_security_group_id }}"
+
+    envSecretRef:
+      NICO_SERVICE_ACCOUNT_PASSWORD:
+        secretName: "{{ k0rdent_apis_nico_sa_secret }}"
+        key: password
+  config:
+    worker:
+      mockMode: "false"
+    reconciler:
+      interval: "60s"
+      retention: "24h"
+
+keycloak:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-keycloak"
+    pullPolicy: Always
+
+kong:
+  image:
+    pullPolicy: Always
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-kong"
+  cors:
+    enabled: true
+    # Browser's Origin header will be http://<UFO_IP>:30080 — Kong rejects
+    # anything else for cross-origin requests.
+    origins:
+      - "{{ k0rdent_apis_base_url }}"
+  k0rdentAuthz:
+    # allowedIss is auto-derived from global.authIssuerUrl + /realms/<realm>,
+    # so changing authIssuerUrl above is enough. Keep this from the kind values:
+    additionalAllowedRealms:
+      - "bootstrap"

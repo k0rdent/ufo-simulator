@@ -1,0 +1,327 @@
+---
+- name: Install k0rdent-apis
+  hosts: cmps
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  vars:
+    workspace: /opt/ufo_lab/
+    k0rdent_apis_repo: git@github.com:k0rdent/k0rdent-apis.git
+    k0rdent_apis_dir: "{{ workspace }}k0rdent-apis"
+    k0rdent_apis_namespace: k0rdent-apis
+    k0rdent_apis_values_path: /tmp/values-socks-overrides.yaml
+    k0rdent_apis_patches_dir: "{{ k0rdent_apis_dir }}/ufo-patches"
+    k0rdent_apis_pull_secret_name: ghcr-pull-secret
+    k0rdent_apis_pull_secret_server: registry.ci.mirantis.com
+    k0rdent_apis_nico_sa_secret: nico-service-account
+    k0rdent_apis_nico_sa_password: "{{ nico_client_secret }}"
+    k0rdent_apis_provision_env: kindmock
+    k0rdent_apis_helm_timeout: 15m
+    k0rdent_apis_extras_helm_timeout: 3m
+    k0rdent_apis_base_url: "http://10.200.0.254:30080"
+    k0rdent_apis_nico_sync_path: "{{ k0rdent_apis_dir }}/nico-sync.sh"
+    k0rdent_apis_platform_admin_dir: "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
+
+  tasks:
+    - name: Ensure workspace exists
+      ansible.builtin.file:
+        path: "{{ workspace }}"
+        state: directory
+
+    - name: Clone k0rdent-apis repo
+      ansible.builtin.git:
+        repo: "{{ k0rdent_apis_repo }}"
+        dest: "{{ k0rdent_apis_dir }}"
+        accept_hostkey: true
+
+    - name: Ensure patches staging directory exists
+      ansible.builtin.file:
+        path: "{{ k0rdent_apis_patches_dir }}"
+        state: directory
+
+    - name: Stage k0rdent-apis patches
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ k0rdent_apis_patches_dir }}/{{ item | basename }}"
+      with_fileglob: "files/k0rdent-apis/patches/*.patch"
+
+    - name: Apply k0rdent-apis patches (skip any already applied)
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          shopt -s nullglob
+          for p in "{{ k0rdent_apis_patches_dir }}"/*.patch; do
+            name=$(basename "$p")
+            if git apply --reverse --check "$p" >/dev/null 2>&1; then
+              echo "SKIP $name"
+              continue
+            fi
+            git apply "$p"
+            echo "APPLY $name"
+          done
+        chdir: "{{ k0rdent_apis_dir }}"
+        executable: /bin/bash
+      register: k0rdent_apis_patch_apply
+      changed_when: "'APPLY ' in k0rdent_apis_patch_apply.stdout"
+
+    - name: Ensure k0rdent-apis namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ k0rdent_apis_namespace }}"
+
+    - name: Apply mailpit manifest
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        namespace: "{{ k0rdent_apis_namespace }}"
+        src: "{{ k0rdent_apis_dir }}/deploy/k8s/mailpit/mailpit.yaml"
+
+    - name: Ensure image pull secret exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: kubernetes.io/dockerconfigjson
+          metadata:
+            name: "{{ k0rdent_apis_pull_secret_name }}"
+            namespace: "{{ k0rdent_apis_namespace }}"
+          data:
+            .dockerconfigjson: >-
+              {{
+                {
+                  'auths': {
+                    k0rdent_apis_pull_secret_server: {
+                      'username': k0rdent_apis_pull_secret_username,
+                      'password': k0rdent_apis_pull_secret_password,
+                      'auth': (k0rdent_apis_pull_secret_username ~ ':' ~ k0rdent_apis_pull_secret_password) | b64encode
+                    }
+                  }
+                } | to_json | b64encode
+              }}
+
+    - name: Build k0rdent-apis helm chart dependencies
+      ansible.builtin.command:
+        cmd: make helm-dep-build
+        chdir: "{{ k0rdent_apis_dir }}"
+      register: k0rdent_apis_helm_dep
+      changed_when: true
+
+    - name: Ensure nico service-account secret exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            name: "{{ k0rdent_apis_nico_sa_secret }}"
+            namespace: "{{ k0rdent_apis_namespace }}"
+          stringData:
+            password: "{{ k0rdent_apis_nico_sa_password }}"
+
+    - name: Ensure platform-admin artifacts directory exists
+      ansible.builtin.file:
+        path: "{{ k0rdent_apis_platform_admin_dir }}"
+        state: directory
+        recurse: true
+
+    - name: Render NICO platform-admin manifests
+      ansible.builtin.template:
+        src: "k8s/nico/child/platform_admin/{{ item }}"
+        dest: "{{ k0rdent_apis_platform_admin_dir }}/{{ item }}"
+      loop:
+        - ssh-key.yaml
+        - security-group.yaml
+
+    - name: Apply NICO platform-admin manifests
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        src: "{{ k0rdent_apis_platform_admin_dir }}/{{ item }}"
+      loop:
+        - ssh-key.yaml
+        - security-group.yaml
+
+    - name: Wait for platform-admin SSHKeyGroup to be reconciled into NICO
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: nico.mirantis.com/v1alpha1
+        kind: SSHKeyGroup
+        namespace: platform-admin
+        name: "{{ nico_prepovision_ssh_key_group_name }}"
+      register: nico_platform_admin_ssh_key_group_cr
+      until: (nico_platform_admin_ssh_key_group_cr.resources[0].status.id | default('')) | length > 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for platform-admin NetworkSecurityGroup to be reconciled into NICO
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: nico.mirantis.com/v1alpha1
+        kind: NetworkSecurityGroup
+        namespace: platform-admin
+        name: "{{ nico_prepovision_network_security_group_name }}"
+      register: nico_platform_admin_nsg_cr
+      until: (nico_platform_admin_nsg_cr.resources[0].status.id | default('')) | length > 0
+      retries: 30
+      delay: 5
+
+    - name: Fetch NICO resource IDs from REST API
+      nico_fetch_resources:
+        api_base_url: "{{ nico_api_base_url }}"
+        org: "{{ nico_api_org }}"
+        token_url: "{{ nico_token_url }}"
+        client_id: "{{ nico_client_id }}"
+        client_secret: "{{ nico_client_secret }}"
+        username: "{{ nico_api_username }}"
+        password: "{{ nico_api_password }}"
+        ssh_key_group_name: "{{ nico_prepovision_ssh_key_group_name }}"
+        network_security_group_name: "{{ nico_prepovision_network_security_group_name }}"
+      register: nico_ids
+
+    - name: Ensure required NICO resource IDs for k0rdent-apis are available
+      ansible.builtin.assert:
+        that:
+          - nico_ids.tenant_id | default('') | length > 0
+          - nico_ids.ssh_key_group_id | default('') | length > 0
+          - nico_ids.network_security_group_id | default('') | length > 0
+        fail_msg: >-
+          Failed to resolve one or more NICO resource IDs for k0rdent-apis.
+          tenant for org '{{ nico_api_org }}' via /tenant/current,
+          ssh key group '{{ nico_prepovision_ssh_key_group_name }}' (available: {{
+            nico_ids.ssh_key_group_available | default([]) | join(', ')
+          }}),
+          network security group '{{ nico_prepovision_network_security_group_name }}' (available: {{
+            nico_ids.network_security_group_available | default([]) | join(', ')
+          }}).
+          Ensure platform-admin CRs have reconciled and name variables match.
+
+    - name: Render k0rdent-apis values overrides
+      ansible.builtin.template:
+        src: k0rdent-apis/values-socks-overrides.yaml.j2
+        dest: "{{ k0rdent_apis_values_path }}"
+
+    - name: Deploy/upgrade k0rdent-apis helm release
+      kubernetes.core.helm:
+        name: k0rdent-apis
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: "{{ k0rdent_apis_dir }}/deploy/helm/k0rdent-apis"
+        release_namespace: "{{ k0rdent_apis_namespace }}"
+        create_namespace: true
+        values_files:
+          - "{{ k0rdent_apis_dir }}/deploy/helm/k0rdent-apis/values-secret-kind.yaml"
+          - "{{ k0rdent_apis_values_path }}"
+        state: present
+        wait: true
+        wait_timeout: "{{ k0rdent_apis_helm_timeout }}"
+
+    - name: Deploy/upgrade k0rdent-kind-extras helm release
+      kubernetes.core.helm:
+        name: k0rdent-kind-extras
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: "{{ k0rdent_apis_dir }}/deploy/helm/k0rdent-kind-extras"
+        release_namespace: "{{ k0rdent_apis_namespace }}"
+        values:
+          global:
+            namespace: "{{ k0rdent_apis_namespace }}"
+        state: present
+        wait: true
+        wait_timeout: "{{ k0rdent_apis_extras_helm_timeout }}"
+
+    - name: Load provision-manifest content
+      ansible.builtin.slurp:
+        src: "{{ k0rdent_apis_dir }}/scripts/post-deploy/envs/{{ k0rdent_apis_provision_env }}/manifest.yaml"
+      register: k0rdent_apis_provision_manifest
+
+    - name: Ensure provision-manifest ConfigMap exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: provision-manifest
+            namespace: "{{ k0rdent_apis_namespace }}"
+          data:
+            manifest.yaml: "{{ k0rdent_apis_provision_manifest.content | b64decode }}"
+
+    - name: Ensure provision-manifest-secrets exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            name: provision-manifest-secrets
+            namespace: "{{ k0rdent_apis_namespace }}"
+          stringData:
+            KINDMOCK_IDP_SECRET: unused-placeholder
+
+    - name: Apply provision-apply job manifest
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        namespace: "{{ k0rdent_apis_namespace }}"
+        src: "{{ k0rdent_apis_dir }}/deploy/k8s/k0r-tools/provision-apply.yaml"
+
+    - name: Wait for provision-apply job to complete
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ k0rdent_apis_namespace }}"
+        name: provision-apply
+      register: k0rdent_apis_provision_job
+      until: >-
+        (k0rdent_apis_provision_job.resources[0].status.succeeded | default(0) | int) >= 1
+        or (k0rdent_apis_provision_job.resources[0].status.failed | default(0) | int) >= 1
+      retries: 60
+      delay: 10
+
+    - name: Fail if provision-apply did not succeed
+      ansible.builtin.assert:
+        that:
+          - (k0rdent_apis_provision_job.resources[0].status.succeeded | default(0) | int) >= 1
+        fail_msg: >-
+          provision-apply job did not complete successfully.
+          Check `kubectl -n {{ k0rdent_apis_namespace }} logs job/provision-apply`.
+
+    - name: Stage nico-sync script
+      ansible.builtin.copy:
+        src: files/k0rdent-apis/nico-sync.sh
+        dest: "{{ k0rdent_apis_nico_sync_path }}"
+        mode: "0755"
+
+    - name: Sync NICO servers into k0rdent-apis
+      ansible.builtin.command:
+        cmd: bash "{{ k0rdent_apis_nico_sync_path }}"
+      environment:
+        BASE: "{{ k0rdent_apis_base_url }}"
+        KUBECONFIG: "{{ kubeconfig_path }}"
+        K0R_LOGIN_ORG: "{{ k0rdent_apis_provision_env }}"
+        K0R_LOGIN_NAMESPACE: "{{ k0rdent_apis_namespace }}"
+        NICO_HOST: "{{ nico_rest_external_ip }}"
+        NICO_KEYCLOAK_BASE_URL: "{{ nico_keycloak_base_url }}"
+        NICO_KEYCLOAK_REALM: "{{ nico_keycloak_realm }}"
+        NICO_REST_API_BASE_URL: "{{ nico_api_base_url }}"
+        NICO_CLIENT_ID: "{{ nico_client_id }}"
+        NICO_CLIENT_SECRET: "{{ nico_client_secret }}"
+        NICO_USERNAME: "{{ nico_api_username }}"
+        NICO_PASSWORD: "{{ nico_api_password }}"
+        NICO_ORG: "{{ nico_api_org }}"

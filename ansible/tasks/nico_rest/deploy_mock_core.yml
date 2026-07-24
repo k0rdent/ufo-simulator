@@ -20,6 +20,7 @@
     chdir: "{{ nico_core_mock_dir }}"
   environment:
     NAMESPACE: "{{ nico_core_mock_helm_namespace }}"
-    KEYCLOAK_URL: "http://{{ nico_rest_external_ip }}:8082"
+    KEYCLOAK_URL: "{{ nico_keycloak_base_url }}"
+    KEYCLOAK_REALM: "{{ nico_keycloak_realm }}"
     API_URL: "{{ nico_api_base_url }}"
     ORG: "{{ nico_api_org }}"
