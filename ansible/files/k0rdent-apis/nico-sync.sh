@@ -203,7 +203,7 @@ else
       selector: $sel,
       config: {
         image: { infrastructureProvider: "nico", url: $url, checksum: $sum },
-        additionalUserData: "#cloud-config\npassword: '"'"'qalab'"'"'\nchpasswd:\n  expire: false\nssh_pwauth: true\n"
+        additionalUserData: "#cloud-config\nssh_pwauth: true\nchpasswd:\n  expire: false\n  users:\n    - {name: ubuntu, password: '"'"'qalab'"'"', type: text}\n"
       }
     }')
   if [ "$DRY_RUN" = "true" ]; then
