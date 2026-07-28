@@ -26,6 +26,9 @@
     k0rdent_apis_base_url: "http://10.200.0.254:30080"
     k0rdent_apis_nico_sync_path: "{{ k0rdent_apis_dir }}/nico-sync.sh"
     k0rdent_apis_platform_admin_dir: "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
+    k0rdent_apis_helm_repo_url: oci://registry.ci.mirantis.com/k0rdent-apis/charts
+    k0rdent_apis_cluster_chart: cluster-nico
+    k0rdent_apis_cluster_chart_version: 0.0.0-main
 
   tasks:
     - name: Ensure workspace exists
@@ -86,7 +89,7 @@
         namespace: "{{ k0rdent_apis_namespace }}"
         src: "{{ k0rdent_apis_dir }}/deploy/k8s/mailpit/mailpit.yaml"
 
-    - name: Ensure image pull secret exists
+    - name: Ensure image pull secret exists in k0rdent-apis and kcm-system
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
@@ -96,7 +99,7 @@
           type: kubernetes.io/dockerconfigjson
           metadata:
             name: "{{ k0rdent_apis_pull_secret_name }}"
-            namespace: "{{ k0rdent_apis_namespace }}"
+            namespace: "{{ item }}"
           data:
             .dockerconfigjson: >-
               {{
@@ -110,6 +113,9 @@
                   }
                 } | to_json | b64encode
               }}
+      loop:
+        - "{{ k0rdent_apis_namespace }}"
+        - kcm-system
 
     - name: Build k0rdent-apis helm chart dependencies
       ansible.builtin.command:
@@ -325,3 +331,92 @@
         NICO_USERNAME: "{{ nico_api_username }}"
         NICO_PASSWORD: "{{ nico_api_password }}"
         NICO_ORG: "{{ nico_api_org }}"
+
+    - name: Ensure HelmRepository for k0rdent-apis in kcm-system
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: source.toolkit.fluxcd.io/v1
+          kind: HelmRepository
+          metadata:
+            name: k0rdent-apis
+            namespace: kcm-system
+            labels:
+              k0rdent.mirantis.com/managed: "true"
+          spec:
+            type: oci
+            interval: 30s
+            provider: generic
+            url: "{{ k0rdent_apis_helm_repo_url }}"
+            secretRef:
+              name: "{{ k0rdent_apis_pull_secret_name }}"
+
+    - name: Ensure ClusterTemplate for NICO cluster in kcm-system
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: k0rdent.mirantis.com/v1beta1
+          kind: ClusterTemplate
+          metadata:
+            name: "{{ k0rdent_apis_cluster_chart }}-{{ k0rdent_apis_cluster_chart_version | replace('.', '-') }}"
+            namespace: kcm-system
+            labels:
+              k0rdent.mirantis.com/managed: "true"
+          spec:
+            helm:
+              chartSpec:
+                chart: "{{ k0rdent_apis_cluster_chart }}"
+                version: "{{ k0rdent_apis_cluster_chart_version }}"
+                interval: 30s
+                reconcileStrategy: ChartVersion
+                sourceRef:
+                  kind: HelmRepository
+                  name: k0rdent-apis
+
+    - name: Wait for ClusterTemplate to be valid
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: k0rdent.mirantis.com/v1beta1
+        kind: ClusterTemplate
+        namespace: kcm-system
+        name: "{{ k0rdent_apis_cluster_chart }}-{{ k0rdent_apis_cluster_chart_version | replace('.', '-') }}"
+      register: k0rdent_apis_cluster_template_cr
+      until: (k0rdent_apis_cluster_template_cr.resources[0].status.valid | default(false)) | bool
+      retries: 30
+      delay: 5
+
+    - name: Ensure ClusterTemplateChain in kcm-system
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: k0rdent.mirantis.com/v1beta1
+          kind: ClusterTemplateChain
+          metadata:
+            name: "ctc-{{ k0rdent_apis_cluster_chart }}-{{ k0rdent_apis_cluster_chart_version | replace('.', '-') }}"
+            namespace: kcm-system
+            labels:
+              app.k0rdent.ai/managed: "true"
+          spec:
+            supportedTemplates:
+              - name: "{{ k0rdent_apis_cluster_chart }}-{{ k0rdent_apis_cluster_chart_version | replace('.', '-') }}"
+
+    - name: Ensure AccessManagement to fan out ClusterTemplateChain into project namespaces
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: k0rdent.mirantis.com/v1beta1
+          kind: AccessManagement
+          metadata:
+            name: kcm
+          spec:
+            accessRules:
+              - clusterTemplateChains:
+                  - "ctc-{{ k0rdent_apis_cluster_chart }}-{{ k0rdent_apis_cluster_chart_version | replace('.', '-') }}"
+                targetNamespaces:
+                  selector:
+                    matchLabels:
+                      app.k0rdent.ai/project-namespace: "true"
