@@ -30,6 +30,12 @@ build.
 9. Stages the vendored [nico-sync.sh](files/k0rdent-apis/nico-sync.sh) and
    runs it to sync NICO servers into k0rdent-apis. Fails the play if any
    server does not reach `state=available`.
+10. Registers the KCM `HelmRepository` + `ClusterTemplate` +
+    `ClusterTemplateChain` + `AccessManagement` for `cluster-nico`, so that
+    k0rdent-apis `ClusterDeployment` requests can pick up the NICo cluster
+    template. Chart name / version live in the `k0rdent_apis_cluster_chart`
+    and `k0rdent_apis_cluster_chart_version` vars; the ClusterTemplate and
+    Chain names are derived from those (`<chart>-<version-with-dots-as-dashes>`).
 
 ## Running it directly against an existing CMP
 
