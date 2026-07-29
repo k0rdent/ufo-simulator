@@ -101,6 +101,259 @@ override:
   CRs whose reconciled `status.id` gets pushed into the workflow-worker env
   vars.
 
+## Creating example clusters via the API
+
+Once the playbook has run, [k0r.sh](k0r.sh) doubles as both a script and a
+library of shell helpers.
+
+- Executed directly (`./k0r.sh` / `./k0r.sh --full`), it prints a
+  cross-reference of k0rdent-apis servers against NICo machines, expected
+  machines, instance-types, and instances — a quick way to see the full
+  inventory across both systems and spot orphans/drift.
+- Sourced (`source ./k0r.sh`), it exposes helpers you can use to poke at the
+  k0rdent-apis REST surface without hand-rolling `curl`:
+  - `k0r_login` — drives the mock-oauth2 login flow to mint a fresh operator JWT.
+  - `k0r_token` — cached wrapper around `k0r_login` (re-mints when the JWT is
+    within 60s of expiry; cache file `/tmp/k0r-token`).
+  - `k0r <path> [curl args...]` — `curl` wrapper that prefixes `$BASE` and
+    attaches `Authorization: Bearer $(k0r_token)`.
+
+The examples below assume you're on the CMP (so the in-cluster `auth` /
+`mock-oauth2-server` Services are reachable) and that `kubectl`, `jq`, and
+`curl` are on `PATH`.
+
+### 1. Source the helpers and pick your target
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+source ./k0r.sh
+
+# The defaults match the ufo-simulator lab; override if yours differ.
+export BASE=http://10.200.0.254:30080
+export REGION=local
+export ORG=kindmock
+export PROJECT=kindmock-main
+export MT=nico-lab          # k0rdent machine-type registered by the playbook
+
+k0r /v1/regions/global/organizations | jq
+```
+
+### 2. Create the address pools
+
+Both cluster types below reference these pools by ID, so create them once per
+region:
+
+```bash
+k0r "/v1/regions/$REGION/compute/address-pools" -X POST \
+  -H 'Content-Type: application/json' -d '{
+  "id": "global-default",
+  "routable": false,
+  "ipVersion": "IPV4",
+  "prefixes": ["10.20.0.0/16"],
+  "minPrefixLength": 19,
+  "maxPrefixLength": 32
+}'
+
+k0r "/v1/regions/$REGION/compute/address-pools" -X POST \
+  -H 'Content-Type: application/json' -d '{
+  "id": "global-public",
+  "routable": true,
+  "ipVersion": "IPV4",
+  "prefixes": ["192.168.0.0/16"],
+  "minPrefixLength": 19,
+  "maxPrefixLength": 32
+}'
+```
+
+### 3a. HCP-managed k0s cluster (CAPI flow)
+
+The CAPI provider must already be installed via KCM — see
+<https://github.com/k0rdent/ncx-ailab/tree/main/k0rdent/kcm>. This registers a
+`nico-hcp` cluster-type with a hosted control plane and a single `default`
+worker nodepool backed by the `$MT` machine-type, then instantiates a cluster:
+
+```bash
+k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
+  -H 'Content-Type: application/json' -d @- <<EOF
+{
+  "id": "nico-hcp",
+  "displayName": "NICo HCP k0s",
+  "networkSchema": {
+    "networks": [
+      { "id": "ns",     "type": "evpn", "evpn": {"type":"l3vpn"} },
+      { "id": "public", "type": "evpn", "evpn": {"type":"l3vpn"} }
+    ],
+    "subnets": [
+      { "id": "ns-subnet",
+        "network": "ns",
+        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-default",
+        "prefixLength": 27 },
+      { "id": "public-subnet",
+        "network": "public",
+        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-public",
+        "prefixLength": 29 }
+    ]
+  },
+  "k8s": {
+    "k0sNetworkProvider": "calico",
+    "k0sVersion": "v1.36.1",
+    "podCidrs": ["10.243.0.0/16"],
+    "serviceCidrs": ["10.95.0.0/16"],
+    "clusterTemplateName": "cluster-nico-0-0-0-main",
+    "clusterTemplateVersion": "0.0.0-main",
+    "services": [],
+    "controlPlane": {
+      "type": "hcp",
+      "replicas": 1,
+      "bootstrapConfig": {},
+      "opConfig": {}
+    },
+    "workers": {
+      "defaults": {
+        "preStartCommands": [
+          "sudo useradd -G sudo -s /bin/bash -d /home/rescue -p \$(openssl passwd -1 rescue) rescue",
+          "sudo mkdir -vp /home/rescue/.ssh/",
+          "sudo chown rescue /home/rescue/.ssh/authorized_keys",
+          "/usr/bin/sleep 180"
+        ],
+        "files": [{
+          "path": "/etc/ssh/sshd_config.d/99-cloudimg-settings.conf",
+          "permissions": "0644",
+          "content": "PasswordAuthentication yes\n"
+        }]
+      }
+    }
+  },
+  "nodePools": [{
+    "id": "default",
+    "role": "worker",
+    "machineType": "/v1/regions/$REGION/infrastructure/machine-types/$MT",
+    "nodeCountMin": 1,
+    "nodeCountMax": 6,
+    "nodeCountDefault": 3,
+    "networkAttachment": {
+      "ethernets": {
+        "enp1s0": {
+          "connectToNetwork": "ns",
+          "addresses": [{ "ipFromSubnet": "ns-subnet" }]
+        }
+      }
+    }
+  }]
+}
+EOF
+
+k0r "/v1/regions/$REGION/projects/$PROJECT/compute/clusters" -X POST \
+  -H 'Content-Type: application/json' -d @- <<EOF
+{
+  "id": "lab-nico-01",
+  "displayName": "Lab NICo cluster",
+  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-hcp",
+  "nodePools": [
+    { "id": "default", "nodeCount": 3 }
+  ],
+  "sshAccess": [
+    {
+      "username": "ubuntu",
+      "displayName": "ubuntu",
+      "sshPublicKeys": [
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCp0evjOaK8c8SKYK4r2+0BN7g+8YSvQ2n8nFgOURCyvkJqOHi1qPGZmuN0CclYVdVuZiXbWw3VxRbSW3EH736VzgY1U0JmoTiSamzLHaWsXvEIW8VCi7boli539QJP0ikJiBaNAgZILyCrVPN+A6mfqtacs1KXdZ0zlMq1BPtFciR1JTCRcVs5vP2Wwz5QtY2jMIh3aiwkePjMTQPcfmh1TkOlxYu5IbQyZ3G1ahA0mNKI9a0dtF282av/F6pwB/N1R1nEZ/9VtcN2I1mf1NW/tTHEEcTzXYo1R/8K9vlqAN8QvvGLZtZduGviNVNoNWvoxaXxDt8CPv2B2NCdQFZp /home/yar/.ssh/os-lab.pub"
+      ]
+    }
+  ]
+}
+EOF
+```
+
+Grab the child-cluster kubeconfig once the cluster is Ready:
+
+```bash
+kubectl -n prj-kindmock-main get secret lab-nico-01-kubeconfig \
+  -o jsonpath='{.data.value}' | base64 -d > /tmp/lab-nico-child.kubeconfig
+
+kubectl --kubeconfig /tmp/lab-nico-child.kubeconfig get nodes -o wide
+```
+
+### 3b. Standalone BMaaS instance-group
+
+For the bare-metal-only flow (no k0s control plane, k0rdent just provisions
+machines into a NICo instance-group), first make sure the project namespace
+carries the labels the KCM/k0rdent-apis operators look for:
+
+```bash
+kubectl create ns prj-kindmock-main --dry-run=client -o yaml | \
+  kubectl label --local -f - \
+    app.k0rdent.ai/managed=true \
+    app.k0rdent.ai/project-namespace=true \
+    k0rdent.mirantis.com/project=kindmock-main \
+    --overwrite -o yaml | \
+  kubectl apply -f -
+```
+
+Then register a cluster-type that only declares a `workers` nodepool (no `k8s`
+block) and instantiate an instance-group against it:
+
+```bash
+k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
+  -H 'Content-Type: application/json' -d @- <<EOF
+{
+  "id": "nico-bm",
+  "displayName": "NICo bare-metal (BMaaS)",
+  "networkSchema": {
+    "networks": [
+      { "id": "ns",     "type": "evpn", "evpn": {"type":"l3vpn"} },
+      { "id": "public", "type": "evpn", "evpn": {"type":"l3vpn"} }
+    ],
+    "subnets": [
+      { "id": "ns-subnet",
+        "network": "ns",
+        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-default",
+        "prefixLength": 27 },
+      { "id": "public-subnet",
+        "network": "public",
+        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-public",
+        "prefixLength": 29 }
+    ]
+  },
+  "nodePools": [{
+    "id": "workers",
+    "role": "worker",
+    "machineType": "/v1/regions/$REGION/infrastructure/machine-types/$MT",
+    "nodeCountMin": 1,
+    "nodeCountMax": 6,
+    "nodeCountDefault": 1,
+    "networkAttachment": {
+      "ethernets": {
+        "enp1s0": {
+          "connectToNetwork": "ns",
+          "addresses": [{ "ipFromSubnet": "ns-subnet" }]
+        }
+      }
+    }
+  }]
+}
+EOF
+
+k0r "/v1/regions/$REGION/projects/$PROJECT/compute/instance-groups" -X POST \
+  -H 'Content-Type: application/json' -d @- <<EOF
+{
+  "id": "lab-bm-01",
+  "displayName": "Lab BMaaS group",
+  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-bm",
+  "nodePools": [ { "nodePool": "workers", "size": 1 } ],
+  "sshAccess": [
+    {
+      "username": "ubuntu",
+      "displayName": "ubuntu",
+      "sshPublicKeys": [
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCp0evjOaK8c8SKYK4r2+0BN7g+8YSvQ2n8nFgOURCyvkJqOHi1qPGZmuN0CclYVdVuZiXbWw3VxRbSW3EH736VzgY1U0JmoTiSamzLHaWsXvEIW8VCi7boli539QJP0ikJiBaNAgZILyCrVPN+A6mfqtacs1KXdZ0zlMq1BPtFciR1JTCRcVs5vP2Wwz5QtY2jMIh3aiwkePjMTQPcfmh1TkOlxYu5IbQyZ3G1ahA0mNKI9a0dtF282av/F6pwB/N1R1nEZ/9VtcN2I1mf1NW/tTHEEcTzXYo1R/8K9vlqAN8QvvGLZtZduGviNVNoNWvoxaXxDt8CPv2B2NCdQFZp /home/yar/.ssh/os-lab.pub"
+      ]
+    }
+  ]
+}
+EOF
+```
+
 ## Troubleshooting
 
 - **Patch fails to apply**: the vendored patches under
