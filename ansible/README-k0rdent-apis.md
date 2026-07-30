@@ -354,6 +354,164 @@ k0r "/v1/regions/$REGION/projects/$PROJECT/compute/instance-groups" -X POST \
 EOF
 ```
 
+## Iterating on Go changes
+
+Two ways to test a code change against a running lab, depending on how far
+down the deployment path you want the change to travel.
+
+### Option A: run the service locally with [lab-extract.sh](lab-extract.sh) (fast, recommended)
+
+Scales an in-cluster `Deployment` to 0, hijacks its `Service` endpoints so
+cluster traffic keeps flowing to it, and runs `go run` against the
+`k0rdent-apis` checkout at `/opt/ufo_lab/k0rdent-apis` on the CMP. No image
+build, no push, no rollout — the loop is `edit → ^C → run again`.
+
+**One-time setup** (installs Go on the CMP):
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+sudo -E ansible-playbook -i inventory.yml go.yml --limit cmp01
+```
+
+**Iteration loop** (all on the CMP, as root):
+
+```bash
+LAB=/opt/ufo_lab/ufo-simulator/ansible/lab-extract.sh
+
+sudo $LAB start iam            # scales deploy/iam to 0, hijacks svc/iam,
+                               # captures env + /etc/k0rdent-ai/ from the pod
+sudo $LAB run   iam            # unshare -m + bind-mount + go run ./services/iam/cmd/iam
+
+# ...edit code, ^C to stop, `sudo $LAB run iam` again...
+
+sudo $LAB stop  iam            # restores selector, scales replicas back
+```
+
+`run` sets up a private mount namespace so the local process sees an
+overlay `/etc/hosts` (cluster DNS resolves to `ClusterIP`s) and
+`/etc/k0rdent-ai/` (file-projected secrets and config match the pod's
+view). Nothing on the CMP host is modified. See the header comment in
+[lab-extract.sh](lab-extract.sh) for the mechanics.
+
+**Multiple services at once** — port selection is automatic. `start` probes
+upward from the Service's `containerPort` and picks the first free port
+that no other extract has claimed:
+
+```bash
+sudo $LAB start iam            # picks 8080 (or next free)
+sudo $LAB start compute        # picks 8081
+sudo $LAB start organizations  # picks 8082
+sudo $LAB status               # shows what's swapped in
+# then `sudo $LAB run <svc>` in separate shells.
+```
+
+Cross-service calls between two locally-run services still flow through
+Kong internal — Kong dials `iam.k0rdent-apis.svc:80` → hijacked
+`Endpoints` → `<node-ip>:<picked-port>` → your local process.
+
+**What's extractable** — anything with a Go binary under
+`k0rdent-apis/services/*/cmd/`: `auth`, `iam`, `organizations`, `compute`,
+`infrastructure`, `notifications`, `workflow` (workflow-api),
+`workflow-worker`, and `reconciler`. Third-party components (Kong,
+Keycloak, Postgres, Temporal, Mailpit) can't be extracted — the script
+refuses when no matching Go package exists.
+
+**Debugger.** `sudo $LAB start <svc>` prints a raw `unshare -m ...`
+incantation you can copy-modify to inject `dlv exec`/`strace`/etc. in
+place of the plain `go run`.
+
+### Option B: inject a fresh binary with [lab-inject.sh](lab-inject.sh) (fidelity-preserving)
+
+When the process's *environment* rather than its logic is what you're
+testing — projected ServiceAccount JWT, NetworkPolicy pod-identity,
+cgroup memory/CPU limits, or anything else that only holds when the
+process runs inside the pod — swap `lab-extract` for `lab-inject`. It
+compiles the same source, drops the binary on the CMP (the k0s node),
+and strategic-merge-patches the Deployment to run *your* binary
+instead of the image's baked-in one. The pod otherwise starts exactly
+as a fresh rollout would.
+
+**How it works.** The k0rdent-apis images entrypoint is
+`sh -c "exec ${BINARY}"` with `ENV BINARY=/app/${CMD_NAME}` baked into
+the image (see [Dockerfile.go-service](../../k0rdent-apis/build/Dockerfile.go-service)).
+Setting `BINARY=/dev-bin/<dep>` at the Pod level overrides that
+default, and a hostPath volume mounted at `/dev-bin/` reads binaries
+from `/opt/lab-binaries/` on the CMP.
+
+**Iteration loop:**
+
+```bash
+INJ=/opt/ufo_lab/ufo-simulator/ansible/lab-inject.sh
+
+sudo $INJ rebuild iam            # go build → /opt/lab-binaries/iam,
+                                 # patch deploy/iam on first call,
+                                 # rollout restart, wait for readiness
+# ...edit code, run rebuild again...
+
+sudo $INJ stop    iam            # reverse the patch, rollout, delete binary
+```
+
+`rebuild` is idempotent — the first call adds the patch; subsequent
+calls skip the patch step (it's a no-op) and just recompile +
+`kubectl rollout restart` so the pod re-execs with the fresh binary.
+
+### Option C: rebuild the image, push to zot, redeploy
+
+Slower loop (roughly a minute per iteration with a warm cache) but
+exercises the same image-pull + container-startup path a production
+deployment would. Useful when the change touches the `Dockerfile`, image
+entrypoint, resource limits, or anything that only manifests as a
+containerized process.
+
+**One-time setup** — deploy the in-cluster OCI registry (namespace `zot`,
+external NodePort 30500):
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+sudo -E ansible-playbook -i inventory.yml zot.yml --limit cmp01
+```
+
+Configure k0s's containerd to trust zot over plain HTTP (not yet
+automated in the playbook). Add to the `[plugins."io.containerd.grpc.v1.cri".registry]`
+block in [k0s.yml](k0s.yml) and re-run the playbook:
+
+```toml
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors."10.200.0.254:30500"]
+  endpoint = ["http://10.200.0.254:30500"]
+[plugins."io.containerd.grpc.v1.cri".registry.configs."10.200.0.254:30500".tls]
+  insecure_skip_verify = true
+```
+
+If you `docker push` from the CMP or your laptop, the docker daemon also
+needs zot in its insecure list — add `"insecure-registries":
+["10.200.0.254:30500"]` to `/etc/docker/daemon.json` and restart docker.
+
+**Iteration loop** (per-service `docker-build` targets in the k0rdent-apis
+Makefiles produce a `<binary>:latest` image locally):
+
+```bash
+cd /opt/ufo_lab/k0rdent-apis
+make -C services/iam docker-build              # → iam:latest
+
+docker tag  iam:latest 10.200.0.254:30500/k0r-iam:dev
+docker push 10.200.0.254:30500/k0r-iam:dev
+
+kubectl -n k0rdent-apis set image deploy/iam iam=10.200.0.254:30500/k0r-iam:dev
+kubectl -n k0rdent-apis rollout restart deploy/iam
+```
+
+Special-case build targets: `services/workflow` has two binaries
+(`docker-build-api`, `docker-build-worker`); `reconciler`, `kong`, and
+`k0r-tools` build from the repo root (`make docker-build-reconciler`,
+`make docker-build-kong`, `make docker-build-k0r-tools`).
+
+**Persistence.** `kubectl set image` gets clobbered the next time
+`k0rdent-apis.yml` runs (helm reverts the tag). To keep an image change
+across playbook runs, bump the tag in
+[templates/k0rdent-apis/values-socks-overrides.yaml.j2](templates/k0rdent-apis/values-socks-overrides.yaml.j2),
+or check the underlying source change in as a patch under
+[files/k0rdent-apis/patches/](files/k0rdent-apis/patches/).
+
 ## Troubleshooting
 
 - **Patch fails to apply**: the vendored patches under

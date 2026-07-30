@@ -1,0 +1,124 @@
+---
+- name: Install zot registry
+  hosts: cmps
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ sdn_provider }}.yml
+
+  vars:
+    zot_namespace: zot
+    zot_image: ghcr.io/project-zot/zot-linux-amd64:v2.1.2
+    zot_http_port: 5000
+    zot_nodeport: 30500
+    zot_wait_timeout: 120
+
+  tasks:
+    - name: Ensure zot namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ zot_namespace }}"
+
+    - name: Apply zot config
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: zot-config
+            namespace: "{{ zot_namespace }}"
+          data:
+            config.json: |
+              {
+                "distSpecVersion": "1.1.0",
+                "storage": { "rootDirectory": "/var/lib/registry" },
+                "http": { "address": "0.0.0.0", "port": "{{ zot_http_port }}" },
+                "log": { "level": "info" }
+              }
+
+    - name: Deploy zot
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: zot
+            namespace: "{{ zot_namespace }}"
+            labels:
+              app: zot
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: zot
+            template:
+              metadata:
+                labels:
+                  app: zot
+              spec:
+                containers:
+                  - name: zot
+                    image: "{{ zot_image }}"
+                    args: ["serve", "/etc/zot/config.json"]
+                    ports:
+                      - containerPort: "{{ zot_http_port }}"
+                    volumeMounts:
+                      - name: config
+                        mountPath: /etc/zot
+                      - name: storage
+                        mountPath: /var/lib/registry
+                    readinessProbe:
+                      httpGet:
+                        path: /v2/
+                        port: "{{ zot_http_port }}"
+                      initialDelaySeconds: 3
+                volumes:
+                  - name: config
+                    configMap:
+                      name: zot-config
+                  - name: storage
+                    emptyDir: {}
+
+    - name: Expose zot via NodePort
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: zot
+            namespace: "{{ zot_namespace }}"
+          spec:
+            type: NodePort
+            selector:
+              app: zot
+            ports:
+              - port: "{{ zot_http_port }}"
+                targetPort: "{{ zot_http_port }}"
+                nodePort: "{{ zot_nodeport }}"
+
+    - name: Wait for zot rollout
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: apps/v1
+        kind: Deployment
+        namespace: "{{ zot_namespace }}"
+        name: zot
+      register: zot_deploy
+      until: >-
+        (zot_deploy.resources[0].status.readyReplicas | default(0) | int) >= 1
+      retries: "{{ (zot_wait_timeout / 5) | int }}"
+      delay: 5
