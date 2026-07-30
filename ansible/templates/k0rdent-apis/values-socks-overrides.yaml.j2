@@ -6,7 +6,7 @@ global:
 auth:
   image:
     pullPolicy: Always
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-auth-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-auth"
   env:
     # OAuth callback after IdP login — must be a URL the browser can reach
     AUTH_CALLBACK_URL: "{{ k0rdent_apis_base_url }}/v1/regions/global/auth/callback"
@@ -15,39 +15,39 @@ auth:
 
 iam:
   image:
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-iam-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-iam"
     pullPolicy: Always
 
 organizations:
   image:
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-organizations-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-organizations"
     pullPolicy: Always
 
 compute:
   image:
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-compute-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-compute"
     pullPolicy: Always
 
 infrastructure:
   image:
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-infrastructure-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-infrastructure"
     pullPolicy: Always
 
 notifications:
   image:
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-notifications-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-notifications"
     pullPolicy: Always
 
 reconciler:
   image:
-    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-reconciler-nico-api"
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-reconciler"
     pullPolicy: Always
 
 workflow:
   api:
     image:
       pullPolicy: Always
-      repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-workflow-api"
+      repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-workflow"
     envSecretRef:
       WORKFLOW_DB_USER:     { secret: db, key: WORKFLOW_DB_USER }
       WORKFLOW_DB_PASSWORD: { secret: db, key: WORKFLOW_DB_PASSWORD }
