@@ -234,8 +234,8 @@ k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
     "networkAttachment": {
       "ethernets": {
         "enp1s0": {
-          "connectToNetwork": "ns",
-          "addresses": [{ "ipFromSubnet": "ns-subnet" }]
+          "dhcp4": true,
+          "connectToNetwork": "ns"
         }
       }
     }
@@ -325,8 +325,8 @@ k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
     "networkAttachment": {
       "ethernets": {
         "enp1s0": {
-          "connectToNetwork": "ns",
-          "addresses": [{ "ipFromSubnet": "ns-subnet" }]
+          "dhcp4": true,
+          "connectToNetwork": { "name": "ns" }
         }
       }
     }
