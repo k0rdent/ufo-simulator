@@ -1,0 +1,58 @@
+---
+# Reusable Go install task. Included by go.yml (standalone entrypoint),
+# ufo.yml (cmps), and tasks/nico_rest/install_packages.yml (gtws). Kept
+# in one place so the pinned version and layout stay consistent across
+# host groups.
+#
+# Variables:
+#   go_version — required; e.g. "1.26.3" (pinned to
+#     k0rdent-apis/build/Dockerfile.go-service so `go run` on the CMP
+#     matches what the images would build). Bump both together.
+#   go_root — optional, default /usr/local/go.
+
+- name: Assert go_version is set
+  ansible.builtin.assert:
+    that: "go_version | default('') | length > 0"
+    fail_msg: "go_version must be set by the including play"
+
+- name: Set Go install paths
+  ansible.builtin.set_fact:
+    go_root: "{{ go_root | default('/usr/local/go') }}"
+    go_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
+
+- name: Check installed Go version
+  ansible.builtin.command: "{{ go_root }}/bin/go version"
+  register: go_current
+  failed_when: false
+  changed_when: false
+
+- name: Refresh Go toolchain
+  when: "'go' + go_version not in (go_current.stdout | default(''))"
+  block:
+    - name: Remove any previous Go install
+      ansible.builtin.file:
+        path: "{{ go_root }}"
+        state: absent
+
+    - name: Download and unpack Go
+      ansible.builtin.unarchive:
+        src: "https://go.dev/dl/go{{ go_version }}.linux-{{ go_arch }}.tar.gz"
+        dest: /usr/local
+        remote_src: true
+        creates: "{{ go_root }}/bin/go"
+
+- name: Symlink go binaries into /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ go_root }}/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - go
+    - gofmt
+
+- name: Ensure /etc/profile.d/go.sh puts {{ go_root }}/bin on PATH
+  ansible.builtin.copy:
+    dest: /etc/profile.d/go.sh
+    content: "export PATH=$PATH:{{ go_root }}/bin\n"
+    mode: "0644"

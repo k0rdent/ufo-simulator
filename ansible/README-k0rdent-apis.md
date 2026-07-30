@@ -366,13 +366,6 @@ cluster traffic keeps flowing to it, and runs `go run` against the
 `k0rdent-apis` checkout at `/opt/ufo_lab/k0rdent-apis` on the CMP. No image
 build, no push, no rollout — the loop is `edit → ^C → run again`.
 
-**One-time setup** (installs Go on the CMP):
-
-```bash
-cd /opt/ufo_lab/ufo-simulator/ansible
-sudo -E ansible-playbook -i inventory.yml go.yml --limit cmp01
-```
-
 **Iteration loop** (all on the CMP, as root):
 
 ```bash

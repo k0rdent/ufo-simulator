@@ -219,7 +219,7 @@ cmd_rebuild() {
 
   [[ -d $K0RDENT_APIS_DIR ]] || die "checkout not found: $K0RDENT_APIS_DIR"
   command -v go >/dev/null 2>&1 \
-    || die "go not on PATH — run: sudo -E ansible-playbook -i inventory.yml go.yml --limit cmp01"
+    || die "go not on PATH — Go is installed as part of ufo.yml. Re-run: sudo -E ansible-playbook -i inventory.yml ufo.yml --limit cmp01"
   kc get "deploy/$dep" >/dev/null 2>&1 || die "no deploy/$dep in ns/$NAMESPACE"
 
   local pkg
