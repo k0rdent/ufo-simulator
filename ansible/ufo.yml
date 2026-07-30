@@ -15,18 +15,12 @@
     ufo_repo: https://github.com/jumpojoy/unified-fabric-operator
     ufo_repo_dir: "{{ workspace }}/unified-fabric-operator"
     ufo_branch: main
-    go_version: 1.25.5
+    # Shared with tasks/install_go.yml; pinned to k0rdent-apis Dockerfile.
+    go_version: "1.26.3"
     netris_operator_dir: "{{ workspace }}/netris-operator"
   tasks:
-    - name: Install recent Go from official tarball
-      ansible.builtin.shell: |
-        set -e
-        GO_VERSION="{{ go_version }}"
-        wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
-        rm -rf /usr/local/go && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
-        echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-      args:
-           creates: /usr/local/go/bin/go
+    - name: Install Go
+      ansible.builtin.include_tasks: tasks/install_go.yml
 
     - name: Ensure namespaces for nico identity secrets exist
       kubernetes.core.k8s:
