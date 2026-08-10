@@ -9,6 +9,9 @@ spec:
     - bySerialNumber: "DPG5NS621A0000"
     - bySerialNumber: "DPG5NS621A0001"
     - bySerialNumber: "DPG5NS621A0002"
+    - bySerialNumber: "DPG5NS621A0003"
+    - bySerialNumber: "DPG5NS621A0004"
+    - bySerialNumber: "DPG5NS621A0005"
 ---
 apiVersion: nico.mirantis.com/v1alpha1
 kind: InstanceTypeAllocation
@@ -18,4 +21,4 @@ metadata:
 spec:
   instanceTypeRef:
     name: gpu-a100
-  reservedMachineCount: 3
+  reservedMachineCount: 6

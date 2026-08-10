@@ -5,5 +5,5 @@ metadata:
   annotations:
     ufo.mirantis.com/netris-adminTenant: "Admin"
   name: internet
-  namespace: kcm-system
+  namespace: platform-admin
 spec: {}
