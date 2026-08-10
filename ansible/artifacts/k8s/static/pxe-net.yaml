@@ -4,14 +4,14 @@ metadata:
   annotations:
     ufo.mirantis.com/netris-adminTenant: "Admin"
   name: default
-  namespace: kcm-system
+  namespace: platform-admin
 spec: {}
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Network
 metadata:
   name: pxe
-  namespace: kcm-system
+  namespace: platform-admin
   annotations:
     ufo.mirantis.com/pxe: default
 spec:
@@ -28,7 +28,7 @@ apiVersion: ufo.mirantis.com/v1alpha1
 kind: Subnet
 metadata:
   name: pxe
-  namespace: kcm-system
+  namespace: platform-admin
 spec:
   vpc: default
   cidr: 172.16.81.0/24
