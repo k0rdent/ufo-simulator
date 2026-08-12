@@ -1,4 +1,5 @@
 sdn_provider: netris
 ufo_fabric_backend: 'netris'
 switch_port_name_prefix: "swp"
+br_mgmt_phys_interface: ens5
 br_ext_phys_interface: "ens4"

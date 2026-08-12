@@ -1,0 +1,5 @@
+# Managed by Ansible (dhcp-server.yml) — DHCP only on {{ br_mgmt_name }}.
+interface={{ br_mgmt_name }}
+dhcp-range=set:mgmt,{{ br_mgmt_dhcp.range_start }},{{ br_mgmt_dhcp.range_end }},{{ br_mgmt_dhcp.netmask }},{{ br_mgmt_dhcp.lease_time }}
+dhcp-option=tag:mgmt,option:router,{{ management_gateway_switch }}
+dhcp-option=tag:mgmt,option:dns-server,{{ management_dns_server }}
