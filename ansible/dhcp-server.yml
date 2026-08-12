@@ -1,9 +1,10 @@
 ---
-# Host DHCP server on the PXE bridge (br-pxe).
-# Runs when topology.north_south.fabric_type is "bridge" (see br_pxe_dhcp.enabled).
-# Run after linux.yml so the bridge and address are configured.
+# Host DHCP via dnsmasq on CMP bridges.
+# - br-pxe: when topology.north_south.fabric_type is "bridge" (br_pxe_dhcp.enabled)
+# - br-mgmt: when fabric backend is netris (br_mgmt_dhcp.enabled)
+# Run after linux.yml so bridges and addresses are configured.
 
-- name: Enable DHCP server on br-pxe
+- name: Enable DHCP servers on CMP bridges
   hosts: cmps
   connection: local
   gather_facts: true
@@ -20,26 +21,67 @@
         state: restarted
 
   tasks:
-    - name: Enable br-pxe DHCP server
+    - name: Install dnsmasq
+      when: (br_pxe_dhcp.enabled | default(false) | bool) or (br_mgmt_dhcp.enabled | default(false) | bool)
+      ansible.builtin.apt:
+        name: dnsmasq
+        state: present
+        update_cache: false
+
+    - name: Deploy global dnsmasq configuration
+      when: (br_pxe_dhcp.enabled | default(false) | bool) or (br_mgmt_dhcp.enabled | default(false) | bool)
+      ansible.builtin.template:
+        src: dnsmasq/global.conf.j2
+        dest: /etc/dnsmasq.d/00-global.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart dnsmasq
+
+    - name: Remove global dnsmasq configuration when DHCP disabled
+      when: not ((br_pxe_dhcp.enabled | default(false) | bool) or (br_mgmt_dhcp.enabled | default(false) | bool))
+      ansible.builtin.file:
+        path: /etc/dnsmasq.d/00-global.conf
+        state: absent
+      notify: Restart dnsmasq
+
+    - name: Deploy br-pxe dnsmasq configuration
       when: br_pxe_dhcp.enabled | default(false) | bool
-      block:
-        - name: Install dnsmasq
-          ansible.builtin.apt:
-            name: dnsmasq
-            state: present
-            update_cache: false
+      ansible.builtin.template:
+        src: dnsmasq/br-pxe.conf.j2
+        dest: /etc/dnsmasq.d/br-pxe.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart dnsmasq
 
-        - name: Deploy br-pxe dnsmasq configuration
-          ansible.builtin.template:
-            src: dnsmasq/br-pxe.conf.j2
-            dest: /etc/dnsmasq.d/br-pxe.conf
-            owner: root
-            group: root
-            mode: "0644"
-          notify: Restart dnsmasq
+    - name: Remove br-pxe dnsmasq configuration when disabled
+      when: not (br_pxe_dhcp.enabled | default(false) | bool)
+      ansible.builtin.file:
+        path: /etc/dnsmasq.d/br-pxe.conf
+        state: absent
+      notify: Restart dnsmasq
 
-        - name: Enable and start dnsmasq
-          ansible.builtin.service:
-            name: dnsmasq
-            state: started
-            enabled: true
+    - name: Deploy br-mgmt dnsmasq configuration
+      when: br_mgmt_dhcp.enabled | default(false) | bool
+      ansible.builtin.template:
+        src: dnsmasq/br-mgmt.conf.j2
+        dest: /etc/dnsmasq.d/br-mgmt.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart dnsmasq
+
+    - name: Remove br-mgmt dnsmasq configuration when disabled
+      when: not (br_mgmt_dhcp.enabled | default(false) | bool)
+      ansible.builtin.file:
+        path: /etc/dnsmasq.d/br-mgmt.conf
+        state: absent
+      notify: Restart dnsmasq
+
+    - name: Enable and start dnsmasq
+      when: (br_pxe_dhcp.enabled | default(false) | bool) or (br_mgmt_dhcp.enabled | default(false) | bool)
+      ansible.builtin.service:
+        name: dnsmasq
+        state: started
+        enabled: true

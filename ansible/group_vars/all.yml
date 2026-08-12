@@ -175,7 +175,7 @@ netris_operator_image_tag: 0.0.1-f431da9.1770637678
 loopback_base: "192.169"
 management_base: "192.168"
 loopback_base_switch: "192.169.0"
-management_base_switch: "192.168.0"
+management_base_switch: "10.200.0"
 management_gateway_switch: "{{ management_base_switch }}.254"
 
 loopback_base_server: "192.169.1"
@@ -222,6 +222,14 @@ br_mgmt_phys_interface: ""
 # Extra interface names (stanza key or set-name) to strip addresses/nameservers from in
 # /etc/netplan/50-cloud-init.yaml (merged with br_mgmt_phys_interface).
 netplan_cloudinit_prune_ifaces: []
+
+# Host DHCP on br-mgmt for switch/SG OOB (netris). Range is overridable via ansible vars.
+br_mgmt_dhcp:
+  enabled: "{{ ufo_fabric_backend | default(sdn_provider) == 'netris' }}"
+  range_start: "{{ management_base_switch }}.200"
+  range_end: "{{ management_base_switch }}.210"
+  netmask: 255.255.255.0
+  lease_time: 1h
 
 br_ext_name: br-ext
 br_ext_netmask: 24

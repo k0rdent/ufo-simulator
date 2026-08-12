@@ -11,6 +11,16 @@ spec:
 apiVersion: k8s.netris.ai/v1alpha1
 kind: Allocation
 metadata:
+  name: mgmt-allocation-switches
+spec:
+  # Separate from mgmt-allocation: switch OOB uses 10.200.0.0/24 (shared by netris and verity).
+  prefix: {{ management_base_switch }}.0/16
+  tenant: Admin
+  vpc: Default
+---
+apiVersion: k8s.netris.ai/v1alpha1
+kind: Allocation
+metadata:
   name: loopback-allocation
 spec:
   prefix: {{ loopback_base }}.0.0/16
