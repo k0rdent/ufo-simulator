@@ -1,8 +1,8 @@
 ---
-# Create a single switch VM using virt-install
+# Create a single switch VM from libvirt/switch.xml.j2
 - name: Create libvirt artifacts directory
   ansible.builtin.file:
-    path:   "{{ artifacts_dir }}/libvirt"
+    path: "{{ artifacts_dir }}/libvirt"
     state: directory
 
 - name: "{{ switch_name }} - Check if VM exists"
@@ -55,49 +55,14 @@
       ; host bridge {{ switch_host_bridge }} is connected to {{ switch_host_bridge_port }}
       {%- endif %}
 
+- name: "{{ switch_name }} - Render VM xml"
+  ansible.builtin.template:
+    src: "libvirt/switch.xml.j2"
+    dest: "{{ artifacts_dir }}/libvirt/{{ switch_name }}.xml"
 
-- name: "{{ switch_name }} - Create VM"
-  when: sdn_provider == "verity"
-  block:
-  - name: "{{ switch_name }} - Render VM xml"
-    ansible.builtin.template:
-      src: "libvirt/switch.xml.j2"
-      dest: "{{ artifacts_dir }}/libvirt/{{ switch_name }}.xml"
-  - name: "{{ switch_name }} - Create VM with virt-install"
-    shell: "virsh define {{ artifacts_dir }}/libvirt/{{ switch_name }}.xml"
-    when: vm_exists.rc != 0
-
-- name: "{{ switch_name }} - Build virt-install command"
-  when: sdn_provider == "netris"
-  set_fact:
-    virt_install_cmd: >-
-      virt-install
-      --os-variant ubuntu20.04
-      --machine q35
-      --name {{ switch_name }}
-      --vcpus {{ switch_vcpus }}
-      --memory {{ switch_memory_mb }}
-      --import
-      --disk path={{ vm_disk_path }}/{{ switch_name }}.qcow2,bus=sata
-      --graphics none
-      --video none
-      --osinfo detect=on,require=off
-      --network none
-      --controller usb,model=none
-      --noautoconsole
-      --qemu-commandline='-netdev user,id=mgmt,net=192.168.0.0/24,hostfwd=tcp::{{ ssh_port }}-:22'
-      --qemu-commandline='-device virtio-net-pci,netdev=mgmt,mac=00:01:00:00:{{ "%02x" | format(switch_index | int) }}:00'
-      {% for link in switch_links %}
-      --qemu-commandline='-netdev socket,udp=127.0.0.1:{{ link.udp_remote }},localaddr=127.0.0.1:{{ link.udp_local }},id={{ link.port }}'
-      --qemu-commandline='-device virtio-net-pci,netdev={{ link.port }},id=net{{ link.port }}'
-      {% endfor %}
-      {% if switch_host_bridge %}
-      --network bridge={{ switch_host_bridge }},model=virtio
-      {% endif %}
-
-- name: "{{ switch_name }} - Create VM with virt-install"
-  shell: "{{ virt_install_cmd }}"
-  when: sdn_provider == "netris" and vm_exists.rc != 0
+- name: "{{ switch_name }} - Define VM from xml"
+  ansible.builtin.command: virsh define {{ artifacts_dir }}/libvirt/{{ switch_name }}.xml
+  when: vm_exists.rc != 0
 
 - name: "{{ switch_name }} - Start VM if not running"
   command: virsh start {{ switch_name }}

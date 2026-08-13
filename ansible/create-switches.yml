@@ -96,7 +96,7 @@
 
           SSH Access (user: cumulus, password: cumulus):
           {% for switch in all_switches %}
-          {{ switch.name }}: ssh -p {{ mgmt_ssh_base_port + loop.index0 }} cumulus@127.0.0.1
+          {{ switch.name }}: ssh cumulus@{{ switch.mgmt_ip }}
           {% endfor %}
 
           Console Access:

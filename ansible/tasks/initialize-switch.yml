@@ -4,14 +4,14 @@
   delegate_to: 127.0.0.1
   shell: |
     sshpass -p "{{ cumulus_new_password }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      -p {{ switch_ssh_port }} cumulus@127.0.0.1 \
+      -p {{ switch_ssh_port | default(22) }} cumulus@{{ switch_mgmt_ip }} \
       "hostname"
   register: result
   ignore_errors: True
 
 - name: Change expired Cumulus password non-interactively
   expect:
-    command: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {{ switch_ssh_port }} cumulus@127.0.0.1
+    command: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {{ switch_ssh_port | default(22) }} cumulus@{{ switch_mgmt_ip }}
     responses:
       'cumulus.*s password:': "{{ cumulus_default_password }}"
       'Current password:': "{{ cumulus_default_password }}"
