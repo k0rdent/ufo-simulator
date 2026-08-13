@@ -3,3 +3,6 @@ interface={{ br_mgmt_name }}
 dhcp-range=set:mgmt,{{ br_mgmt_dhcp.range_start }},{{ br_mgmt_dhcp.range_end }},{{ br_mgmt_dhcp.netmask }},{{ br_mgmt_dhcp.lease_time }}
 dhcp-option=tag:mgmt,option:router,{{ management_gateway_switch }}
 dhcp-option=tag:mgmt,option:dns-server,{{ management_dns_server }}
+{% for switch in (topology.spines + topology.leafs) %}
+dhcp-host=00:01:00:00:{{ '%02x' | format(loop.index0) }}:00,{{ switch.mgmt_ip }},{{ switch.name }},set:mgmt
+{% endfor %}

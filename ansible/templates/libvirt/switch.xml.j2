@@ -48,7 +48,7 @@
       <alias name='ide'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
     </controller>
-    {%- if sdn_provider == "verity" %}
+    {# First NIC becomes eth0 on Cumulus (mgmt). #}
     <interface type='bridge'>
       <driver>
         <host csum='off'/>
@@ -56,34 +56,24 @@
       </driver>
       <mac address='00:01:00:00:{{ "%02x" | format(switch_index | int) }}:00'/>
       <source bridge='{{ br_mgmt_name }}'/>
-      <target dev='vnet78'/>
       <model type='virtio'/>
       <alias name='net0'/>
     </interface>
-    {%- endif %}
     {% for link in switch_links %}
     <interface type='udp'>
-        <source address='127.0.0.1' port='{{ link.udp_remote }}'>
-	<local address='127.0.0.1' port='{{ link.udp_local }}'/>
+      <source address='127.0.0.1' port='{{ link.udp_remote }}'>
+        <local address='127.0.0.1' port='{{ link.udp_local }}'/>
       </source>
       <model type='virtio'/>
     </interface>
     {%- endfor %}
-    {% if "leaf" in switch_name %}
+    {% if switch_host_bridge | default('') %}
     <interface type='bridge'>
       <driver>
         <host csum='off'/>
         <guest csum='off'/>
       </driver>
-      <source bridge='{{ br_pxe_name }}'/>
-      <model type='virtio'/>
-    </interface>
-    <interface type='bridge'>
-      <driver>
-        <host csum='off'/>
-        <guest csum='off'/>
-      </driver>
-      <source bridge='{{ br_ext_name }}'/>
+      <source bridge='{{ switch_host_bridge }}'/>
       <model type='virtio'/>
     </interface>
     {%- endif %}
@@ -111,4 +101,3 @@
     </memballoon>
   </devices>
 </domain>
-

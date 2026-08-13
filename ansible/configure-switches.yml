@@ -30,12 +30,13 @@
         name: "{{ item.0.name }}"
         hostname: "{{ item.0.name }}"
         groups: all_switches
-        ansible_user: cumulus  # Optional vars
-        ansible_port: "{{ mgmt_ssh_base_port + idx }}"
+        ansible_user: cumulus
+        ansible_port: 22
         ansible_password: "{{ cumulus_new_password }}"
-        ansible_host: 127.0.0.1
+        ansible_host: "{{ item.0.mgmt_ip }}"
         switch_name: "{{ item.0.name }}"
-        switch_ssh_port: "{{ mgmt_ssh_base_port + idx }}"
+        switch_mgmt_ip: "{{ item.0.mgmt_ip }}"
+        switch_ssh_port: 22
         switch_type: "{{ 'spine' if item.0.name.startswith('spine') else 'leaf' }}"
         switch_id: "{{ idx }}"
         ansible_become_password: "{{ cumulus_new_password }}"
@@ -49,20 +50,20 @@
 
     - name: Wait for switches to be reachable
       wait_for:
-        host: 127.0.0.1
-        port: "{{ mgmt_ssh_base_port + idx }}"
+        host: "{{ item.mgmt_ip }}"
+        port: 22
         delay: 10
         timeout: 300
       loop: "{{ all_switches }}"
       loop_control:
-        index_var: idx
         label: "{{ item.name }}"
 
     - name: Initialize each switch
       include_tasks: tasks/initialize-switch.yml
       vars:
         switch_name: "{{ item.0.name }}"
-        switch_ssh_port: "{{ mgmt_ssh_base_port + item.1 }}"
+        switch_mgmt_ip: "{{ item.0.mgmt_ip }}"
+        switch_ssh_port: 22
         switch_type: "{{ 'spine' if item.0.name.startswith('spine') else 'leaf' }}"
         switch_id: "{{ item.1 }}"
       loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
