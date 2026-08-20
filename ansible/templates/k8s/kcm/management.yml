@@ -108,4 +108,4 @@ spec:
     name: cluster-api-provider-nico
     template: cluster-api-provider-nico-{{ nico_capi_provider_chart_version }}
 {% endif %}
-  release: kcm-1-10-0
+  release: kcm-1-11-0
