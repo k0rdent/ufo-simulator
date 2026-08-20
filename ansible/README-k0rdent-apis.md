@@ -165,31 +165,73 @@ k0r "/v1/regions/$REGION/compute/address-pools" -X POST \
 }'
 ```
 
-### 3a. HCP-managed k0s cluster (CAPI flow)
+### 3a. Two-VPC (nico + verity) HCP cluster with per-slot NIC pinning
 
-The CAPI provider must already be installed via KCM — see
-<https://github.com/k0rdent/ncx-ailab/tree/main/k0rdent/kcm>. This registers a
-`nico-hcp` cluster-type with a hosted control plane and a single `default`
-worker nodepool backed by the `$MT` machine-type, then instantiates a cluster:
+Exercises the multi-VPC schema (`networkSchema.vpcs[]`) with two different
+fabric backends in a single cluster-type, plus a two-ethernet nodePool
+where each interface is pinned to a specific physical NIC by PCI slot.
+
+`match.pciSlot` resolves against the machine's advertised inventory via
+the Link CR's `spec.peer.pciSlot`, not against on-VM `ip link` output.
+The nico-core-mock helm chart advertises this ethernet inventory per
+mocked machine (see
+[`helm/nico-rest-mock-core/values.yaml`](../../nico-core-mock/helm/nico-rest-mock-core/values.yaml)):
+
+```
+eth0   0000:01:00.0   Mellanox ConnectX-7 (BlueField-3 integrated)   — no LLDP → no Link CR
+eth1   0000:a3:00.0   Intel I350   (LLDP: leaf-0 port eth1/1)         ← ns_verity byslot target
+eth2   0000:a3:00.1   Intel I350   (LLDP: leaf-0 port eth1/12)
+eth3   0000:a3:00.2   Intel I350   (LLDP: leaf-1 port eth1/12)
+eth4   0000:a3:00.3   Intel I350   (LLDP: leaf-1 port eth1/12)
+```
+
+Only the LLDP-attached interfaces (`eth1`..`eth4`) get a NicoMachine
+Link CR, so those are the only slots `byslot` can resolve. `eth0` has
+no LLDP peer → no Link CR → `match.pciSlot: 0000:01:00.0` fails
+resolution. For the nico interface we therefore use the OS interface
+name (`enp1s0` per systemd-predictable naming, matching what `ip link`
+shows on the running worker) as the ethernet map key and skip `match`
+entirely. The schema declares:
+
+- `vpc-nico` (backend `nico`) with `net-nico` and a subnet from
+  `global-default`.
+- `vpc-verity` (backend `verity`) with `net-verity` and a subnet from
+  `global-public`. The `verity` backend must be enabled in the region's
+  fabric operator; on a nico-only lab the ClusterType create validates but
+  the cluster reconcile will stall on the verity-backed Vpc until a verity
+  fabric operator is present.
+- Two ethernets per worker: `enp1s0` (interface-name matched, DHCP)
+  attached to `net-nico`; `ns_verity` pinned by
+  `match.pciSlot: 0000:a3:00.0` (mock `eth1`, LLDP-attached to `leaf-0`
+  port `eth1/1`) attached to `net-verity` — this is the SNA case, where
+  the Verity backend programs the required switch ports for the
+  attached interface. `byslot` matching requires `connectToNetwork`,
+  and `connectToNetwork` is mutually exclusive with `addresses`, so
+  addressing on the verity interface is left to the Verity fabric /
+  DHCP rather than pinned via `ipFromSubnet`.
 
 ```bash
 k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
   -H 'Content-Type: application/json' -d @- <<EOF
 {
-  "id": "nico-hcp",
-  "displayName": "NICo HCP k0s",
+  "id": "nico-verity-hcp",
+  "displayName": "NICo + Verity HCP k0s",
   "networkSchema": {
+    "vpcs": [
+      { "id": "vpc-nico",   "backend": "nico"   },
+      { "id": "vpc-verity", "backend": "verity" }
+    ],
     "networks": [
-      { "id": "ns",     "type": "evpn", "evpn": {"type":"l3vpn"} },
-      { "id": "public", "type": "evpn", "evpn": {"type":"l3vpn"} }
+      { "id": "net-nico",   "vpc": "vpc-nico",   "type": "evpn", "evpn": {"type":"l3vpn"} },
+      { "id": "net-verity", "vpc": "vpc-verity", "type": "evpn", "evpn": {"type":"l2vpn"}, "vlan": {"id": "500" }}
     ],
     "subnets": [
-      { "id": "ns-subnet",
-        "network": "ns",
+      { "id": "sub-nico",
+        "network": "net-nico",
         "addressPool": "/v1/regions/$REGION/compute/address-pools/global-default",
         "prefixLength": 27 },
-      { "id": "public-subnet",
-        "network": "public",
+      { "id": "sub-verity",
+        "network": "net-verity",
         "addressPool": "/v1/regions/$REGION/compute/address-pools/global-public",
         "prefixLength": 29 }
     ]
@@ -208,21 +250,7 @@ k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
       "bootstrapConfig": {},
       "opConfig": {}
     },
-    "workers": {
-      "defaults": {
-        "preStartCommands": [
-          "sudo useradd -G sudo -s /bin/bash -d /home/rescue -p \$(openssl passwd -1 rescue) rescue",
-          "sudo mkdir -vp /home/rescue/.ssh/",
-          "sudo chown rescue /home/rescue/.ssh/authorized_keys",
-          "/usr/bin/sleep 180"
-        ],
-        "files": [{
-          "path": "/etc/ssh/sshd_config.d/99-cloudimg-settings.conf",
-          "permissions": "0644",
-          "content": "PasswordAuthentication yes\n"
-        }]
-      }
-    }
+    "workers": { "defaults": {} }
   },
   "nodePools": [{
     "id": "default",
@@ -235,7 +263,12 @@ k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
       "ethernets": {
         "enp1s0": {
           "dhcp4": true,
-          "connectToNetwork": "ns"
+          "connectToNetwork": { "name": "net-nico" }
+        },
+        "verity1": {
+          "match": { "pciSlot": "0000:a3:00.0" },
+          "dhcp4": false,
+          "connectToNetwork": { "name": "net-verity" }
         }
       }
     }
@@ -246,9 +279,9 @@ EOF
 k0r "/v1/regions/$REGION/projects/$PROJECT/compute/clusters" -X POST \
   -H 'Content-Type: application/json' -d @- <<EOF
 {
-  "id": "lab-nico-01",
-  "displayName": "Lab NICo cluster",
-  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-hcp",
+  "id": "lab-nico-verity-21",
+  "displayName": "Lab NICo+Verity cluster",
+  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-verity-hcp",
   "nodePools": [
     { "id": "default", "nodeCount": 3 }
   ],
@@ -265,20 +298,47 @@ k0r "/v1/regions/$REGION/projects/$PROJECT/compute/clusters" -X POST \
 EOF
 ```
 
-Grab the child-cluster kubeconfig once the cluster is Ready:
+Field notes:
+
+- `networkSchema.vpcs[].backend` is required (no default). It names a
+  fabric operator that must exist in the region — see the OpenAPI
+  `NetworkSchemaVpc.backend` description. Multi-VPC contract test:
+  [cluster_deployment_create_v3_test.go::TestDerivePlans_MultiVpc](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/cluster_deployment_create_v3_test.go).
+- `addresses[].ipFromSubnet` and `gatewayv4.gatewayFromSubnet` reference
+  `networkSchema.subnets[].id`. The actual IP is allocated at cluster
+  materialization from that subnet's AddressPool. The materialized
+  NetworkBundle carries the resolved UFO subnet ref, which is what
+  downstream reconciles binding the ethernet to the network the subnet
+  belongs to.
+
+**Version requirement.** `match.pciSlot` and `connectToNetwork` on the
+v3 (HCP/CAPI) code path were added by
+[KCS-1276](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/cluster_deployment_create_v3.go)
+(commits `84fbf9160`, `ab380b93a`, `a45372183`). A workflow-worker image
+built from `main` before those landed silently drops both at
+`json.Unmarshal` in the v3 translator's `naEthernet` / `naMatch` structs
+(the sibling translator in
+[`child-workflows/providers/ufo/create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go)
+used by 3b has always carried them). Confirm by inspecting the
+materialized NetworkBundle:
 
 ```bash
-kubectl -n prj-kindmock-main get secret lab-nico-01-kubeconfig \
-  -o jsonpath='{.data.value}' | base64 -d > /tmp/lab-nico-child.kubeconfig
-
-kubectl --kubeconfig /tmp/lab-nico-child.kubeconfig get nodes -o wide
+sudo kubectl -n prj-kindmock-main get networkbundle \
+  -l cluster.k0rdent.ai/name=lab-nico-verity-04 \
+  -o yaml | grep -E 'pciSlot|connectToNetwork'
 ```
 
-### 3b. Standalone BMaaS instance-group
+If those keys don't show up, rebuild the workflow-worker with
+[`lab-inject.sh rebuild workflow-worker`](lab-inject.sh) against the
+current checkout.
 
-For the bare-metal-only flow (no k0s control plane, k0rdent just provisions
-machines into a NICo instance-group), first make sure the project namespace
-carries the labels the KCM/k0rdent-apis operators look for:
+### 3b. Two-VPC (nico + verity) standalone BMaaS with per-slot NIC pinning
+
+Same networkSchema + slot-pinning pattern as 3a, applied to the standalone
+BMaaS flow: no `k8s` block on the cluster-type, and the deployment target
+is `/compute/instance-groups` rather than `/compute/clusters`. Ensure the
+project namespace carries the k0rdent labels the KCM/k0rdent-apis operators
+look for:
 
 ```bash
 kubectl create ns prj-kindmock-main --dry-run=client -o yaml | \
@@ -290,27 +350,29 @@ kubectl create ns prj-kindmock-main --dry-run=client -o yaml | \
   kubectl apply -f -
 ```
 
-Then register a cluster-type that only declares a `workers` nodepool (no `k8s`
-block) and instantiate an instance-group against it:
-
 ```bash
 k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
   -H 'Content-Type: application/json' -d @- <<EOF
 {
-  "id": "nico-bm",
-  "displayName": "NICo bare-metal (BMaaS)",
+  "id": "nico-verity-bm",
+  "displayName": "NICo + Verity bare-metal (BMaaS)",
   "networkSchema": {
+    "vpcs": [
+      { "id": "vpc-nico",   "backend": "nico"   },
+      { "id": "vpc-verity", "backend": "verity" }
+    ],
     "networks": [
-      { "id": "ns",     "type": "evpn", "evpn": {"type":"l3vpn"} },
-      { "id": "public", "type": "evpn", "evpn": {"type":"l3vpn"} }
+      { "id": "net-nico",      "vpc": "vpc-nico",   "type": "evpn", "evpn": {"type":"l3vpn"} },
+      { "id": "net-verity-l3", "vpc": "vpc-verity", "type": "evpn", "evpn": {"type":"l3vpn"} },
+      { "id": "net-verity-l2", "vpc": "vpc-verity", "type": "evpn", "evpn": {"type":"l2vpn"}, "vlan": {"id": "500" } }
     ],
     "subnets": [
-      { "id": "ns-subnet",
-        "network": "ns",
+      { "id": "sub-nico",
+        "network": "net-nico",
         "addressPool": "/v1/regions/$REGION/compute/address-pools/global-default",
         "prefixLength": 27 },
-      { "id": "public-subnet",
-        "network": "public",
+      { "id": "sub-verity-l3",
+        "network": "net-verity-l3",
         "addressPool": "/v1/regions/$REGION/compute/address-pools/global-public",
         "prefixLength": 29 }
     ]
@@ -324,9 +386,22 @@ k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
     "nodeCountDefault": 1,
     "networkAttachment": {
       "ethernets": {
-        "enp1s0": {
+        "nico_l3_net": {
+          "match": { "pciSlot": "0000:01:00.0" },
           "dhcp4": true,
-          "connectToNetwork": { "name": "ns" }
+          "connectToNetwork": { "name": "net-nico" }
+        },
+        "verity_l3_addr": {
+          "match": { "pciSlot": "0000:a3:00.0" },
+          "dhcp4": false,
+          "addresses": [
+            { "ipFromSubnet": "sub-verity-l3" }
+          ]
+        },
+        "verity_l2_net": {
+          "match": { "pciSlot": "0000:a3:00.2" },
+          "dhcp4": false,
+          "connectToNetwork": { "name": "net-verity-l2" }
         }
       }
     }
@@ -337,9 +412,9 @@ EOF
 k0r "/v1/regions/$REGION/projects/$PROJECT/compute/instance-groups" -X POST \
   -H 'Content-Type: application/json' -d @- <<EOF
 {
-  "id": "lab-bm-01",
-  "displayName": "Lab BMaaS group",
-  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-bm",
+  "id": "lab-nico-verity-bm-01",
+  "displayName": "Lab NICo+Verity BMaaS group",
+  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-verity-bm",
   "nodePools": [ { "nodePool": "workers", "size": 1 } ],
   "sshAccess": [
     {
@@ -353,6 +428,36 @@ k0r "/v1/regions/$REGION/projects/$PROJECT/compute/instance-groups" -X POST \
 }
 EOF
 ```
+
+Same interface-selection rules as 3a apply: the nico interface uses
+its OS-predictable name (`enp1s0`) as the ethernet-map key because the
+`0000:01:00.0` NIC (mock `eth0`, Mellanox) has no LLDP peer → no Link
+CR → `byslot` can't resolve it. The verity side exercises two
+byslot-pinned interfaces, both against LLDP-attached slots that carry a
+Link CR (per the mock inventory in
+[`helm/nico-rest-mock-core/values.yaml`](../../nico-core-mock/helm/nico-rest-mock-core/values.yaml)):
+
+- `verity-l3-addr` → slot `0000:a3:00.0` (mock `eth1`, leaf-0 port
+  `eth1/1`) on the l3vpn network `net-verity-l3`, addressed via
+  `addresses[].ipFromSubnet: "sub-verity-l3"`.
+- `verity-l2-net` → slot `0000:a3:00.2` (mock `eth3`, leaf-1 port
+  `eth1/1`) on the l2vpn network `net-verity-l2` (VLAN 500), joined via
+  `connectToNetwork: { name: "net-verity-l2" }` with no `addresses` —
+  L2 addressing is left to the fabric / DHCP.
+
+Unlike 3a's HCP path, the instance-group translator
+([`create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go))
+does not enforce mutual exclusion between `match.pciSlot` and
+`addresses[]`: `translateMatch` and `translateAddresses` are emitted
+independently, so byslot-pinning coexists with subnet-allocated
+addressing on the same ethernet. `verity` must be an enabled fabric
+backend in the region for the `vpc-verity` reconcile to complete.
+
+The instance-group flow uses the sibling translator in
+[`child-workflows/providers/ufo/create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go)
+rather than the v3 inline one, so the KCS-1276 version requirement
+called out for 3a does not apply here — `match.pciSlot` and
+`connectToNetwork` have always been carried through in this code path.
 
 ## Iterating on Go changes
 
