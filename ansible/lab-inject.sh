@@ -185,6 +185,14 @@ spec:
 # \$patch: delete removes the merge-key entry cleanly; dropping BINARY
 # from container env lets the image's Dockerfile default
 # (ENV BINARY=/app/\${CMD_NAME}) take effect again.
+#
+# Merge keys per field (from k8s API types.go patchMergeKey tags):
+#   • .spec.template.spec.volumes                 → name
+#   • .spec.template.spec.containers              → name
+#   • containers[].env                            → name
+#   • containers[].volumeMounts                   → mountPath  ← NOT name
+# Strategic-merge \$patch: delete has to identify entries by their merge
+# key, so the volumeMounts delete uses mountPath.
 revert_inject_patch() {
   local dep=$1 cname=$2
   kc patch "deploy/$dep" --type=strategic --patch "
@@ -197,7 +205,7 @@ spec:
       containers:
         - name: $cname
           volumeMounts:
-            - name: dev-binary
+            - mountPath: $MOUNT_PATH
               \$patch: delete
           env:
             - name: BINARY
