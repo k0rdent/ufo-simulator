@@ -20,7 +20,7 @@
     k0rdent_apis_pull_secret_server: registry.ci.mirantis.com
     k0rdent_apis_nico_sa_secret: nico-service-account
     k0rdent_apis_nico_sa_password: "{{ nico_client_secret }}"
-    k0rdent_apis_provision_env: kindmock
+    k0rdent_apis_provision_env: kind
     k0rdent_apis_helm_timeout: 15m
     k0rdent_apis_extras_helm_timeout: 3m
     k0rdent_apis_base_url: "http://10.200.0.254:30080"
@@ -277,7 +277,7 @@
             name: provision-manifest-secrets
             namespace: "{{ k0rdent_apis_namespace }}"
           stringData:
-            KINDMOCK_IDP_SECRET: unused-placeholder
+            KIND_IDP_SECRET: unused-placeholder
 
     - name: Apply provision-apply job manifest
       kubernetes.core.k8s:
