@@ -93,7 +93,7 @@ override:
 - `k0rdent_apis_dir` — checkout location (default `/opt/ufo_lab/k0rdent-apis`).
 - `k0rdent_apis_provision_env` — env name under
   `scripts/post-deploy/envs/` used for the provision-manifest ConfigMap.
-  Default `kindmock`.
+  Default `kind`.
 - `k0rdent_apis_base_url` — external URL where Kong is reachable, injected
   into the values overrides. Default `http://10.200.0.254:30080`.
 - `nico_prepovision_ssh_key_group_name` /
@@ -131,8 +131,8 @@ source ./k0r.sh
 # The defaults match the ufo-simulator lab; override if yours differ.
 export BASE=http://10.200.0.254:30080
 export REGION=local
-export ORG=kindmock
-export PROJECT=kindmock-main
+export ORG=kind
+export PROJECT=kind-main
 export MT=nico-lab          # k0rdent machine-type registered by the playbook
 
 k0r /v1/regions/global/organizations | jq
@@ -323,7 +323,7 @@ used by 3b has always carried them). Confirm by inspecting the
 materialized NetworkBundle:
 
 ```bash
-sudo kubectl -n prj-kindmock-main get networkbundle \
+sudo kubectl -n prj-kind-main get networkbundle \
   -l cluster.k0rdent.ai/name=lab-nico-verity-04 \
   -o yaml | grep -E 'pciSlot|connectToNetwork'
 ```
@@ -341,11 +341,11 @@ project namespace carries the k0rdent labels the KCM/k0rdent-apis operators
 look for:
 
 ```bash
-kubectl create ns prj-kindmock-main --dry-run=client -o yaml | \
+kubectl create ns prj-kind-main --dry-run=client -o yaml | \
   kubectl label --local -f - \
     app.k0rdent.ai/managed=true \
     app.k0rdent.ai/project-namespace=true \
-    k0rdent.mirantis.com/project=kindmock-main \
+    k0rdent.mirantis.com/project=kind-main \
     --overwrite -o yaml | \
   kubectl apply -f -
 ```
