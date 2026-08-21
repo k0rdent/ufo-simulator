@@ -16,7 +16,7 @@
 #   K0R_TOKEN_FILE           cache for the k0rdent JWT        (/tmp/k0r-token)
 #   TOKEN_SLACK_SEC          re-mint threshold, seconds       (60)
 #   K0R_NAMESPACE            namespace with auth + mock-oauth2-server (k0rdent-apis)
-#   K0R_LOGIN_EMAIL          login email for k0r_login        (admin@kindmock.test)
+#   K0R_LOGIN_EMAIL          login email for k0r_login        (admin@kind.test)
 #   K0R_LOGIN_CLIENT_ID      OAuth client id                  (operator-portal)
 #   K0R_LOGIN_REDIRECT_URI   OAuth redirect URI               ($BASE/v1/regions/global/auth/callback)
 #   NICO_HOST, NICO_KEYCLOAK_*, NICO_REST_API_BASE_URL, NICO_ORG
@@ -30,7 +30,7 @@
 : "${TOKEN_SLACK_SEC:=60}"
 
 : "${K0R_NAMESPACE:=k0rdent-apis}"
-: "${K0R_LOGIN_EMAIL:=admin@kindmock.test}"
+: "${K0R_LOGIN_EMAIL:=admin@kind.test}"
 : "${K0R_LOGIN_CLIENT_ID:=operator-portal}"
 : "${K0R_LOGIN_REDIRECT_URI:=${BASE}/v1/regions/global/auth/callback}"
 

@@ -84,7 +84,7 @@ if [ "${1:-}" = "delete-all-expected" ]; then
 fi
 
 # ─── k0rdent OAuth token flow (inlined; was external ~/login.sh) ────
-: "${K0R_LOGIN_ORG:=kindmock}"
+: "${K0R_LOGIN_ORG:=kind}"
 : "${K0R_LOGIN_NAMESPACE:=k0rdent-apis}"
 
 _k0r_login() {
