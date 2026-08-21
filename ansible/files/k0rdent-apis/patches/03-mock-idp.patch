@@ -1,0 +1,93 @@
+diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
+index 081c49f02..ad735c6f1 100644
+--- a/scripts/post-deploy/envs/kind/manifest.yaml
++++ b/scripts/post-deploy/envs/kind/manifest.yaml
+@@ -127,66 +127,37 @@ policies:
+     displayName: Kind Admin - compute-admin (platform)
+ 
+ identityProviders:
+-# KCS-1407 — these were previously the in-cluster mock-oauth2-server on plaintext
+-# http (http://mock-oauth2-server.k0rdent-apis.svc:8080/...). A customer-supplied
+-# discoveryUrl is now screened as an outbound destination — https to a public
+-# host, with private/loopback/link-local and cloud-metadata targets refused — so
+-# an in-cluster IdP could not be registered at all, and kind moved to the same
+-# real Cognito pools as mock01/dev02, with secrets from the operator's
+-# environment (see docs/operations/environment-bootstrap.md and
+-# scripts/post-deploy/seed.sh).
+-#
+-# KCS-1468 has since made that screening relaxable, and kind sets both opt-outs
+-# (global.idpAllowPrivateTargets, global.idpAllowInsecureScheme), so an
+-# in-cluster mock IdP CAN be seeded here again. These entries were deliberately
+-# left on Cognito rather than reverted: that is a kind local-env tooling
+-# decision, and the fixture users below would need restoring in step with it.
+-#
+-# Consequence, deliberately accepted: the mock fixture users (admin@kind.test,
+-# alice@acme.test, bob@acme-eng.test) can no longer complete an interactive
+-# login, because they do not exist in these pools. They remain for the
+-# header-driven e2e paths, and resolve to the CIAM fallback below.
+-# `make kind-multi-verify-mock-oauth` fails for this reason — the seed, no
+-# longer the guard — see the note at the top of scripts/kind/verify-mock-oauth.sh.
+-#
+-# KCS-1384 is preserved: the `vendor` org keeps a registered tenant_domain so
+-# the special-org invitation guard's accept path stays testable here, and
+-# `provider` still deliberately gets none — an org with no registered domain is
+-# the case that proves the guard fails closed rather than falling back. Only the
+-# IdP behind vendor changed, from the mock to the real vendor pool.
+-  - displayName: "Vendor IdP (Cognito)"
+-    org: vendor
+-    tenantDomain: vendor.com
+-    oidcDiscoveryUrl: https://cognito-idp.us-west-2.amazonaws.com/us-west-2_217ihZppD/.well-known/openid-configuration
+-    oidcClientId: 5sq4p6kv122e22o1qba7ndmads
++  # In-cluster mock-oauth2-server (k0rdent-kind-extras). Each row's issuer path +
++  # oidcClientId must match a tokenCallbacks entry in the chart's values.yaml.
++  # Requires global.idpAllowPrivateTargets + global.idpAllowInsecureScheme
++  # (both set by values-secret-kind.yaml, per KCS-1468).
++  - displayName: Kind IdP (operator)
++    org: kind
++    tenantDomain: kind.test
++    oidcDiscoveryUrl: http://mock-oauth2-server.k0rdent-apis.svc:8080/kind/.well-known/openid-configuration
++    oidcClientId: kind-mock-client
+     oidcClientSecret:
+-      env: VENDOR_IDP_CLIENT_SECRET
++      env: KIND_IDP_SECRET
+     enabled: true
+     isDefault: true
+-  # org `acme` is the customer-side fixture. It borrows the provider pool because
+-  # that is one of the three pools whose secret the documented export set covers
+-  # (vendor / provider / ciam); the domain name reads oddly against the org name
+-  # for that reason alone.
+-  - displayName: "Acme IdP (Cognito, provider pool)"
++  - displayName: Acme IdP (alice)
+     org: acme
+-    tenantDomain: ncprovider.com
+-    oidcDiscoveryUrl: https://cognito-idp.us-west-2.amazonaws.com/us-west-2_DM62vEZtL/.well-known/openid-configuration
+-    oidcClientId: 3107ktlhcg3b3rlhimik37ubr8
++    tenantDomain: acme.test
++    oidcDiscoveryUrl: http://mock-oauth2-server.k0rdent-apis.svc:8080/acme/.well-known/openid-configuration
++    oidcClientId: kind-mock-acme-client
+     oidcClientSecret:
+-      env: PROVIDER_IDP_CLIENT_SECRET
++      env: KIND_IDP_SECRET
+     enabled: true
+     isDefault: true
+-  # Platform-wide CIAM fallback (org_id = ''), used when an email domain matches
+-  # no org-scoped IdP — which is now the case for the .test fixture users.
+-  - displayName: "Default CIAM (Cognito)"
+-    org: ""
+-    tenantDomain: ciam.internal
+-    oidcDiscoveryUrl: https://cognito-idp.us-west-2.amazonaws.com/us-west-2_yu7xGZIRa/.well-known/openid-configuration
+-    oidcClientId: 1d1o91en9p0dti6kec9repuc18
++  - displayName: Acme IdP (bob, eng)
++    org: acme
++    tenantDomain: acme-eng.test
++    oidcDiscoveryUrl: http://mock-oauth2-server.k0rdent-apis.svc:8080/acme-eng/.well-known/openid-configuration
++    oidcClientId: kind-mock-acme-eng-client
+     oidcClientSecret:
+-      env: CIAM_IDP_CLIENT_SECRET
++      env: KIND_IDP_SECRET
+     enabled: true
+-    isDefault: true
++    isDefault: false
+ 
+ portalClients:
+   # operator-portal: the login client for operators (admin@kind.test) and the
