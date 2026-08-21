@@ -135,9 +135,16 @@ K8S_ENV_DROP_RE='^(PATH|HOSTNAME|HOME|PWD|SHLVL|TERM|_|KUBERNETES_[A-Z_]+|[A-Z0-
 capture_pod_env() {
   local dep=$1
   # `env` in the exec'd shell reflects kubelet's resolved container env
-  # (kubelet substitutes $(VAR) references before container start).
+  # (kubelet substitutes $(VAR) references before container start), so
+  # what we capture is fully resolved. printf %q shell-quotes each value
+  # so `source` handles values with spaces, globs, or other metachars
+  # (e.g. "svc-*-workflow-worker, svc-*-k8s-monitor").
   kc exec "deploy/$dep" -- env 2>/dev/null \
     | grep -Ev "$K8S_ENV_DROP_RE" \
+    | while IFS='=' read -r k v; do
+        [[ $k =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        printf '%s=%q\n' "$k" "$v"
+      done \
     | sort
 }
 
