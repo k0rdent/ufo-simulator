@@ -8,7 +8,7 @@ spec:
   tenant: Admin
   description: {{ server_name }}
   site: default
-  portsCount: 4
+  portsCount: {{ vm_port_count }}
   mainIp: {{ loopback_ip }}
   mgmtIp: {{ mgmt_ip }}
   tags:

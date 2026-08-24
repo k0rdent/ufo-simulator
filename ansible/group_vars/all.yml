@@ -68,6 +68,14 @@ topology:
       host_id: 4
     - name: vm-5
       host_id: 5
+    - name: vm-6
+      host_id: 6
+    - name: vm-7
+      host_id: 7
+    - name: vm-8
+      host_id: 8
+    - name: vm-9
+      host_id: 9
   softgates:
     - name: sg-0
       role: general
@@ -141,6 +149,18 @@ topology:
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}3", remote: "ext-leaf-0", remote_port: "{{ switch_port_name_prefix }}2" }
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}4", remote: "ext-leaf-1", remote_port: "{{ switch_port_name_prefix }}2" }
 
+# East-west fabric (populated by vars/netris.yml). Empty for verity.
+topology_ew:
+  spines: []
+  leafs: []
+  links: []
+
+# Aggregates used by create/configure/destroy playbooks and link wiring.
+# all_topology_links renumbers switch-side ports to match Cumulus NIC order
+# (local links first, then remote — same as create-switch-vm.yml).
+all_topology_switches: "{{ topology.spines + topology.leafs + topology_ew.spines + topology_ew.leafs }}"
+all_topology_links: "{{ (topology.links + topology_ew.links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
+
 # Cumulus default credentials
 cumulus_user: cumulus
 cumulus_default_password: cumulus
@@ -158,6 +178,9 @@ vm_port_count: 4
 disk_path: /var/lib/libvirt/images
 
 sg_base_mac: "52:54:00:13"
+# Mgmt NIC (eth0) OUI for north-south switches vs east-west switches.
+switch_base_mac: "00:01:00:00"
+ew_switch_base_mac: "00:01:00:01"
 sg_port_count: 2
 sg_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 sg_image: "/var/lib/libvirt/images/noble-server-cloudimg-amd64.img"

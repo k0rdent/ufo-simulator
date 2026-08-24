@@ -54,7 +54,7 @@
         <host csum='off'/>
         <guest csum='off'/>
       </driver>
-      <mac address='00:01:00:00:{{ "%02x" | format(switch_index | int) }}:00'/>
+      <mac address='{{ switch_mgmt_mac }}'/>
       <source bridge='{{ br_mgmt_name }}'/>
       <model type='virtio'/>
       <alias name='net0'/>

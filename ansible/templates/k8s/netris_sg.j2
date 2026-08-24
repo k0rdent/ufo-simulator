@@ -3,6 +3,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Softgate
 metadata:
   name: {{ sg_name }}
+  namespace: platform-admin
 spec:
   tenant: Admin
   description: {{ sg_name }}
@@ -25,6 +26,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Link
 metadata: 
   name: {{ sg_name }}-{{ link.remote_port }}
+  namespace: platform-admin
 spec: 
   ports: 
   - {{ link.local_port }}@{{ link.local }}

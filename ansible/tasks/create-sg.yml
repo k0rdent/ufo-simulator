@@ -5,7 +5,7 @@
 - name: "{{ vm_name }} - Add links where this switch is local"
   set_fact:
     vm_links: "{{ vm_links + [{'port': link_item.local_port, 'udp_local': udp_base_port + (link_idx * 2), 'udp_remote': udp_base_port + (link_idx * 2) + 1}] }}"
-  loop: "{{ topology.links }}"
+  loop: "{{ all_topology_links }}"
   loop_control:
     loop_var: link_item
     index_var: link_idx
@@ -15,7 +15,7 @@
 - name: "{{ vm_name }} - Add links where this switch is remote"
   set_fact:
     vm_links: "{{ vm_links + [{'port': link_item.remote_port, 'udp_local': udp_base_port + (link_idx * 2) + 1, 'udp_remote': udp_base_port + (link_idx * 2)}] }}"
-  loop: "{{ topology.links }}"
+  loop: "{{ all_topology_links }}"
   loop_control:
     loop_var: link_item
     index_var: link_idx

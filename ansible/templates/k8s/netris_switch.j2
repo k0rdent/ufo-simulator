@@ -14,14 +14,16 @@ spec:
   mgmtIp: {{ mgmt_ip }}
   portsCount: 48
 ### LINKS ####
+{# VM/softgate links live in netris_server.j2 / netris_sg.j2 only. Emit switch-to-switch links here when this switch is the remote endpoint. #}
 {% for link in links %}
 {% if link.remote == switch_name %}
 --- 
 apiVersion: k8s.netris.ai/v1alpha1 
 kind: Link 
 metadata: 
-  name: {{ switch_name }}-{{ link.remote_port }} 
-spec: 
+  name: {{ switch_name }}-{{ link.remote_port }}
+  namespace: platform-admin
+spec:
   ports: 
   - {{ link.local_port }}@{{ link.local }}
   - {{ link.remote_port }}@{{ link.remote }} 
