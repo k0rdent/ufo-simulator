@@ -3,3 +3,5 @@ ufo_fabric_backend: 'netris'
 switch_port_name_prefix: "swp"
 br_mgmt_phys_interface: ens5
 br_ext_phys_interface: "ens4"
+# Match br-mgmt DHCP DNS so PXE-booted hosts resolve the same way.
+pxe_dns_server: "{{ management_dns_server }}"

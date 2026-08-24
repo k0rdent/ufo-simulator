@@ -2,5 +2,5 @@
 interface={{ br_pxe_name }}
 dhcp-range=set:pxe,{{ br_pxe_dhcp.range_start }},{{ br_pxe_dhcp.range_end }},{{ br_pxe_dhcp.netmask }},{{ br_pxe_dhcp.lease_time }}
 dhcp-option=tag:pxe,option:router,{{ br_pxe_ip }}
-dhcp-option=tag:pxe,option:dns-server,{{ br_pxe_ip }}
+dhcp-option=tag:pxe,option:dns-server,{{ pxe_dns_server }}
 dhcp-option=tag:pxe,option:ntp-server,{{ br_pxe_ip }}

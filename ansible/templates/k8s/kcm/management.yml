@@ -89,7 +89,7 @@ spec:
             netmask: 255.255.255.0
             options:
             - option:router,{{ br_pxe_ip }}
-            - option:dns-server,{{ br_pxe_ip }}
+            - option:dns-server,{{ pxe_dns_server }}
             - option:ntp-server,{{ br_pxe_ip }}
             rangeBegin: 172.16.81.100
             rangeEnd: 172.16.81.200
