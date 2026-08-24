@@ -13,7 +13,7 @@
   vars:
     workspace: /opt/ufo_lab/
     netris_charts_repo: https://github.com/jumpojoy/netris-charts
-    netris_charts_branch: extensions
+    netris_charts_branch: main
     netris_chars_dir: "{{ workspace }}/netris-charts"
 
   tasks:
