@@ -10,9 +10,10 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_switches: "{{ all_topology_switches }}"
     all_servers: "{{ topology.nodes }}"
     all_softgates: "{{ topology.softgates }}"
+    topology_resolved_links: "{{ (topology.links + topology_ew.links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
 
   tasks:
     - name: Ensure artifacts directory exists
@@ -32,11 +33,11 @@
         - name: Render Netris switch templates
           vars:
             switch_name: "{{ item.0.name }}"
-            links: "{{ topology.links }}"
+            links: "{{ topology_resolved_links }}"
             switch_index: "{{ item.1 }}"
             switch_digit: "{{ switch_index | int + 1 }}"
-            loopback_ip: "{{ loopback_base_switch }}.{{ switch_digit }}"
-            mgmt_ip: "{{ management_base_switch }}.{{ switch_digit }}"
+            loopback_ip: "{{ item.0.loopback_ip | default(loopback_base_switch ~ '.' ~ switch_digit) }}"
+            mgmt_ip: "{{ item.0.mgmt_ip | default(management_base_switch ~ '.' ~ switch_digit) }}"
           ansible.builtin.template:
             src: "k8s/netris_switch.j2"
             dest: "{{ k8s_artifacts_dir }}/{{ switch_name }}.yaml"
@@ -53,7 +54,7 @@
           vars:
             sg_name: "{{ item.0.name }}"
             sg_role: "{{ item.0.role | default('general') }}"
-            links: "{{ topology.links }}"
+            links: "{{ topology_resolved_links }}"
             sg_index: "{{ item.1 }}"
             sg_digit: "{{ sg_index | int + 1 }}"
             loopback_ip: "{{ loopback_base_sg }}.{{ sg_digit }}"
@@ -68,7 +69,7 @@
         - name: Render Netris server templates
           vars:
             server_name: "{{ item.0.name }}"
-            links: "{{ topology.links }}"
+            links: "{{ topology_resolved_links }}"
             server_index: "{{ item.1 }}"
             server_digit: "{{ server_index | int + 1 }}"
             loopback_ip: "{{ loopback_base_server }}.{{ server_digit }}"
@@ -98,7 +99,7 @@
       vars:
         switch_name: "{{ item.0.name }}"
         switch: "{{ item.0 }}"
-        links: "{{ topology.links }}"
+        links: "{{ topology_resolved_links }}"
       ansible.builtin.template:
         src: "k8s/switch.j2"
         dest: "{{ k8s_artifacts_dir }}/switch_{{ switch_name }}.yaml"
@@ -116,11 +117,11 @@
       vars:
         switch_name: "{{ item.0.name }}"
         switch: "{{ item.0 }}"
-        links: "{{ topology.links }}"
+        links: "{{ topology_resolved_links }}"
         all_nodes: "{{ topology.nodes }}"
       ansible.builtin.template:
         src: "k8s/ufo_link.j2"
         dest: "{{ k8s_artifacts_dir }}/links/{{ switch_name }}.yaml"
-      loop: "{{ topology.leafs | zip(range(topology.leafs | length)) | list }}"
+      loop: "{{ (topology.leafs + topology_ew.leafs) | zip(range((topology.leafs + topology_ew.leafs) | length)) | list }}"
       loop_control:
         loop_var: item

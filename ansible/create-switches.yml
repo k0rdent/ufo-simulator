@@ -12,7 +12,7 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_switches: "{{ all_topology_switches }}"
     all_servers: "{{ topology.nodes + topology.softgates }}"
 
   tasks:
@@ -105,7 +105,7 @@
           {% endfor %}
 
           Topology:
-          {% for link in topology.links %}
+          {% for link in all_topology_links %}
           {{ link.local }}:{{ link.local_port }} <--> {{ link.remote }}:{{ link.remote_port }}
           {% endfor %}
 

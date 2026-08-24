@@ -12,7 +12,7 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_switches: "{{ all_topology_switches }}"
     all_servers: "{{ topology.nodes }}"
     all_softgates: "{{ topology.softgates }}"
   handlers:

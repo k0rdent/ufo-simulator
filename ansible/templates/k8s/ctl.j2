@@ -18,6 +18,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Link
 metadata:
   name: {{ server_name }}-eth1
+  namespace: platform-system
 spec:
   ports:
   - swp29@leaf-0

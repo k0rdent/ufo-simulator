@@ -10,41 +10,55 @@
     - ./vars/common.yml
     - ./vars/{{ sdn_provider }}.yml
 
-  vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
-
   tasks:
-    - name: Stop VMs
-      command: virsh destroy {{ item.name }}
-      register: result
+    - name: Build switch inventory for teardown
+      ansible.builtin.set_fact:
+        all_switches: "{{ topology.spines + topology.leafs + (topology_ew.spines | default([])) + (topology_ew.leafs | default([])) }}"
+        all_switch_names: "{{ (topology.spines + topology.leafs + (topology_ew.spines | default([])) + (topology_ew.leafs | default([]))) | map(attribute='name') | list }}"
+
+    - name: List libvirt domains
+      ansible.builtin.command: virsh list --all --name
+      register: virsh_all_domains
+      changed_when: false
+
+    - name: Add any ew-* switch domains still defined in libvirt
+      ansible.builtin.set_fact:
+        all_switch_names: "{{ (all_switch_names + (virsh_all_domains.stdout_lines | select('match', '^ew-(leaf|spine)-') | list)) | unique }}"
+
+    - name: Stop switch VMs
+      ansible.builtin.command: virsh destroy {{ item }}
+      register: destroy_result
       failed_when: false
-      changed_when: result.rc == 0
-      loop: "{{ all_switches }}"
+      changed_when: destroy_result.rc == 0
+      loop: "{{ all_switch_names }}"
       loop_control:
-        label: "{{ item.name }}"
+        label: "{{ item }}"
 
-    - name: Undefine VMs
-      command: virsh undefine {{ item.name }}
-      register: result
+    - name: Undefine switch VMs
+      ansible.builtin.command: virsh undefine {{ item }}
+      register: undefine_result
       failed_when: false
-      changed_when: result.rc == 0
-      loop: "{{ all_switches }}"
+      changed_when: undefine_result.rc == 0
+      loop: "{{ all_switch_names }}"
       loop_control:
-        label: "{{ item.name }}"
+        label: "{{ item }}"
 
-    - name: Remove VM disk images
-      file:
-        path: "{{ vm_disk_path }}/{{ item.name }}.qcow2"
+    - name: Remove switch disk images
+      ansible.builtin.file:
+        path: "{{ vm_disk_path }}/{{ item }}.qcow2"
         state: absent
-      loop: "{{ all_switches }}"
+      loop: "{{ all_switch_names }}"
       loop_control:
-        label: "{{ item.name }}"
+        label: "{{ item }}"
 
-    - name: Clean up XML definitions
-      file:
-        path: /tmp/switch-lab-xml
+    - name: Remove rendered libvirt XML definitions
+      ansible.builtin.file:
+        path: "{{ artifacts_dir }}/libvirt/{{ item }}.xml"
         state: absent
+      loop: "{{ all_switch_names }}"
+      loop_control:
+        label: "{{ item }}"
 
     - name: Lab destroyed
-      debug:
-        msg: "Virtual Switch Lab has been destroyed"
+      ansible.builtin.debug:
+        msg: "Destroyed switches: {{ all_switch_names | join(', ') }}"

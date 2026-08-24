@@ -11,7 +11,7 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_switches: "{{ all_topology_switches }}"
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
   tasks:
@@ -37,7 +37,7 @@
         switch_name: "{{ item.0.name }}"
         switch_mgmt_ip: "{{ item.0.mgmt_ip }}"
         switch_ssh_port: 22
-        switch_type: "{{ 'spine' if item.0.name.startswith('spine') else 'leaf' }}"
+        switch_type: "{{ 'spine' if 'spine' in item.0.name else 'leaf' }}"
         switch_id: "{{ idx }}"
         ansible_become_password: "{{ cumulus_new_password }}"
         netris_auth_token: "{{ netris_auth_token }}"
@@ -64,7 +64,7 @@
         switch_name: "{{ item.0.name }}"
         switch_mgmt_ip: "{{ item.0.mgmt_ip }}"
         switch_ssh_port: 22
-        switch_type: "{{ 'spine' if item.0.name.startswith('spine') else 'leaf' }}"
+        switch_type: "{{ 'spine' if 'spine' in item.0.name else 'leaf' }}"
         switch_id: "{{ item.1 }}"
       loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
       loop_control:
@@ -100,7 +100,7 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_switches: "{{ all_topology_switches }}"
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
   tasks:
@@ -115,7 +115,7 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    all_switches: "{{ topology.spines + topology.leafs }}"
+    all_switches: "{{ all_topology_switches }}"
   tasks:
     - name: "Netris enrollment info"
       vars:

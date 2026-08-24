@@ -4,5 +4,8 @@ dhcp-range=set:mgmt,{{ br_mgmt_dhcp.range_start }},{{ br_mgmt_dhcp.range_end }},
 dhcp-option=tag:mgmt,option:router,{{ management_gateway_switch }}
 dhcp-option=tag:mgmt,option:dns-server,{{ management_dns_server }}
 {% for switch in (topology.spines + topology.leafs) %}
-dhcp-host=00:01:00:00:{{ '%02x' | format(loop.index0) }}:00,{{ switch.mgmt_ip }},{{ switch.name }},set:mgmt
+dhcp-host={{ switch_base_mac }}:{{ '%02x' | format(loop.index0) }}:00,{{ switch.mgmt_ip }},{{ switch.name }},set:mgmt
+{% endfor %}
+{% for switch in (topology_ew.spines + topology_ew.leafs) %}
+dhcp-host={{ ew_switch_base_mac }}:{{ '%02x' | format(loop.index0) }}:00,{{ switch.mgmt_ip }},{{ switch.name }},set:mgmt
 {% endfor %}
