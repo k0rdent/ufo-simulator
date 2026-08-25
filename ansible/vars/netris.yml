@@ -11,9 +11,6 @@ br_ext_phys_interface: "ens4"
 # Match br-mgmt DHCP DNS so PXE-booted hosts resolve the same way.
 pxe_dns_server: "{{ management_dns_server }}"
 
-# eth1-4: north-south rails; eth5-12: one NIC per ew-leaf (all 8 ew-leafs).
-vm_port_count: 12
-
 # East-west leaf-spine fabric. Each VM connects to every ew-leaf (eth5→ew-leaf-0,
 # eth6→ew-leaf-1, … eth12→ew-leaf-7), mirroring how vm-0..10 attach to leaf-0
 # on eth1. ew-leafs uplink to ew-spines like leaf-0/1 → spine-0/1.
