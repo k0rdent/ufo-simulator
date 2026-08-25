@@ -3,14 +3,13 @@
 # k0rdent-apis Deployment via a hostPath volume, so the pod runs your
 # local code without rebuilding + pushing the container image.
 #
-# Complements lab-extract.sh: same discovery model but the process runs
-# *as the pod* — real projected ServiceAccount JWT, real NetworkPolicy
-# pod-identity, real cgroup limits — at the cost of a longer iteration
-# cycle (pod restart per rebuild).
+# The process runs *as the pod* — real projected ServiceAccount JWT, real
+# NetworkPolicy pod-identity, real cgroup limits — at the cost of a pod
+# restart per rebuild.
 #
 # How it works:
-#   • Discovers the go package for the Deployment via the same walk as
-#     lab-extract (services/*/cmd/<name>/main.go).
+#   • Discovers the go package for the Deployment by walking
+#     services/*/cmd/<name>/main.go.
 #   • Compiles a static linux/amd64 binary into $BIN_DIR/<dep> on the
 #     CMP (the k0s node — hostPath source lives here).
 #   • Strategic-merge-patches the Deployment: adds a hostPath volume
