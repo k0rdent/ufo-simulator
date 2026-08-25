@@ -11,7 +11,6 @@
 
   vars:
     workspace: /opt/ufo_lab/
-    k0rdent_apis_repo: git@github.com:k0rdent/k0rdent-apis.git
     k0rdent_apis_dir: "{{ workspace }}k0rdent-apis"
     k0rdent_apis_namespace: k0rdent-apis
     k0rdent_apis_values_path: /tmp/values-socks-overrides.yaml
@@ -35,12 +34,6 @@
       ansible.builtin.file:
         path: "{{ workspace }}"
         state: directory
-
-    - name: Clone k0rdent-apis repo
-      ansible.builtin.git:
-        repo: "{{ k0rdent_apis_repo }}"
-        dest: "{{ k0rdent_apis_dir }}"
-        accept_hostkey: true
 
     - name: Ensure patches staging directory exists
       ansible.builtin.file:

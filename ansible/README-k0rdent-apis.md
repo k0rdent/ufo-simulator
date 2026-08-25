@@ -89,7 +89,6 @@ Most defaults live in the `vars:` block of [k0rdent-apis.yml](k0rdent-apis.yml)
 and in [group_vars/all.yml](group_vars/all.yml). Highlights you may want to
 override:
 
-- `k0rdent_apis_repo` — git URL (default upstream on GitHub).
 - `k0rdent_apis_dir` — checkout location (default `/opt/ufo_lab/k0rdent-apis`).
 - `k0rdent_apis_provision_env` — env name under
   `scripts/post-deploy/envs/` used for the provision-manifest ConfigMap.
