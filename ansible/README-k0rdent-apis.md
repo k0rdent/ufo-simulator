@@ -463,70 +463,15 @@ called out for 3a does not apply here — `match.pciSlot` and
 Two ways to test a code change against a running lab, depending on how far
 down the deployment path you want the change to travel.
 
-### Option A: run the service locally with [lab-extract.sh](lab-extract.sh) (fast, recommended)
+### Option A: inject a fresh binary with [lab-inject.sh](lab-inject.sh) (fast, recommended)
 
-Scales an in-cluster `Deployment` to 0, hijacks its `Service` endpoints so
-cluster traffic keeps flowing to it, and runs `go run` against the
-`k0rdent-apis` checkout at `/opt/ufo_lab/k0rdent-apis` on the CMP. No image
-build, no push, no rollout — the loop is `edit → ^C → run again`.
-
-**Iteration loop** (all on the CMP, as root):
-
-```bash
-LAB=/opt/ufo_lab/ufo-simulator/ansible/lab-extract.sh
-
-sudo $LAB start iam            # scales deploy/iam to 0, hijacks svc/iam,
-                               # captures env + /etc/k0rdent-ai/ from the pod
-sudo $LAB run   iam            # unshare -m + bind-mount + go run ./services/iam/cmd/iam
-
-# ...edit code, ^C to stop, `sudo $LAB run iam` again...
-
-sudo $LAB stop  iam            # restores selector, scales replicas back
-```
-
-`run` sets up a private mount namespace so the local process sees an
-overlay `/etc/hosts` (cluster DNS resolves to `ClusterIP`s) and
-`/etc/k0rdent-ai/` (file-projected secrets and config match the pod's
-view). Nothing on the CMP host is modified. See the header comment in
-[lab-extract.sh](lab-extract.sh) for the mechanics.
-
-**Multiple services at once** — port selection is automatic. `start` probes
-upward from the Service's `containerPort` and picks the first free port
-that no other extract has claimed:
-
-```bash
-sudo $LAB start iam            # picks 8080 (or next free)
-sudo $LAB start compute        # picks 8081
-sudo $LAB start organizations  # picks 8082
-sudo $LAB status               # shows what's swapped in
-# then `sudo $LAB run <svc>` in separate shells.
-```
-
-Cross-service calls between two locally-run services still flow through
-Kong internal — Kong dials `iam.k0rdent-apis.svc:80` → hijacked
-`Endpoints` → `<node-ip>:<picked-port>` → your local process.
-
-**What's extractable** — anything with a Go binary under
-`k0rdent-apis/services/*/cmd/`: `auth`, `iam`, `organizations`, `compute`,
-`infrastructure`, `notifications`, `workflow` (workflow-api),
-`workflow-worker`, and `reconciler`. Third-party components (Kong,
-Keycloak, Postgres, Temporal, Mailpit) can't be extracted — the script
-refuses when no matching Go package exists.
-
-**Debugger.** `sudo $LAB start <svc>` prints a raw `unshare -m ...`
-incantation you can copy-modify to inject `dlv exec`/`strace`/etc. in
-place of the plain `go run`.
-
-### Option B: inject a fresh binary with [lab-inject.sh](lab-inject.sh) (fidelity-preserving)
-
-When the process's *environment* rather than its logic is what you're
-testing — projected ServiceAccount JWT, NetworkPolicy pod-identity,
-cgroup memory/CPU limits, or anything else that only holds when the
-process runs inside the pod — swap `lab-extract` for `lab-inject`. It
-compiles the same source, drops the binary on the CMP (the k0s node),
-and strategic-merge-patches the Deployment to run *your* binary
-instead of the image's baked-in one. The pod otherwise starts exactly
-as a fresh rollout would.
+Skips the image build/push/redeploy loop while keeping full pod
+fidelity — projected ServiceAccount JWT, NetworkPolicy pod-identity,
+cgroup memory/CPU limits, and anything else that only holds when the
+process runs inside the pod. It compiles the source, drops the binary
+on the CMP (the k0s node), and strategic-merge-patches the Deployment
+to run *your* binary instead of the image's baked-in one. The pod
+otherwise starts exactly as a fresh rollout would.
 
 **How it works.** The k0rdent-apis images entrypoint is
 `sh -c "exec ${BINARY}"` with `ENV BINARY=/app/${CMD_NAME}` baked into
@@ -552,7 +497,7 @@ sudo $INJ stop    iam            # reverse the patch, rollout, delete binary
 calls skip the patch step (it's a no-op) and just recompile +
 `kubectl rollout restart` so the pod re-execs with the fresh binary.
 
-### Option C: rebuild the image, push to zot, redeploy
+### Option B: rebuild the image, push to zot, redeploy
 
 Slower loop (roughly a minute per iteration with a warm cache) but
 exercises the same image-pull + container-startup path a production
