@@ -14,13 +14,19 @@
     all_servers: "{{ topology.nodes }}"
     all_softgates: "{{ topology.softgates }}"
     topology_resolved_links: "{{ (topology.links + topology_ew.links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
+    k8s_inventory_dir: "{{ k8s_artifacts_dir }}/inventory"
 
   tasks:
-    - name: Ensure artifacts directory exists
+    - name: Ensure artifacts directories exist
       ansible.builtin.file:
-        path: "{{ k8s_artifacts_dir }}"
+        path: "{{ item }}"
         state: directory
         recurse: true
+      loop:
+        - "{{ k8s_artifacts_dir }}"
+        - "{{ k8s_inventory_dir }}"
+        - "{{ k8s_inventory_dir }}/ufo"
+        - "{{ k8s_inventory_dir }}/links"
 
     - name: Render Netris artifacts
       when: sdn_provider == "netris"
@@ -40,16 +46,16 @@
             mgmt_ip: "{{ item.0.mgmt_ip | default(management_base_switch ~ '.' ~ switch_digit) }}"
           ansible.builtin.template:
             src: "k8s/netris_switch.j2"
-            dest: "{{ k8s_artifacts_dir }}/{{ switch_name }}.yaml"
+            dest: "{{ k8s_inventory_dir }}/{{ switch_name }}.yaml"
           loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
           loop_control:
             loop_var: item
-    
+
         - name: Render Netris IPAM template
           ansible.builtin.template:
             src: "k8s/netris_ipam.j2"
             dest: "{{ k8s_artifacts_dir }}/netris_ipam.yaml"
-    
+
         - name: Render Netris softgate templates
           vars:
             sg_name: "{{ item.0.name }}"
@@ -61,11 +67,20 @@
             mgmt_ip: "{{ management_base_sg }}.{{ sg_index | int + 1 }}"
           ansible.builtin.template:
             src: "k8s/netris_sg.j2"
-            dest: "{{ k8s_artifacts_dir }}/{{ sg_name }}.yaml"
+            dest: "{{ k8s_inventory_dir }}/{{ sg_name }}.yaml"
           loop: "{{ all_softgates | zip(range(all_softgates | length)) | list }}"
           loop_control:
             loop_var: item
-    
+
+        - name: Render Netris management host (ctl) template
+          vars:
+            server_name: ctl
+            loopback_ip: "{{ loopback_base_server }}.253"
+            mgmt_ip: "{{ management_base_server }}.253"
+          ansible.builtin.template:
+            src: "k8s/ctl.j2"
+            dest: "{{ k8s_inventory_dir }}/{{ server_name }}.yaml"
+
         - name: Render Netris server templates
           vars:
             server_name: "{{ item.0.name }}"
@@ -80,38 +95,33 @@
           loop: "{{ all_servers | zip(range(all_servers | length)) | list }}"
           loop_control:
             loop_var: item
-    
+
         - name: Render external gateway BGP manifest
           ansible.builtin.template:
             src: "k8s/bgp-external-gateway.yaml.j2"
             dest: "{{ k8s_artifacts_dir }}/bgp-external-gateway.yaml"
 
-    - name: Render Management host template
+    - name: Render Verity management host (ctl) template
+      when: sdn_provider == "verity"
       vars:
         server_name: ctl
         loopback_ip: "{{ loopback_base_server }}.253"
         mgmt_ip: "{{ management_base_server }}.253"
       ansible.builtin.template:
         src: "k8s/ctl.j2"
-        dest: "{{ k8s_artifacts_dir }}/{{ server_name }}.yaml"
+        dest: "{{ k8s_inventory_dir }}/{{ server_name }}.yaml"
 
-    - name: Render switch templates
+    - name: Render UFO switch templates
       vars:
         switch_name: "{{ item.0.name }}"
         switch: "{{ item.0 }}"
         links: "{{ topology_resolved_links }}"
       ansible.builtin.template:
         src: "k8s/switch.j2"
-        dest: "{{ k8s_artifacts_dir }}/switch_{{ switch_name }}.yaml"
+        dest: "{{ k8s_inventory_dir }}/ufo/{{ switch_name }}.yaml"
       loop: "{{ all_switches | zip(range(all_switches | length)) | list }}"
       loop_control:
         loop_var: item
-
-    - name: Ensure links artifacts directory exists
-      ansible.builtin.file:
-        path: "{{ k8s_artifacts_dir }}/links"
-        state: directory
-        recurse: true
 
     - name: Render UFO link templates
       vars:
@@ -121,7 +131,7 @@
         all_nodes: "{{ topology.nodes }}"
       ansible.builtin.template:
         src: "k8s/ufo_link.j2"
-        dest: "{{ k8s_artifacts_dir }}/links/{{ switch_name }}.yaml"
+        dest: "{{ k8s_inventory_dir }}/links/{{ switch_name }}.yaml"
       loop: "{{ (topology.leafs + topology_ew.leafs) | zip(range((topology.leafs + topology_ew.leafs) | length)) | list }}"
       loop_control:
         loop_var: item

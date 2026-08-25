@@ -136,40 +136,38 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
         # Wait ipam to be handled before applying other resources
         sleep 30
+    fi
 
-        switch_manifests=(
-            spine-0.yaml
-            spine-1.yaml
-            leaf-0.yaml
-            leaf-1.yaml
-            ext-leaf-0.yaml
-            ext-leaf-1.yaml
-        )
-        for manifest in "${switch_manifests[@]}"; do
-            kubectl apply -f "${UFO_K8S_ARTIFACTS_DIR}/${manifest}"
-            # Wait switch to be handled before applying other resources
+    INVENTORY_DIR=${UFO_K8S_ARTIFACTS_DIR}/inventory
+    # Apply fabric switch / softgate / ctl inventory manifests
+    for manifest in "${INVENTORY_DIR}"/*.yaml; do
+        [ -e "${manifest}" ] || continue
+        [ -s "${manifest}" ] || continue
+        kubectl apply -f "${manifest}"
+        if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+            # Wait for the resource to be handled before applying the next
             sleep 5
+        fi
+    done
+    if [ -d "${INVENTORY_DIR}/ufo" ]; then
+        for manifest in "${INVENTORY_DIR}/ufo"/*.yaml; do
+            [ -e "${manifest}" ] || continue
+            [ -s "${manifest}" ] || continue
+            kubectl apply -f "${manifest}"
         done
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-0.yaml
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/sg-1.yaml
+    fi
+    if [ -d "${INVENTORY_DIR}/links" ]; then
+        kubectl apply -f "${INVENTORY_DIR}/links/"
+    fi
+
+    if [[ ${FABRIC_BACKEND} == "netris" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-0.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-1.yaml
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/vm-2.yaml
-
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/bgp-external-gateway.yaml
     fi
-
-    kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/ctl.yaml
-
-    leaf_switches=(
-        leaf-0
-        leaf-1
-    )
-    for leaf in "${leaf_switches[@]}"; do
-        kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/switch_${leaf}.yaml
-    done
     
-    # Wait netris is fully initialized
+    # Wait fabric inventory is fully initialized
     sleep 120
     
     if [[ ${NICO_ENABLE} != "true" ]]; then
