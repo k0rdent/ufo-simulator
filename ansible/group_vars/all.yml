@@ -97,40 +97,18 @@ topology:
     - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth1", role: "rail1", rail_id: 0  }
     - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth1", role: "rail1", rail_id: 0  }
     - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}12", remote: "vm-0", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}13", remote: "vm-1", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}14", remote: "vm-2", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}15", remote: "vm-3", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}16", remote: "vm-4", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}17", remote: "vm-5", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}18", remote: "vm-6", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}19", remote: "vm-7", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}20", remote: "vm-8", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}21", remote: "vm-9", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}22", remote: "vm-10", remote_port: "eth2", role: "rail2", rail_id: 1  }
 
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}1", remote: "vm-0", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}2", remote: "vm-1", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}3", remote: "vm-2", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}4", remote: "vm-3", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}5", remote: "vm-4", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}6", remote: "vm-5", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}7", remote: "vm-6", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}8", remote: "vm-7", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth3", role: "rail3", rail_id: 2  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}12", remote: "vm-0", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}13", remote: "vm-1", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}14", remote: "vm-2", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}15", remote: "vm-3", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}16", remote: "vm-4", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}17", remote: "vm-5", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}18", remote: "vm-6", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}19", remote: "vm-7", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}20", remote: "vm-8", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}21", remote: "vm-9", remote_port: "eth4", role: "rail4", rail_id: 3  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}22", remote: "vm-10", remote_port: "eth4", role: "rail4", rail_id: 3  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}1", remote: "vm-0", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}2", remote: "vm-1", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}3", remote: "vm-2", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}4", remote: "vm-3", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}5", remote: "vm-4", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}6", remote: "vm-5", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}7", remote: "vm-6", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}8", remote: "vm-7", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth2", role: "rail2", rail_id: 1  }
 
     - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}23", remote: "sg-0", remote_port: "eth1", role: ext }
     - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}23", remote: "sg-0", remote_port: "eth2", role: ext }
@@ -162,6 +140,9 @@ topology_ew:
 all_topology_switches: "{{ topology.spines + topology.leafs + topology_ew.spines + topology_ew.leafs }}"
 all_topology_links: "{{ (topology.links + topology_ew.links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
 
+# Highest ethN on any VM link (covers NS + EW). Used for Netris portsCount and MAC offsets.
+vm_port_count: "{{ ((topology.links + (topology_ew.links | default([]))) | selectattr('remote', 'match', '^vm-') | map(attribute='remote_port') | map('regex_replace', '^eth', '') | map('int') | list | max) | default(4) | int }}"
+
 # Cumulus default credentials
 cumulus_user: cumulus
 cumulus_default_password: cumulus
@@ -175,7 +156,6 @@ bridge_name: br-mgmt
 vm_vcpus: 6
 vm_ram: 6144
 vm_disk_size: 60
-vm_port_count: 4
 disk_path: /var/lib/libvirt/images
 
 sg_base_mac: "52:54:00:13"

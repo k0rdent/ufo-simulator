@@ -42,7 +42,7 @@
         vm_name: "{{ item.0.name }}"
         vm_uuid: "00000000-0000-4000-8000-00000000000{{ vm_index }}"
         vm_index: "{{ item.1 }}"
-        vm_base_offset: "{{ vm_index | int * vm_port_count }}"
+        vm_base_offset: "{{ (vm_index | int) * (vm_port_count | int) }}"
         ssh_port: "{{ mgmt_ssh_base_port + vm_index | int }}"
         vm_mac_0: "{{vm_base_mac }}:{{ '%02x' | format(base_offset | int // 256) }}:{{ '%02x' | format(base_offset | int % 256) }}"
         vm_mac_1: "{{vm_base_mac }}:{{ '%02x' | format((base_offset | int + 1) // 256) }}:{{ '%02x' | format((base_offset | int + 1) % 256) }}"
@@ -85,7 +85,7 @@
           |-----|-------------------|-----------|------------------|
           {% for item in all_servers %}
           {% set vm_index = loop.index0 %}
-          {% set base_offset = vm_index * vm_port_count %}
+          {% set base_offset = vm_index * (vm_port_count | int) %}
 
           {% set vm_mac_0 = vm_base_mac ~ ':' ~ ('%02x' | format(base_offset // 256)) ~ ':' ~ ('%02x' | format(base_offset % 256)) %}
           {% set vm_mac_1 = vm_base_mac ~ ':' ~ ('%02x' | format((base_offset +1)// 256)) ~ ':' ~ ('%02x' | format((base_offset+1) % 256)) %}
