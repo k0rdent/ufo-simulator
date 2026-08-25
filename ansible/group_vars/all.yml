@@ -76,6 +76,7 @@ topology:
       host_id: 8
     - name: vm-9
       host_id: 9
+    # 9 is maximum need to fix templates to support more
   softgates:
     - name: sg-0
       role: general
