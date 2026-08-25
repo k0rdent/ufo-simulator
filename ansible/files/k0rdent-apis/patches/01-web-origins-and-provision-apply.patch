@@ -1,8 +1,7 @@
 diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/provision-apply.yaml
-index 474e05af5..107740321 100644
 --- a/deploy/k8s/k0r-tools/provision-apply.yaml
 +++ b/deploy/k8s/k0r-tools/provision-apply.yaml
-@@ -37,6 +37,8 @@ spec:
+@@ -37,6 +37,8 @@
        restartPolicy: Never
        # The tool only calls the platform's own HTTP APIs — no K8s API access.
        automountServiceAccountToken: false
@@ -11,7 +10,7 @@ index 474e05af5..107740321 100644
        # Hardened pod context: run as the image's non-root user (uid 65532, set
        # in build/Dockerfile.go-tools) and apply the default seccomp profile.
        securityContext:
-@@ -54,8 +56,8 @@ spec:
+@@ -54,8 +56,8 @@
            # For a real cluster, pin a published tag here. For kind, build and load it
            # locally (`make docker-build-k0r-tools`, then `kind load
            # docker-image k0r-tools:latest`) — IfNotPresent keeps the loaded image.
@@ -22,7 +21,7 @@ index 474e05af5..107740321 100644
            # The image bundles multiple tool binaries (no ENTRYPOINT); select
            # the provision tool explicitly.
            command: ["/usr/local/bin/provision"]
-@@ -80,13 +82,11 @@ spec:
+@@ -80,13 +82,11 @@
                    key: KEYCLOAK_BOOTSTRAP_ADMIN_CLIENT_SECRET
              - name: BOOTSTRAP_INTERNAL_URL
                value: "http://kong-internal:8100"
@@ -42,10 +41,9 @@ index 474e05af5..107740321 100644
              - name: manifest
                mountPath: /etc/provision
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
-index 2ea4f56a6..905858452 100644
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -184,10 +184,12 @@ portalClients:
+@@ -184,10 +184,12 @@
        - http://localhost:8083/*
        - http://localhost:3000/*
        - http://localhost:3010/*
@@ -58,7 +56,7 @@ index 2ea4f56a6..905858452 100644
    # customer-portal: the login client for customer users (alice, bob).
    - clientId: customer-portal
      displayName: Customer Portal (kind)
-@@ -198,7 +200,9 @@ portalClients:
+@@ -198,7 +200,9 @@
        - http://localhost:8083/*
        - http://localhost:3000/*
        - http://localhost:3010/*

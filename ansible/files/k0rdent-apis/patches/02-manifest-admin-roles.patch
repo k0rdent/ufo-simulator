@@ -1,8 +1,7 @@
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
-index 2ea4f56a6..081c49f02 100644
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -109,6 +109,22 @@ policies:
+@@ -109,6 +109,22 @@
      principal: {type: user, id: usr-acme-bob}
      scope: {type: project, org: acme, project: acme-main}
      displayName: Bob - compute-viewer (acme-main)

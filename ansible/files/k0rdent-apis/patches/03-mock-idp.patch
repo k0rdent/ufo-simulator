@@ -1,8 +1,7 @@
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
-index 081c49f02..ad735c6f1 100644
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -127,66 +127,37 @@ policies:
+@@ -127,66 +127,37 @@
      displayName: Kind Admin - compute-admin (platform)
  
  identityProviders:
