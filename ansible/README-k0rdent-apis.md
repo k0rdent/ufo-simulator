@@ -103,23 +103,27 @@ override:
 ## Creating example clusters via the API
 
 Once the playbook has run, [k0r.sh](k0r.sh) doubles as both a script and a
-library of shell helpers.
+library of shell helpers. Create bodies live as YAML under
+[../k0rdent-apis/scenarios/templates/](../k0rdent-apis/scenarios/templates/)
+and are posted with
+[../k0rdent-apis/scripts/k0r.sh](../k0rdent-apis/scripts/k0r.sh)
+(`k0r.sh create <resource> --file …`).
 
-- Executed directly (`./k0r.sh` / `./k0r.sh --full`), it prints a
-  cross-reference of k0rdent-apis servers against NICo machines, expected
-  machines, instance-types, and instances — a quick way to see the full
-  inventory across both systems and spot orphans/drift.
-- Sourced (`source ./k0r.sh`), it exposes helpers you can use to poke at the
-  k0rdent-apis REST surface without hand-rolling `curl`:
+- Executed directly (`./k0r.sh` / `./k0r.sh --full`), the ansible helper
+  prints a cross-reference of k0rdent-apis servers against NICo machines,
+  expected machines, instance-types, and instances — a quick way to see the
+  full inventory across both systems and spot orphans/drift.
+- Sourced (`source ./k0r.sh`), it exposes helpers used to mint a JWT for the
+  create CLI:
   - `k0r_login` — drives the mock-oauth2 login flow to mint a fresh operator JWT.
   - `k0r_token` — cached wrapper around `k0r_login` (re-mints when the JWT is
     within 60s of expiry; cache file `/tmp/k0r-token`).
   - `k0r <path> [curl args...]` — `curl` wrapper that prefixes `$BASE` and
-    attaches `Authorization: Bearer $(k0r_token)`.
+    attaches `Authorization: Bearer $(k0r_token)` (handy for one-off GETs).
 
 The examples below assume you're on the CMP (so the in-cluster `auth` /
-`mock-oauth2-server` Services are reachable) and that `kubectl`, `jq`, and
-`curl` are on `PATH`.
+`mock-oauth2-server` Services are reachable) and that `kubectl`, `jq`,
+`curl`, `python3`, and `pyyaml` are on `PATH`.
 
 ### 1. Source the helpers and pick your target
 
@@ -134,6 +138,15 @@ export ORG=kind
 export PROJECT=kind-main
 export MT=nico-lab          # k0rdent machine-type registered by the playbook
 
+# Create CLI (YAML bodies under scenarios/templates). Do not export PROJECT into
+# the environment for region-scoped creates — pass it only on project-scoped
+# calls (see below). Templates hard-code region `local` and machine-type
+# `nico-lab` to match these defaults.
+export API_BASE=$BASE
+export TOKEN=$(k0r_token)
+K0R=../k0rdent-apis/scripts/k0r.sh
+TPL=../k0rdent-apis/scenarios/templates
+
 k0r /v1/regions/global/organizations | jq
 ```
 
@@ -143,25 +156,8 @@ Both cluster types below reference these pools by ID, so create them once per
 region:
 
 ```bash
-k0r "/v1/regions/$REGION/compute/address-pools" -X POST \
-  -H 'Content-Type: application/json' -d '{
-  "id": "global-default",
-  "routable": false,
-  "ipVersion": "IPV4",
-  "prefixes": ["10.20.0.0/16"],
-  "minPrefixLength": 19,
-  "maxPrefixLength": 32
-}'
-
-k0r "/v1/regions/$REGION/compute/address-pools" -X POST \
-  -H 'Content-Type: application/json' -d '{
-  "id": "global-public",
-  "routable": true,
-  "ipVersion": "IPV4",
-  "prefixes": ["192.168.0.0/16"],
-  "minPrefixLength": 19,
-  "maxPrefixLength": 32
-}'
+PROJECT= $K0R create compute/address-pools --file "$TPL/address-pool-global-default.yaml"
+PROJECT= $K0R create compute/address-pools --file "$TPL/address-pool-global-public.yaml"
 ```
 
 ### 3a. Two-VPC (nico + verity) HCP cluster with per-slot NIC pinning
@@ -210,91 +206,8 @@ entirely. The schema declares:
   DHCP rather than pinned via `ipFromSubnet`.
 
 ```bash
-k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
-  -H 'Content-Type: application/json' -d @- <<EOF
-{
-  "id": "nico-verity-hcp",
-  "displayName": "NICo + Verity HCP k0s",
-  "networkSchema": {
-    "vpcs": [
-      { "id": "vpc-nico",   "backend": "nico"   },
-      { "id": "vpc-verity", "backend": "verity" }
-    ],
-    "networks": [
-      { "id": "net-nico",   "vpc": "vpc-nico",   "type": "evpn", "evpn": {"type":"l3vpn"} },
-      { "id": "net-verity", "vpc": "vpc-verity", "type": "evpn", "evpn": {"type":"l2vpn"}, "vlan": {"id": "500" }}
-    ],
-    "subnets": [
-      { "id": "sub-nico",
-        "network": "net-nico",
-        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-default",
-        "prefixLength": 27 },
-      { "id": "sub-verity",
-        "network": "net-verity",
-        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-public",
-        "prefixLength": 29 }
-    ]
-  },
-  "k8s": {
-    "k0sNetworkProvider": "calico",
-    "k0sVersion": "v1.36.1",
-    "podCidrs": ["10.243.0.0/16"],
-    "serviceCidrs": ["10.95.0.0/16"],
-    "clusterTemplateName": "cluster-nico-0-0-0-main",
-    "clusterTemplateVersion": "0.0.0-main",
-    "services": [],
-    "controlPlane": {
-      "type": "hcp",
-      "replicas": 1,
-      "bootstrapConfig": {},
-      "opConfig": {}
-    },
-    "workers": { "defaults": {} }
-  },
-  "nodePools": [{
-    "id": "default",
-    "role": "worker",
-    "machineType": "/v1/regions/$REGION/infrastructure/machine-types/$MT",
-    "nodeCountMin": 1,
-    "nodeCountMax": 6,
-    "nodeCountDefault": 3,
-    "networkAttachment": {
-      "ethernets": {
-        "enp1s0": {
-          "dhcp4": true,
-          "connectToNetwork": { "name": "net-nico" }
-        },
-        "verity1": {
-          "match": { "pciSlot": "0000:a3:00.0" },
-          "dhcp4": false,
-          "connectToNetwork": { "name": "net-verity" }
-        }
-      }
-    }
-  }]
-}
-EOF
-
-k0r "/v1/regions/$REGION/projects/$PROJECT/compute/clusters" -X POST \
-  -H 'Content-Type: application/json' -d @- <<EOF
-{
-  "id": "lab-nico-verity-21",
-  "displayName": "Lab NICo+Verity cluster",
-  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-verity-hcp",
-  "nodePools": [
-    { "id": "default", "nodeCount": 3 }
-  ],
-  "sshAccess": [
-    {
-      "username": "ubuntu",
-      "displayName": "ubuntu",
-      "sshPublicKeys": [
-        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCp0evjOaK8c8SKYK4r2+0BN7g+8YSvQ2n8nFgOURCyvkJqOHi1qPGZmuN0CclYVdVuZiXbWw3VxRbSW3EH736VzgY1U0JmoTiSamzLHaWsXvEIW8VCi7boli539QJP0ikJiBaNAgZILyCrVPN+A6mfqtacs1KXdZ0zlMq1BPtFciR1JTCRcVs5vP2Wwz5QtY2jMIh3aiwkePjMTQPcfmh1TkOlxYu5IbQyZ3G1ahA0mNKI9a0dtF282av/F6pwB/N1R1nEZ/9VtcN2I1mf1NW/tTHEEcTzXYo1R/8K9vlqAN8QvvGLZtZduGviNVNoNWvoxaXxDt8CPv2B2NCdQFZp /home/yar/.ssh/os-lab.pub"
-      ]
-    }
-  ]
-}
-EOF
+PROJECT= $K0R create compute/cluster-types --file "$TPL/cluster-type-nico-verity-hcp.yaml"
+PROJECT=$PROJECT $K0R create compute/clusters --file "$TPL/cluster-lab-nico-verity-hcp.yaml"
 ```
 
 Field notes:
@@ -350,82 +263,8 @@ kubectl create ns prj-kind-main --dry-run=client -o yaml | \
 ```
 
 ```bash
-k0r "/v1/regions/$REGION/compute/cluster-types" -X POST \
-  -H 'Content-Type: application/json' -d @- <<EOF
-{
-  "id": "nico-verity-bm",
-  "displayName": "NICo + Verity bare-metal (BMaaS)",
-  "networkSchema": {
-    "vpcs": [
-      { "id": "vpc-nico",   "backend": "nico"   },
-      { "id": "vpc-verity", "backend": "verity" }
-    ],
-    "networks": [
-      { "id": "net-nico",      "vpc": "vpc-nico",   "type": "evpn", "evpn": {"type":"l3vpn"} },
-      { "id": "net-verity-l3", "vpc": "vpc-verity", "type": "evpn", "evpn": {"type":"l3vpn"} },
-      { "id": "net-verity-l2", "vpc": "vpc-verity", "type": "evpn", "evpn": {"type":"l2vpn"}, "vlan": {"id": "500" } }
-    ],
-    "subnets": [
-      { "id": "sub-nico",
-        "network": "net-nico",
-        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-default",
-        "prefixLength": 27 },
-      { "id": "sub-verity-l3",
-        "network": "net-verity-l3",
-        "addressPool": "/v1/regions/$REGION/compute/address-pools/global-public",
-        "prefixLength": 29 }
-    ]
-  },
-  "nodePools": [{
-    "id": "workers",
-    "role": "worker",
-    "machineType": "/v1/regions/$REGION/infrastructure/machine-types/$MT",
-    "nodeCountMin": 1,
-    "nodeCountMax": 6,
-    "nodeCountDefault": 1,
-    "networkAttachment": {
-      "ethernets": {
-        "nico_l3_net": {
-          "match": { "pciSlot": "0000:01:00.0" },
-          "dhcp4": true,
-          "connectToNetwork": { "name": "net-nico" }
-        },
-        "verity_l3_addr": {
-          "match": { "pciSlot": "0000:a3:00.0" },
-          "dhcp4": false,
-          "addresses": [
-            { "ipFromSubnet": "sub-verity-l3" }
-          ]
-        },
-        "verity_l2_net": {
-          "match": { "pciSlot": "0000:a3:00.2" },
-          "dhcp4": false,
-          "connectToNetwork": { "name": "net-verity-l2" }
-        }
-      }
-    }
-  }]
-}
-EOF
-
-k0r "/v1/regions/$REGION/projects/$PROJECT/compute/instance-groups" -X POST \
-  -H 'Content-Type: application/json' -d @- <<EOF
-{
-  "id": "lab-nico-verity-bm-01",
-  "displayName": "Lab NICo+Verity BMaaS group",
-  "clusterType": "/v1/regions/$REGION/compute/cluster-types/nico-verity-bm",
-  "nodePools": [ { "nodePool": "workers", "size": 1 } ],
-  "sshAccess": [
-    {
-      "username": "ubuntu",
-      "displayName": "ubuntu",
-      "sshPublicKeys": [
-        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCp0evjOaK8c8SKYK4r2+0BN7g+8YSvQ2n8nFgOURCyvkJqOHi1qPGZmuN0CclYVdVuZiXbWw3VxRbSW3EH736VzgY1U0JmoTiSamzLHaWsXvEIW8VCi7boli539QJP0ikJiBaNAgZILyCrVPN+A6mfqtacs1KXdZ0zlMq1BPtFciR1JTCRcVs5vP2Wwz5QtY2jMIh3aiwkePjMTQPcfmh1TkOlxYu5IbQyZ3G1ahA0mNKI9a0dtF282av/F6pwB/N1R1nEZ/9VtcN2I1mf1NW/tTHEEcTzXYo1R/8K9vlqAN8QvvGLZtZduGviNVNoNWvoxaXxDt8CPv2B2NCdQFZp /home/yar/.ssh/os-lab.pub"
-      ]
-    }
-  ]
-}
-EOF
+PROJECT= $K0R create compute/cluster-types --file "$TPL/cluster-type-nico-verity-bm.yaml"
+PROJECT=$PROJECT $K0R create compute/instance-groups --file "$TPL/instance-group-lab-nico-verity-bm.yaml"
 ```
 
 Same interface-selection rules as 3a apply: the nico interface uses
