@@ -1,0 +1,16 @@
+id: demo-ns-manual
+displayName: "hand-rolled fabric"
+vpcs:
+  - id: common
+    backend: nico
+networks:
+  - id: global
+    vpc: common
+    type: evpn
+    evpn:
+      type: l3vpn
+subnets:
+  - id: data
+    network: global
+    addressPool: /v1/regions/global/networking/address-pools/global
+    prefixLength: 26

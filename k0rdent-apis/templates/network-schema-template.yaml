@@ -1,0 +1,37 @@
+id: demo-nst
+displayName: "GPU / IB / NVLink reference layout"
+description: "Reference fabric for standalone GPU training clusters"
+vpcs:
+  - id: common
+    backend: nico
+
+networks:
+  - id: global
+    vpc: common
+    type: evpn
+    evpn:
+      type: l3vpn
+  - id: external
+    vpc: common
+    type: evpn
+    evpn:
+      type: l3vpn
+  - id: nvlink
+    vpc: common
+    type: nvlink
+
+subnets:
+  - id: data
+    network: global
+    addressPool: /v1/regions/local/networking/address-pools/global-default
+    prefixLength: 26
+  - id: vip
+    network: external
+    addressPool: /v1/regions/local/networking/address-pools/global-public
+    prefixLength: 30
+  - id: lb
+    network: external
+    addressPool: /v1/regions/local/networking/address-pools/global-public
+    prefixLength: 28
+tags:
+  owner: platform
