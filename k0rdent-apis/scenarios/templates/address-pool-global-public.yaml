@@ -1,0 +1,7 @@
+id: global-public
+routable: true
+ipVersion: IPV4
+prefixes:
+  - 192.168.0.0/16
+minPrefixLength: 19
+maxPrefixLength: 32

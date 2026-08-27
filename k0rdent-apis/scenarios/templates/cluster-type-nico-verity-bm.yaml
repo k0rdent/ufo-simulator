@@ -1,0 +1,62 @@
+id: nico-verity-bm
+displayName: NICo + Verity bare-metal (BMaaS)
+networkSchema:
+  vpcs:
+    - id: vpc-nico
+      backend: nico
+    - id: vpc-verity
+      backend: verity
+  networks:
+    - id: net-nico
+      vpc: vpc-nico
+      type: evpn
+      evpn:
+        type: l3vpn
+    - id: net-verity-l3
+      vpc: vpc-verity
+      type: evpn
+      evpn:
+        type: l3vpn
+    - id: net-verity-l2
+      vpc: vpc-verity
+      type: evpn
+      evpn:
+        type: l2vpn
+      vlan:
+        id: "500"
+  subnets:
+    - id: sub-nico
+      network: net-nico
+      addressPool: /v1/regions/local/compute/address-pools/global-default
+      prefixLength: 27
+    - id: sub-verity-l3
+      network: net-verity-l3
+      addressPool: /v1/regions/local/compute/address-pools/global-public
+      prefixLength: 29
+nodePools:
+  - id: workers
+    role: worker
+    machineType: /v1/regions/local/infrastructure/machine-types/nico-lab
+    nodeCountMin: 1
+    nodeCountMax: 6
+    nodeCountDefault: 1
+    networkAttachment:
+      ethernets:
+        nico_l3_net:
+          match:
+            pciSlot: "0000:01:00.0"
+          dhcp4: true
+          connectToNetwork:
+            name: net-nico
+        verity_l3_addr:
+          match:
+            pciSlot: "0000:a3:00.0"
+          dhcp4: false
+          addresses:
+            - ipFromSubnet: sub-verity-l3
+        verity_l2_net:
+          match:
+            pciSlot: "0000:a3:00.2"
+          dhcp4: false
+          connectToNetwork:
+            name: net-verity-l2
