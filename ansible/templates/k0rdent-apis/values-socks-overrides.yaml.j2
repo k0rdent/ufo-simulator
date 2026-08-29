@@ -55,9 +55,11 @@ workflow:
     env:
       # Restore the $(VAR) DSN that env-mode uses; the kind overlay nulled it.
       DATABASE_URL: "postgres://$(WORKFLOW_DB_USER):$(WORKFLOW_DB_PASSWORD)@postgres:5432/workflow?sslmode=disable"
-      DATABASE_URL_FILE: null
       INTERNAL_SHARED_SECRET_FILE: null
       INTERNAL_SHARED_SECRET_PREV_FILE: null
+      EXTERNAL_SHARED_SECRET_FILE: null
+      EXTERNAL_SHARED_SECRET_PREV_FILE: null
+      DATABASE_URL_FILE: null
   worker:
     image:
       pullPolicy: Always
