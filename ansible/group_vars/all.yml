@@ -339,8 +339,8 @@ br_pxe_name: br-pxe
 br_pxe_ip: 172.16.81.254
 br_pxe_netmask: 24
 br_pxe_phys_interface: ""
-# DNS offered on PXE DHCP; netris overrides to management_dns_server (same as br-mgmt).
-pxe_dns_server: "{{ br_pxe_ip }}"
+# DNS offered on PXE DHCP (same global DNS as br-mgmt).
+pxe_dns_server: "{{ management_dns_server }}"
 
 br_pxe_dhcp:
   enabled: "{{ topology.north_south.fabric_type | default('') == 'bridge' }}"
