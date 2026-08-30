@@ -43,7 +43,7 @@
 
     - name: Handle kcm templates
       vars:
-        kcm_templates: "{{ ['management.yml', 'metal3-provider.yml'] + (['nico-provider.yml'] if (nico_capi_provider_enabled | bool) else []) }}"
+        kcm_templates: "{{ ['management.yml'] + (['metal3-provider.yml'] if (metal3_provision_enabled | bool) else []) + (['nico-provider.yml'] if (nico_capi_provider_enabled | bool) else []) }}"
       block:
         - name: Render templates
           ansible.builtin.template:

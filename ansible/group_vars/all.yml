@@ -417,6 +417,8 @@ nico_api_username: admin@example.com
 nico_api_password: adminpassword
 nico_client_secret: nico-local-secret
 nico_enabled: true
+# Metal3 provision/IPAM backends and CAPM3 provider — off when NICo is the provisioner.
+metal3_provision_enabled: "{{ not (nico_enabled | bool) }}"
 
 nico_capi_provider_enabled: true
 nico_capi_provider_namespace: nico-capi

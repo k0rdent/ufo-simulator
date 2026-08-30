@@ -23,11 +23,19 @@ backends:
     nico:
       enabled: {{ 'true' if nico_enabled else 'false' }}
       driver: nico
+  ipam_default: {{ 'metal3' if (metal3_provision_enabled | bool) else 'noop' }}
+  ipam:
+    metal3:
+      driver: metal3
+      enabled: {{ 'true' if (metal3_provision_enabled | bool) else 'false' }}
+    noop:
+      driver: noop
+      enabled: {{ 'false' if (metal3_provision_enabled | bool) else 'true' }}
   provision_default: {{ 'nico' if nico_enabled else 'metal3' }}
   provision:
     metal3:
       driver: metal3
-      enabled: {{ 'false' if nico_enabled else 'true' }}
+      enabled: {{ 'true' if (metal3_provision_enabled | bool) else 'false' }}
     nico:
       enabled: {{ 'true' if nico_enabled else 'false' }}
       driver: nico
