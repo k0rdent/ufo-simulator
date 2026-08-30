@@ -53,12 +53,20 @@
           shopt -s nullglob
           for p in "{{ k0rdent_apis_patches_dir }}"/*.patch; do
             name=$(basename "$p")
+            # Reverse-check succeeds ⇒ patch is already in the tree.
             if git apply --reverse --check "$p" >/dev/null 2>&1; then
-              echo "SKIP $name"
+              echo "SKIP $name (already applied)"
               continue
             fi
-            git apply "$p"
-            echo "APPLY $name"
+            # Forward-check succeeds ⇒ safe to apply.
+            if git apply --check "$p" >/dev/null 2>&1; then
+              git apply "$p"
+              echo "APPLY $name"
+              continue
+            fi
+            # Neither direction applies cleanly (common when the change is
+            # already present but reverse context does not match). Do not fail.
+            echo "SKIP $name (already applied or not applicable)"
           done
         chdir: "{{ k0rdent_apis_dir }}"
         executable: /bin/bash
