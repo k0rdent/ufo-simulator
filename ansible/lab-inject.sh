@@ -27,9 +27,13 @@
 # Deployments) work naturally: each Deployment gets its own binary
 # under $BIN_DIR/<dep>; both pods can share the same hostPath dir.
 #
+# It also toggles the workflow stack's mock mode (`mock on|off`), which the
+# k0rdent-apis e2e suites need — see the "Mock mode" section further down.
+#
 # Usage:
 #   sudo ./lab-inject.sh rebuild <deployment> [--pkg PATH]
 #   sudo ./lab-inject.sh stop    <deployment>
+#   sudo ./lab-inject.sh mock    on|off|status
 #   sudo ./lab-inject.sh status
 
 set -euo pipefail
@@ -40,6 +44,12 @@ set -euo pipefail
 : "${MOUNT_PATH:=/dev-bin}"
 : "${KUBECONFIG:=/root/.kube/config}"
 export KUBECONFIG
+
+# Mock mode lives in the workflow chart's shared ConfigMap, which BOTH the
+# workflow-api and workflow-worker Deployments consume via envFrom (see
+# k0rdent-apis/deploy/helm/charts/services/workflow/templates/configmap-shared.yaml).
+: "${WORKFLOW_CONFIGMAP:=workflow-config}"
+WORKFLOW_DEPLOYMENTS=(workflow workflow-worker)
 
 log() { printf '%s\n' "$*" >&2; }
 ok()  { log "✓ $*"; }
@@ -52,14 +62,16 @@ usage() {
 usage:
   $0 rebuild <deployment> [--pkg PATH]
   $0 stop    <deployment>
+  $0 mock    on|off|status
   $0 status
 
 env overrides:
-  NAMESPACE         k8s namespace          (default: $NAMESPACE)
-  K0RDENT_APIS_DIR  local checkout root    (default: $K0RDENT_APIS_DIR)
-  BIN_DIR           hostPath source dir    (default: $BIN_DIR)
-  MOUNT_PATH        binary mount path      (default: $MOUNT_PATH)
-  KUBECONFIG                               (default: $KUBECONFIG)
+  NAMESPACE           k8s namespace          (default: $NAMESPACE)
+  K0RDENT_APIS_DIR    local checkout root    (default: $K0RDENT_APIS_DIR)
+  BIN_DIR             hostPath source dir    (default: $BIN_DIR)
+  MOUNT_PATH          binary mount path      (default: $MOUNT_PATH)
+  WORKFLOW_CONFIGMAP  mock-mode ConfigMap    (default: $WORKFLOW_CONFIGMAP)
+  KUBECONFIG                                 (default: $KUBECONFIG)
 EOF
   exit 1
 }
@@ -212,6 +224,125 @@ spec:
 " >/dev/null
 }
 
+# ── Mock mode ───────────────────────────────────────────────────
+#
+# MOCK_MODE makes the workflow stack synthesize provisioning outcomes
+# instead of driving NICo/UFO: cluster, instance-group, network and
+# vpc-peering workflows short-circuit to a deterministic "done" and fire
+# their lifecycle callback immediately. Most k0rdent-apis e2e suites are
+# written against that boundary — they wait ~90s for a cluster to reach
+# `active`, which a real provision on this lab will never do.
+#
+# The authoritative reader is the workflow-API, not the worker: its
+# consumer handler stamps `mockMode` onto each execution row as it is
+# created (`req.MockMode = req.MockMode || h.mockMode`, see
+# k0rdent-apis/services/workflow/internal/handler/consumer.go). The worker
+# reads MOCK_MODE too (kubeconfig activities), so both Deployments are
+# restarted. Patching only the worker's env would NOT flip anything.
+#
+# We patch the shared ConfigMap rather than the Deployments because that is
+# the single value the chart renders into both. A `helm upgrade` — i.e. a
+# re-run of k0rdent-apis.yml — reverts it; to make it stick, parameterize
+# `workflow.config.worker.mockMode` in
+# templates/k0rdent-apis/values-socks-overrides.yaml.j2 instead.
+
+mock_current() {
+  kc get "cm/$WORKFLOW_CONFIGMAP" -o jsonpath='{.data.MOCK_MODE}' 2>/dev/null || true
+}
+
+# What the running pods actually have, which is what matters — a ConfigMap
+# edit does nothing until the Deployments restart (envFrom is resolved once,
+# at container start).
+#
+# Retried, because `kubectl rollout status` returns while the old replica is
+# still terminating and `kubectl exec deploy/<x>` may select that pod — a
+# single attempt right after a restart reports a spurious failure. stderr is
+# captured separately rather than folded into the value, so a genuine exec
+# failure is quoted instead of being flattened into an opaque marker.
+mock_running() {
+  local dep=$1 out attempt errf
+  errf=$(mktemp)
+  for attempt in 1 2 3 4 5; do
+    if out=$(kc exec "deploy/$dep" -- sh -c 'printf %s "${MOCK_MODE-<unset>}"' 2>"$errf"); then
+      rm -f "$errf"
+      printf '%s' "$out"
+      return 0
+    fi
+    sleep 2
+  done
+  local err; err=$(head -1 "$errf")
+  rm -f "$errf"
+  printf '<exec failed: %s>' "${err:-no stderr}"
+}
+
+cmd_mock() {
+  local action=$1
+  local want
+
+  case "$action" in
+    on)  want=true  ;;
+    off) want=false ;;
+    status)
+      printf '%-24s %s\n' "cm/$WORKFLOW_CONFIGMAP" "MOCK_MODE=$(mock_current)"
+      local dep
+      for dep in "${WORKFLOW_DEPLOYMENTS[@]}"; do
+        kc get "deploy/$dep" >/dev/null 2>&1 || { printf '%-24s %s\n' "deploy/$dep" "(absent)"; continue; }
+        printf '%-24s %s\n' "deploy/$dep" "MOCK_MODE=$(mock_running "$dep") (in the running pod)"
+      done
+      return 0
+      ;;
+    *) die "mock takes on|off|status (got '$action')" ;;
+  esac
+
+  kc get "cm/$WORKFLOW_CONFIGMAP" >/dev/null 2>&1 \
+    || die "no cm/$WORKFLOW_CONFIGMAP in ns/$NAMESPACE — is k0rdent-apis installed? (override with WORKFLOW_CONFIGMAP=)"
+  local dep
+  for dep in "${WORKFLOW_DEPLOYMENTS[@]}"; do
+    kc get "deploy/$dep" >/dev/null 2>&1 || die "no deploy/$dep in ns/$NAMESPACE"
+  done
+
+  if [[ "$want" == "true" ]]; then
+    log "WARNING: mock mode makes ALL provisioning synthetic — no NICo/UFO object is"
+    log "         created or deleted while it is on. Do not run nico-sync or trust the"
+    log "         lab's inventory until you turn it back off."
+  fi
+
+  local current; current=$(mock_current)
+  if [[ "$current" == "$want" ]]; then
+    log "cm/$WORKFLOW_CONFIGMAP already has MOCK_MODE=$want — restarting anyway so the pods are known to match"
+  else
+    log "patching cm/$WORKFLOW_CONFIGMAP: MOCK_MODE=${current:-<unset>} → $want"
+    kc patch "cm/$WORKFLOW_CONFIGMAP" --type merge \
+      -p "{\"data\":{\"MOCK_MODE\":\"$want\"}}" >/dev/null
+  fi
+
+  # envFrom is read once at container start, so a restart is not optional.
+  for dep in "${WORKFLOW_DEPLOYMENTS[@]}"; do
+    kc rollout restart "deploy/$dep" >/dev/null
+  done
+  for dep in "${WORKFLOW_DEPLOYMENTS[@]}"; do
+    kc rollout status "deploy/$dep" --timeout=180s
+  done
+
+  # Verify against the pods rather than the ConfigMap: an injected binary, a
+  # stray `kubectl set env`, or a half-finished rollout would all leave the
+  # ConfigMap saying one thing and the process seeing another.
+  local failed=0
+  for dep in "${WORKFLOW_DEPLOYMENTS[@]}"; do
+    local got; got=$(mock_running "$dep")
+    if [[ "$got" == "$want" ]]; then
+      ok "deploy/$dep MOCK_MODE=$got"
+    else
+      log "✗ deploy/$dep reports MOCK_MODE=$got, expected $want"
+      failed=1
+    fi
+  done
+  [[ $failed -eq 0 ]] \
+    || die "mock $action did not take effect in every pod — check for an explicit MOCK_MODE env entry on the Deployment (it overrides envFrom): kubectl -n $NAMESPACE get deploy -o yaml | grep -A2 MOCK_MODE"
+
+  ok "workflow stack is running with MOCK_MODE=$want"
+}
+
 # ── Commands ────────────────────────────────────────────────────
 
 cmd_rebuild() {
@@ -276,6 +407,9 @@ cmd_stop() {
 # Enumerate Deployments in $NAMESPACE that carry our dev-binary volume.
 # No state files to consult — the cluster itself is the source of truth.
 cmd_status() {
+  echo "mock mode: MOCK_MODE=$(mock_current) in cm/$WORKFLOW_CONFIGMAP  ($0 mock status for the running pods)"
+  echo
+
   local list
   list=$(kc get deploy -o json | jq -r '
     .items[]
@@ -305,6 +439,7 @@ cmd_status() {
 case "${1:-}" in
   rebuild) shift; [[ $# -ge 1 ]] || usage; cmd_rebuild "$@" ;;
   stop)    shift; [[ $# -eq 1 ]] || usage; cmd_stop    "$1" ;;
+  mock)    shift; [[ $# -eq 1 ]] || usage; cmd_mock    "$1" ;;
   status)  shift; cmd_status ;;
   *) usage ;;
 esac
