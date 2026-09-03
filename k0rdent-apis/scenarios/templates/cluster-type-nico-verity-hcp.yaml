@@ -51,7 +51,7 @@ nodePools:
     machineType: /v1/regions/local/infrastructure/machine-types/nico-lab
     nodeCountMin: 1
     nodeCountMax: 6
-    nodeCountDefault: 3
+    nodeCountDefault: 1
     networkAttachment:
       ethernets:
         enp1s0:
