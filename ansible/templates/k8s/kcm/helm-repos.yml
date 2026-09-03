@@ -1,0 +1,45 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: oot-capm3-repo
+  namespace: kcm-system
+  labels:
+    k0rdent.mirantis.com/managed: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  type: oci
+  url: 'oci://registry.mirantis.com/k0rdent-bm/charts/'
+  interval: 10m0s
+
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: oot-capm3-ci-repo
+  namespace: kcm-system
+  labels:
+    k0rdent.mirantis.com/managed: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  type: oci
+  url: 'oci://registry.ci.mirantis.com/k0rdent-bm/charts/'
+  interval: 10m0s
+
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: oot-k0rdent-ai-repo
+  namespace: kcm-system
+  labels:
+    k0rdent.mirantis.com/managed: "true"
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  type: oci
+  url: 'oci://registry.ci.mirantis.com/k0rdent-ai/k0rdent-bm-lab/'
+  interval: 10m0s
+#  secretRef:
+#    name: oci-k0rdent-ai-creds

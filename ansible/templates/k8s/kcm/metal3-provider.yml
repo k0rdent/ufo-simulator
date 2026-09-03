@@ -1,50 +1,6 @@
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: HelmRepository
-metadata:
-  name: oot-capm3-repo
-  namespace: kcm-system
-  labels:
-    k0rdent.mirantis.com/managed: "true"
-  annotations:
-    helm.sh/resource-policy: keep
-spec:
-  type: oci
-  url: 'oci://registry.mirantis.com/k0rdent-bm/charts/'
-  interval: 10m0s
-
----
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: HelmRepository
-metadata:
-  name: oot-capm3-ci-repo
-  namespace: kcm-system
-  labels:
-    k0rdent.mirantis.com/managed: "true"
-  annotations:
-    helm.sh/resource-policy: keep
-spec:
-  type: oci
-  url: 'oci://registry.ci.mirantis.com/k0rdent-bm/charts/'
-  interval: 10m0s
-
----
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: HelmRepository
-metadata:
-  name: oot-k0rdent-ai-repo
-  namespace: kcm-system
-  labels:
-    k0rdent.mirantis.com/managed: "true"
-  annotations:
-    helm.sh/resource-policy: keep
-spec:
-  type: oci
-  url: 'oci://registry.ci.mirantis.com/k0rdent-ai/k0rdent-bm-lab/'
-  interval: 10m0s
-#  secretRef:
-#    name: oci-k0rdent-ai-creds
-
----
+# NOTE: the shared oot-* HelmRepositories these templates reference live in
+# helm-repos.yml, which is applied unconditionally — this file is only applied
+# when metal3_provision_enabled is true.
 apiVersion: k0rdent.mirantis.com/v1beta1
 kind: ProviderTemplate
 metadata:
