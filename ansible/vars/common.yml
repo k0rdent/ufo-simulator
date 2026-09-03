@@ -29,6 +29,6 @@ nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
 nico_operator_image_tag: 0.3.1-8eb21ff
 
 nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-nico
-nico_capi_provider_chart_version: v0.2.0-rc1-10-g340928f043b698-dirty
+nico_capi_provider_chart_version: v0.2.0-rc1-10-g340928f043b698
 nico_capi_provider_image: registry.ci.mirantis.com/k0rdent-bm/images/cluster-api-provider-nico
-nico_capi_provider_image_tag: v0.2.0-rc1-10-g340928f043b698-dirty
+nico_capi_provider_image_tag: v0.2.0-rc1-10-g340928f043b698
