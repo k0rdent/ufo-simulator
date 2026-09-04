@@ -1,0 +1,5 @@
+pytest==9.1.1
+pytest-timeout==2.4.0
+requests==2.34.2
+PyYAML==6.0.3
+kubernetes==33.1.0

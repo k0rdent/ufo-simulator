@@ -1,0 +1,34 @@
+# Lab e2e environment for k0rdent-apis pytest.
+# Usage:
+#   source /opt/ufo_simulator/venvs/e2e/env
+#   cd "$E2E_DIR" && pytest -m smoke -s
+#
+# Operator JWT mint/refresh lives in Python (helpers/auth.py) — same flow as
+# ansible/k0r.sh k0r_login/k0r_token (auth + mock-oauth2 ClusterIPs, JWT cache).
+# Pytest refreshes on every HTTP request; no bash mint on source.
+
+export E2E_VENV="{{ e2e_venv_dir }}"
+export E2E_DIR="{{ e2e_dir }}"
+export E2E_ENV="{{ e2e_env_file }}"
+
+# Activate the venv when sourced from an interactive shell / script.
+if [ -f "${E2E_VENV}/bin/activate" ]; then
+  # shellcheck disable=SC1090
+  . "${E2E_VENV}/bin/activate"
+fi
+
+export API_BASE="{{ e2e_api_base }}"
+export BASE="${API_BASE}"
+export E2E_REGION="{{ e2e_region }}"
+export REGION="{{ e2e_region }}"
+export PROJECT="{{ e2e_project }}"
+export KUBECONFIG="{{ e2e_kubeconfig }}"
+
+export K0R_TOKEN_FILE="{{ e2e_token_file }}"
+export TOKEN_SLACK_SEC="{{ e2e_token_slack_sec }}"
+export K0R_NAMESPACE="${K0R_NAMESPACE:-k0rdent-apis}"
+export K0R_LOGIN_EMAIL="${K0R_LOGIN_EMAIL:-admin@kind.test}"
+export K0R_LOGIN_CLIENT_ID="${K0R_LOGIN_CLIENT_ID:-operator-portal}"
+export K0R_LOGIN_REDIRECT_URI="${K0R_LOGIN_REDIRECT_URI:-${API_BASE}/v1/regions/global/auth/callback}"
+
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:--ra}"

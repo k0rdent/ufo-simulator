@@ -1,0 +1,17 @@
+id: cluster-sg
+displayName: Cluster-level e2e security group
+rules:
+  ingress:
+    - name: cluster-allow-ssh
+      protocol: tcp
+      action: permit
+      sourcePrefix: 8.8.8.8/32
+      destinationPrefix: 10.5.44.0/24
+      destinationPortRange: "22"
+  egress:
+    - name: cluster-allow-dns
+      protocol: udp
+      action: permit
+      sourcePrefix: 10.5.44.0/24
+      destinationPrefix: 8.8.8.8/32
+      destinationPortRange: "53"
