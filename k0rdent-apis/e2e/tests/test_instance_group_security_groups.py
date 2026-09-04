@@ -26,6 +26,7 @@ def _await_sg_active(session, sg_collection: str, sg_id: str) -> dict[str, Any]:
     return wait.await_api_state(
         lambda: api.get_json(session, f"{sg_collection}/{sg_id}"),
         "active",
+        what=f"security group {sg_id}",
         timeout=300,
         interval=5,
     )
@@ -254,7 +255,13 @@ def test_instance_group_vpc_security_groups(
 
     log.step("wait for instance group API state=active")
     ig_obj = wait.await_api_state(
-        _get_ig, "active", timeout=1800, interval=15, steps=log, log_every=2
+        _get_ig,
+        "active",
+        what=f"instance group {ig_id}",
+        timeout=1800,
+        interval=15,
+        steps=log,
+        log_every=2,
     )
     ig_uid = ig_obj["uid"]
     log.info(f"instance group uid={ig_uid}")
@@ -271,6 +278,7 @@ def test_instance_group_vpc_security_groups(
     vpc = wait.await_api_state(
         lambda: api.get_json(session, vpc_url),
         "active",
+        what=f"vpc {vpc_id}",
         timeout=900,
         interval=10,
         steps=log,
@@ -304,6 +312,7 @@ def test_instance_group_vpc_security_groups(
     vpc = wait.await_api_state(
         lambda: api.get_json(session, vpc_url),
         "active",
+        what=f"vpc {vpc_id} after SG attach",
         timeout=900,
         interval=10,
         steps=log,
@@ -312,7 +321,13 @@ def test_instance_group_vpc_security_groups(
     assert list(vpc.get("securityGroups") or []) == [vpc_custom_sg_id, default_sg_id]
     log.info("wait for instance group to settle after VPC re-render")
     wait.await_api_state(
-        _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
+        _get_ig,
+        "active",
+        what=f"instance group {ig_id} after VPC SG attach",
+        timeout=900,
+        interval=10,
+        steps=log,
+        log_every=2,
     )
     log.ok("VPC binding settled")
 
@@ -433,7 +448,13 @@ def test_instance_group_vpc_security_groups(
     patched = api.set_instance_group_security_groups(session, ig_url, [ig_sg_id])
     assert list(patched.get("securityGroups") or []) == [ig_sg_id]
     wait.await_api_state(
-        _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
+        _get_ig,
+        "active",
+        what=f"instance group {ig_id} after IG SG attach",
+        timeout=900,
+        interval=10,
+        steps=log,
+        log_every=2,
     )
     ig_obj = _get_ig()
     assert list(ig_obj.get("securityGroups") or []) == [ig_sg_id]
@@ -520,11 +541,23 @@ def test_instance_group_vpc_security_groups(
     log.step("detach IG SG and assert its rules leave the NICo NSG")
     try:
         wait.await_api_state(
-            _get_ig, "active", timeout=300, interval=10, steps=log, log_every=2
+            _get_ig,
+            "active",
+            what=f"instance group {ig_id} before IG SG detach",
+            timeout=300,
+            interval=10,
+            steps=log,
+            log_every=2,
         )
         api.set_instance_group_security_groups(session, ig_url, [])
         wait.await_api_state(
-            _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
+            _get_ig,
+            "active",
+            what=f"instance group {ig_id} after IG SG detach",
+            timeout=900,
+            interval=10,
+            steps=log,
+            log_every=2,
         )
         assert list(_get_ig().get("securityGroups") or []) == []
 
@@ -552,6 +585,7 @@ def test_instance_group_vpc_security_groups(
         wait.await_api_state(
             lambda: api.get_json(session, vpc_url),
             "active",
+            what=f"vpc {vpc_id} before custom SG detach",
             timeout=900,
             interval=10,
             steps=log,
@@ -561,13 +595,20 @@ def test_instance_group_vpc_security_groups(
         wait.await_api_state(
             lambda: api.get_json(session, vpc_url),
             "active",
+            what=f"vpc {vpc_id} after custom SG detach",
             timeout=900,
             interval=10,
             steps=log,
             log_every=2,
         )
         wait.await_api_state(
-            _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
+            _get_ig,
+            "active",
+            what=f"instance group {ig_id} after VPC SG detach",
+            timeout=900,
+            interval=10,
+            steps=log,
+            log_every=2,
         )
         vpc_after = api.get_json(session, vpc_url)
         remaining = list(vpc_after.get("securityGroups") or [])

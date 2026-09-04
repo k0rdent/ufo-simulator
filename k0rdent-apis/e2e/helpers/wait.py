@@ -43,35 +43,42 @@ def await_api_state(
     get_fn: Callable[[], dict],
     target: str,
     *,
+    what: str = "resource",
     timeout: float = 900,
     interval: float = 5,
     fail_states: tuple[str, ...] = ("failed",),
     steps: "Steps | None" = None,
     log_every: int = 1,
 ) -> dict:
+    """Poll get_fn until obj['state'] == target.
+
+    ``what`` names the resource in progress logs (e.g. ``instance group foo``,
+    ``vpc vpc-nico``) so consecutive waits are distinguishable.
+    """
     deadline = time.monotonic() + timeout
     last: dict | None = None
     attempt = 0
     if steps:
-        steps.info(f"waiting for state={target!r} (timeout={timeout:.0f}s)")
+        steps.info(f"waiting for {what} state={target!r} (timeout={timeout:.0f}s)")
     while time.monotonic() < deadline:
         obj = get_fn()
         last = obj
         state = obj.get("state")
         if state in fail_states:
-            raise AssertionError(f"resource entered {state!r}: {obj}")
+            raise AssertionError(f"{what} entered {state!r}: {obj}")
         if state == target:
             if steps:
-                steps.ok(f"state={target}")
+                steps.ok(f"{what} state={target}")
             return obj
         attempt += 1
         if steps and attempt % max(log_every, 1) == 0:
-            steps.progress(f"… state={state!r}, want {target!r}")
+            steps.progress(f"… {what} state={state!r}, want {target!r}")
         time.sleep(interval)
     if steps:
-        steps.info(f"state={target!r} TIMED OUT after {timeout:.0f}s")
-    raise AssertionError(f"state={target} not met within {timeout}s; last={last!r}")
-
+        steps.info(f"{what} state={target!r} TIMED OUT after {timeout:.0f}s")
+    raise AssertionError(
+        f"{what} state={target} not met within {timeout}s; last={last!r}"
+    )
 
 def await_api_absent(
     get_fn: Callable[[], Any],

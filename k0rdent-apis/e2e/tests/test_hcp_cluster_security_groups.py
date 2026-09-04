@@ -26,6 +26,7 @@ def _await_sg_active(session, sg_collection: str, sg_id: str) -> dict[str, Any]:
     return wait.await_api_state(
         lambda: api.get_json(session, f"{sg_collection}/{sg_id}"),
         "active",
+        what=f"security group {sg_id}",
         timeout=300,
         interval=5,
     )
@@ -250,7 +251,13 @@ def test_hcp_cluster_vpc_security_groups(
 
     log.step("wait for cluster API state=active")
     cluster_obj = wait.await_api_state(
-        _get_cluster, "active", timeout=1800, interval=15, steps=log, log_every=2
+        _get_cluster,
+        "active",
+        what=f"cluster {cluster_id}",
+        timeout=1800,
+        interval=15,
+        steps=log,
+        log_every=2,
     )
     cluster_uid = cluster_obj["uid"]
     log.info(f"cluster uid={cluster_uid}")
@@ -267,6 +274,7 @@ def test_hcp_cluster_vpc_security_groups(
     vpc = wait.await_api_state(
         lambda: api.get_json(session, vpc_url),
         "active",
+        what=f"vpc {vpc_id}",
         timeout=900,
         interval=10,
         steps=log,
@@ -300,6 +308,7 @@ def test_hcp_cluster_vpc_security_groups(
     vpc = wait.await_api_state(
         lambda: api.get_json(session, vpc_url),
         "active",
+        what=f"vpc {vpc_id} after SG attach",
         timeout=900,
         interval=10,
         steps=log,
@@ -308,7 +317,13 @@ def test_hcp_cluster_vpc_security_groups(
     assert list(vpc.get("securityGroups") or []) == [vpc_custom_sg_id, default_sg_id]
     log.info("wait for cluster to settle after VPC re-render")
     wait.await_api_state(
-        _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+        _get_cluster,
+        "active",
+        what=f"cluster {cluster_id} after VPC SG attach",
+        timeout=900,
+        interval=10,
+        steps=log,
+        log_every=2,
     )
     log.ok("VPC binding settled")
 
@@ -429,7 +444,13 @@ def test_hcp_cluster_vpc_security_groups(
     patched = api.set_cluster_security_groups(session, cluster_url, [cluster_sg_id])
     assert list(patched.get("securityGroups") or []) == [cluster_sg_id]
     wait.await_api_state(
-        _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+        _get_cluster,
+        "active",
+        what=f"cluster {cluster_id} after cluster SG attach",
+        timeout=900,
+        interval=10,
+        steps=log,
+        log_every=2,
     )
     cluster_obj = _get_cluster()
     assert list(cluster_obj.get("securityGroups") or []) == [cluster_sg_id]
@@ -516,11 +537,23 @@ def test_hcp_cluster_vpc_security_groups(
     log.step("detach cluster SG and assert its rules leave the NICo NSG")
     try:
         wait.await_api_state(
-            _get_cluster, "active", timeout=300, interval=10, steps=log, log_every=2
+            _get_cluster,
+            "active",
+            what=f"cluster {cluster_id} before cluster SG detach",
+            timeout=300,
+            interval=10,
+            steps=log,
+            log_every=2,
         )
         api.set_cluster_security_groups(session, cluster_url, [])
         wait.await_api_state(
-            _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+            _get_cluster,
+            "active",
+            what=f"cluster {cluster_id} after cluster SG detach",
+            timeout=900,
+            interval=10,
+            steps=log,
+            log_every=2,
         )
         assert list(_get_cluster().get("securityGroups") or []) == []
 
@@ -549,6 +582,7 @@ def test_hcp_cluster_vpc_security_groups(
         wait.await_api_state(
             lambda: api.get_json(session, vpc_url),
             "active",
+            what=f"vpc {vpc_id} before custom SG detach",
             timeout=900,
             interval=10,
             steps=log,
@@ -558,6 +592,7 @@ def test_hcp_cluster_vpc_security_groups(
         wait.await_api_state(
             lambda: api.get_json(session, vpc_url),
             "active",
+            what=f"vpc {vpc_id} after custom SG detach",
             timeout=900,
             interval=10,
             steps=log,
@@ -565,7 +600,13 @@ def test_hcp_cluster_vpc_security_groups(
         )
         # Cluster re-renders after VPC binding change.
         wait.await_api_state(
-            _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+            _get_cluster,
+            "active",
+            what=f"cluster {cluster_id} after VPC SG detach",
+            timeout=900,
+            interval=10,
+            steps=log,
+            log_every=2,
         )
         vpc_after = api.get_json(session, vpc_url)
         remaining = list(vpc_after.get("securityGroups") or [])

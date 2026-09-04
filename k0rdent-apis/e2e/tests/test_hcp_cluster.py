@@ -72,7 +72,13 @@ def test_hcp_cluster_create_ready_terminate(
 
     log.step("wait for cluster API state=active")
     cluster_obj = wait.await_api_state(
-        _get_cluster, "active", timeout=1800, interval=15, steps=log, log_every=2
+        _get_cluster,
+        "active",
+        what=f"cluster {cluster_id}",
+        timeout=1800,
+        interval=15,
+        steps=log,
+        log_every=2,
     )
     cluster_uid = cluster_obj["uid"]
     log.info(f"cluster uid={cluster_uid}")

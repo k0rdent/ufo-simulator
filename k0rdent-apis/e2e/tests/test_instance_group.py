@@ -72,7 +72,13 @@ def test_instance_group_create_active_terminate(
 
     log.step("wait for instance group API state=active")
     ig_obj = wait.await_api_state(
-        _get_ig, "active", timeout=1800, interval=15, steps=log, log_every=2
+        _get_ig,
+        "active",
+        what=f"instance group {ig_id}",
+        timeout=1800,
+        interval=15,
+        steps=log,
+        log_every=2,
     )
     log.info(f"instance group uid={ig_obj['uid']}")
 
