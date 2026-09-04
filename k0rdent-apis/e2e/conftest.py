@@ -10,6 +10,7 @@ import requests
 import yaml
 
 from helpers.auth import AuthedSession, get_token
+from helpers.names import new_run_id
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "scenarios" / "templates"
@@ -19,12 +20,19 @@ GLOBAL_PREREQS: tuple[tuple[str, str], ...] = (
     ("global/address-pool-global-default.yaml", "compute/address-pools"),
     ("global/address-pool-global-public.yaml", "compute/address-pools"),
     ("global/cluster-type-nico-verity-hcp.yaml", "compute/cluster-types"),
+    ("global/cluster-type-nico-verity-bm.yaml", "compute/cluster-types"),
 )
 
 
 def _auth_configured() -> bool:
     """True when API_BASE is set; JWT is minted in-process via helpers.auth."""
     return bool(os.environ.get("API_BASE"))
+
+
+@pytest.fixture(scope="session")
+def run_id() -> str:
+    """Short hex shared by all tests in this pytest process (see E2E_RUN_ID)."""
+    return new_run_id()
 
 
 @pytest.fixture(scope="session")

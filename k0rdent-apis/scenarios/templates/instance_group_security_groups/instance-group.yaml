@@ -1,5 +1,5 @@
-id: lab-nico-verity-bm-01
-displayName: Lab NICo+Verity BMaaS group
+id: lab-nico-verity-bm-sg
+displayName: Lab NICo+Verity BMaaS SG e2e
 clusterType: /v1/regions/local/compute/cluster-types/nico-verity-bm
 nodePools:
   - nodePool: workers
