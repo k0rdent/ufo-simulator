@@ -100,6 +100,31 @@ override:
   CRs whose reconciled `status.id` gets pushed into the workflow-worker env
   vars.
 
+## Lab e2e pytest
+
+End-to-end scenarios live under
+[../k0rdent-apis/e2e/](../k0rdent-apis/e2e/) (create cluster, security groups,
+NICo/UFO asserts). Full instructions:
+[../k0rdent-apis/e2e/README.md](../k0rdent-apis/e2e/README.md).
+
+**Prepare once** (venv at `/opt/ufo_simulator/venvs/e2e` + sourceable `env`):
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+ansible-playbook prepare-e2e-tests.yml
+```
+
+**Run on the CMP:**
+
+```bash
+source /opt/ufo_simulator/venvs/e2e/env
+cd "$E2E_DIR"
+pytest -m smoke -s
+```
+
+JWT mint/refresh is pure Python (`helpers/auth.py`, same flow as bash
+`k0r_login` / `k0r_token`). Pytest refreshes on each HTTP request.
+
 ## Creating example clusters via the API
 
 Once the playbook has run, [k0r.sh](k0r.sh) doubles as both a script and a
@@ -156,8 +181,8 @@ Both cluster types below reference these pools by ID, so create them once per
 region:
 
 ```bash
-PROJECT= $K0R create compute/address-pools --file "$TPL/address-pool-global-default.yaml"
-PROJECT= $K0R create compute/address-pools --file "$TPL/address-pool-global-public.yaml"
+PROJECT= $K0R create compute/address-pools --file "$TPL/global/address-pool-global-default.yaml"
+PROJECT= $K0R create compute/address-pools --file "$TPL/global/address-pool-global-public.yaml"
 ```
 
 ### 3a. Two-VPC (nico + verity) HCP cluster with per-slot NIC pinning
@@ -206,8 +231,8 @@ entirely. The schema declares:
   DHCP rather than pinned via `ipFromSubnet`.
 
 ```bash
-PROJECT= $K0R create compute/cluster-types --file "$TPL/cluster-type-nico-verity-hcp.yaml"
-PROJECT=$PROJECT $K0R create compute/clusters --file "$TPL/cluster-lab-nico-verity-hcp.yaml"
+PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-verity-hcp.yaml"
+PROJECT=$PROJECT $K0R create compute/clusters --file "$TPL/hcp_cluster/cluster.yaml"
 ```
 
 Field notes:
@@ -263,8 +288,8 @@ kubectl create ns prj-kind-main --dry-run=client -o yaml | \
 ```
 
 ```bash
-PROJECT= $K0R create compute/cluster-types --file "$TPL/cluster-type-nico-verity-bm.yaml"
-PROJECT=$PROJECT $K0R create compute/instance-groups --file "$TPL/instance-group-lab-nico-verity-bm.yaml"
+PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-verity-bm.yaml"
+PROJECT=$PROJECT $K0R create compute/instance-groups --file "$TPL/instance_group/instance-group.yaml"
 ```
 
 Same interface-selection rules as 3a apply: the nico interface uses

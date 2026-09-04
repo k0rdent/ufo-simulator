@@ -1,9 +1,10 @@
-id: lab-nico-verity-bm-01
-displayName: Lab NICo+Verity BMaaS group
-clusterType: /v1/regions/local/compute/cluster-types/nico-verity-bm
+id: lab-nico-verity-sg
+displayName: Lab NICo+Verity SG e2e
+clusterType: /v1/regions/local/compute/cluster-types/nico-verity-hcp
 nodePools:
-  - nodePool: workers
-    size: 1
+  - id: default
+    nodeCount: 1
+    securityGroups: []
 sshAccess:
   - username: ubuntu
     displayName: ubuntu

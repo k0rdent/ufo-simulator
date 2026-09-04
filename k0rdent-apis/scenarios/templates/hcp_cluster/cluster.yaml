@@ -4,6 +4,7 @@ clusterType: /v1/regions/local/compute/cluster-types/nico-verity-hcp
 nodePools:
   - id: default
     nodeCount: 1
+    securityGroups: []
 sshAccess:
   - username: ubuntu
     displayName: ubuntu

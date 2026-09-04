@@ -1,0 +1,4 @@
+# POST .../networking/vpcs/{id} — replace VPC security-group binding.
+# Path id is the VPC name (e.g. vpc-nico from a materialized cluster).
+# Empty list reinstates the platform default group (does not leave the VPC unbound).
+securityGroups: []

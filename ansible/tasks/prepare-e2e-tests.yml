@@ -1,0 +1,41 @@
+---
+# Create /opt/ufo_simulator/venvs/e2e, install pytest deps, write sourceable env.
+
+- name: Verify e2e requirements file exists
+  ansible.builtin.stat:
+    path: "{{ e2e_requirements }}"
+  register: e2e_req_stat
+
+- name: Fail if e2e requirements.txt is missing
+  ansible.builtin.fail:
+    msg: "Missing {{ e2e_requirements }} — expected ufo-simulator checkout with k0rdent-apis/e2e"
+  when: not e2e_req_stat.stat.exists
+
+- name: Ensure e2e venv parent directory exists
+  ansible.builtin.file:
+    path: "{{ e2e_venv_dir | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Create e2e Python virtualenv
+  ansible.builtin.command:
+    cmd: python3 -m venv "{{ e2e_venv_dir }}"
+    creates: "{{ e2e_venv_dir }}/bin/python"
+
+- name: Install e2e Python dependencies
+  ansible.builtin.pip:
+    requirements: "{{ e2e_requirements }}"
+    virtualenv: "{{ e2e_venv_dir }}"
+    virtualenv_command: python3 -m venv
+
+- name: Write e2e env file (sourceable)
+  ansible.builtin.template:
+    src: e2e-env.sh.j2
+    dest: "{{ e2e_env_file }}"
+    mode: "0644"
+
+- name: Show how to use the e2e env
+  ansible.builtin.debug:
+    msg:
+      - "source {{ e2e_env_file }}"
+      - "cd \"$E2E_DIR\" && pytest -m smoke -s"
