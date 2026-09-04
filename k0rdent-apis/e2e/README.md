@@ -41,16 +41,19 @@ and login settings. The operator JWT is minted in Python on first API call
 (`helpers/auth.py` — same auth + mock-oauth2 flow as bash `k0r_login`).
 
 ```bash
-# All smoke tests (HCP create + security-group scenario)
+# All smoke tests (HCP + BMaaS create + security-group scenarios)
 # -s is required to see live STEP progress on stderr
 pytest -m smoke -s
 
 # Single files
 pytest tests/test_hcp_cluster.py -s
 pytest tests/test_hcp_cluster_security_groups.py -s
+pytest tests/test_instance_group.py -s
+pytest tests/test_instance_group_security_groups.py -s
 
 # By marker
 pytest -m hcp -s
+pytest -m bmaas -s
 ```
 
 `-s` shows print/log output; default timeout is 1800s (`pytest.ini`).
@@ -79,8 +82,9 @@ rm -f /tmp/k0r-token
 - CMP can reach Kong (`http://10.200.0.254:30080`) and in-cluster
   `auth` / `mock-oauth2-server` Services (for token minting)
 
-Tests **create** missing region-scoped prerequisites (address pools, cluster
-type) and leave them in place. They delete the clusters they create.
+Tests **create** missing region-scoped prerequisites (address pools, HCP + BM
+cluster types) and leave them in place. They delete the clusters / instance
+groups they create.
 
 ---
 
@@ -101,8 +105,14 @@ Set automatically by `source …/env`:
 | `K0R_LOGIN_CLIENT_ID` | `operator-portal` | OAuth client id |
 | `K0R_LOGIN_REDIRECT_URI` | `$API_BASE/…/auth/callback` | OAuth redirect |
 | `E2E_DIR` | `…/k0rdent-apis/e2e` | Suite root |
+| `E2E_RUN_ID` | random 8-hex | Short run id stamped into every test-created resource `id` |
 
 Override before `source` or after, e.g. `export PROJECT=my-project`.
+
+Resource ids for clusters, instance groups, and security groups are
+`{test-name-without-test_}-{kind}-{run_id}` (≤63 chars), e.g.
+`hcp-cluster-vpc-security-groups-cluster-a1b2c3d4`. Shared globals
+(address pools, cluster types) keep stable names and are never deleted.
 
 ---
 
@@ -110,12 +120,15 @@ Override before `source` or after, e.g. `export PROJECT=my-project`.
 
 | Test | Marker | Summary |
 |---|---|---|
-| `test_hcp_cluster.py` | `smoke`, `hcp` | Ensure address pools + cluster type; create HCP cluster; wait API `active` + ClusterDeployment Ready; delete |
+| `test_hcp_cluster.py` | `smoke`, `hcp` | Ensure address pools + cluster types; create HCP cluster; wait API `active` + ClusterDeployment Ready; delete |
 | `test_hcp_cluster_security_groups.py` | `smoke`, `hcp` | Create cluster; VPC default + custom SG; cluster SG; UFO CRs; NICo NSG merge + precedence; detach and assert rules leave NICo NSG; teardown |
+| `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
+| `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; detach and assert rules leave NICo NSG; teardown |
 
-Do not run both against the same project in parallel — they use different
-cluster ids (`lab-nico-verity-21` vs `lab-nico-verity-sg`) but share address
-pools / cluster type / SG templates.
+Do not run these against the same project in parallel — they share address
+pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
+collisions across sequential runs; use a distinct `PROJECT` for true parallel
+suites.
 
 ---
 
@@ -127,14 +140,17 @@ e2e/
   pytest.ini
   requirements.txt
   helpers/
-    api.py             # REST create/get/delete / VPC+cluster SG bind
+    api.py             # REST create/get/delete / VPC+cluster/IG SG bind
     auth.py            # Python k0r_login/k0r_token (mint + cache)
+    names.py           # per-run resource ids ({test}-{kind}-{run_id})
     k8s.py             # list/get CRs in project namespace
     steps.py           # numbered runtime STEP progress (pytest -s)
     wait.py            # await_predicate / await_api_state
   tests/
     test_hcp_cluster.py
     test_hcp_cluster_security_groups.py
+    test_instance_group.py
+    test_instance_group_security_groups.py
 ```
 
 Templates live under [`../scenarios/templates`](../scenarios/templates):
@@ -151,8 +167,11 @@ scenarios/templates/
     cluster.yaml
     security-group-*.yaml
     vpc-security-groups.yaml
-  instance_group/                      # BMaaS (manual / future e2e)
+  instance_group/                      # test_instance_group.py
     instance-group.yaml
+  instance_group_security_groups/      # test_instance_group_security_groups.py
+    instance-group.yaml
+    security-group-*.yaml
 ```
 
 ---

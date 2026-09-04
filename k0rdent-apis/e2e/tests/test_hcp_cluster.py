@@ -12,6 +12,7 @@ from conftest import (
     load_scenario_template,
 )
 from helpers import api, k8s, wait
+from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
 
@@ -24,16 +25,19 @@ _SCENARIO = "hcp_cluster"
     not auth_configured(),
     reason="API_BASE required",
 )
-def test_hcp_cluster_create_ready_terminate(session, api_base, region, project):
+def test_hcp_cluster_create_ready_terminate(
+    session, api_base, region, project, run_id, request
+):
     """Ensure globals, create cluster, wait ready, delete."""
     log = Steps("HCP cluster create → ready → terminate")
+    log.info(f"run_id={run_id}")
 
     log.step("ensure global prereqs (address-pools + cluster-type; never deleted)")
     ensure_global_prereqs(session, api_base, region)
     log.ok()
 
-    cluster = load_scenario_template(_SCENARIO, "cluster.yaml")
-    cluster_id = cluster["id"]
+    cluster_id = resource_id(request.node.name, "cluster", run_id=run_id)
+    cluster = stamp_id(load_scenario_template(_SCENARIO, "cluster.yaml"), cluster_id)
     clusters_url = api.region_url(api_base, region, "compute/clusters", project=project)
     cluster_url = f"{clusters_url}/{cluster_id}"
 

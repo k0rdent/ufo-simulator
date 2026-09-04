@@ -1,0 +1,25 @@
+id: demo-sg
+displayName: Training cluster edge (2026 run)
+rules:
+  ingress:
+    - name: allow-https
+      protocol: tcp
+      action: permit
+      sourcePrefix: 4.4.4.4/32
+      destinationPrefix: 10.5.44.0/24
+      destinationPortRange: "443"
+  egress:
+    - name: allow-ephemeral-return
+      protocol: tcp
+      action: permit
+      sourcePrefix: 1.1.1.1/32
+      destinationPrefix: 0.0.0.0/0
+      sourcePortRange: "443"
+      destinationPortRange: "1024-65535"
+    - name: allow-ephemeral-return123
+      protocol: tcp
+      action: permit
+      sourcePrefix: 1.1.1.1/32
+      destinationPrefix: 0.0.0.0/0
+      sourcePortRange: "443"
+      destinationPortRange: "1024-65535"

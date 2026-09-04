@@ -71,7 +71,7 @@ def list_items(
     body = resp.json()
     if isinstance(body, list):
         return body
-    for key in ("items", "vpcs", "securityGroups", "clusters"):
+    for key in ("items", "vpcs", "securityGroups", "clusters", "instanceGroups"):
         if key in body and isinstance(body[key], list):
             return body[key]
     raise AssertionError(f"unexpected list envelope from {collection_url}: {body!r}")
@@ -106,6 +106,21 @@ def set_cluster_security_groups(
     """PATCH .../compute/clusters/{id} with only securityGroups (async 202)."""
     resp = session.patch(
         cluster_url,
+        json={"securityGroups": security_group_ids},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def set_instance_group_security_groups(
+    session: requests.Session,
+    instance_group_url: str,
+    security_group_ids: list[str],
+) -> dict[str, Any]:
+    """PATCH .../compute/instance-groups/{id} with only securityGroups (async 202)."""
+    resp = session.patch(
+        instance_group_url,
         json={"securityGroups": security_group_ids},
         timeout=60,
     )

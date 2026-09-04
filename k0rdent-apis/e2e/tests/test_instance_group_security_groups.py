@@ -1,4 +1,4 @@
-"""HCP cluster + VPC/cluster security-group binding and NICo/UFO materialization."""
+"""Instance group + VPC/IG security-group binding and NICo/UFO materialization."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
 
-pytestmark = [pytest.mark.smoke, pytest.mark.hcp]
+pytestmark = [pytest.mark.smoke, pytest.mark.bmaas]
 
-_SCENARIO = "hcp_cluster_security_groups"
+_SCENARIO = "instance_group_security_groups"
 
 
 def _await_sg_active(session, sg_collection: str, sg_id: str) -> dict[str, Any]:
@@ -58,38 +58,40 @@ def _delete_security_group(
     )
 
 
-def _fresh_cluster(session, clusters_url: str, cluster: dict[str, Any]) -> None:
-    cluster_url = f"{clusters_url}/{cluster['id']}"
-    existing = api.get(session, cluster_url)
+def _fresh_instance_group(
+    session, groups_url: str, ig: dict[str, Any]
+) -> None:
+    ig_url = f"{groups_url}/{ig['id']}"
+    existing = api.get(session, ig_url)
     if existing.status_code == 200:
-        api.delete(session, cluster_url)
+        api.delete(session, ig_url)
         wait.await_api_absent(
-            lambda: None if api.get(session, cluster_url).status_code == 404 else True,
+            lambda: None if api.get(session, ig_url).status_code == 404 else True,
             timeout=1800,
             interval=15,
-            desc=f"cluster {cluster['id']} gone before recreate",
+            desc=f"instance group {ig['id']} gone before recreate",
         )
     elif existing.status_code != 404:
         existing.raise_for_status()
 
-    created = session.post(clusters_url, json=cluster, timeout=60)
+    created = session.post(groups_url, json=ig, timeout=60)
     assert created.status_code in (200, 201), created.text
 
 
-def _cluster_vpcs(
+def _ig_vpcs(
     session,
     api_base: str,
     region: str,
     project: str,
-    cluster_uid: str,
+    ig_uid: str,
 ) -> list[dict[str, Any]]:
     vpcs_url = api.region_url(api_base, region, "networking/vpcs", project=project)
     items = api.list_items(session, vpcs_url)
     return [
         v
         for v in items
-        if v.get("ownerKind") == "cluster"
-        and v.get("ownerId") == cluster_uid
+        if v.get("ownerKind") == "instance_group"
+        and v.get("ownerId") == ig_uid
         and (v.get("backend") or "").lower() == "nico"
     ]
 
@@ -210,54 +212,56 @@ def _first_index(names: list[str], candidates: set[str]) -> int | None:
     not auth_configured(),
     reason="API_BASE required",
 )
-def test_hcp_cluster_vpc_security_groups(
+def test_instance_group_vpc_security_groups(
     session, api_base, region, project, run_id, request
 ):
-    """Create cluster, VPC+cluster SG attach, UFO CRs, NICo merge + precedence."""
-    log = Steps("HCP cluster security-group scenario")
+    """Create IG, VPC+IG SG attach, UFO CRs, NICo merge + precedence."""
+    log = Steps("Instance group security-group scenario")
     log.info(f"run_id={run_id}")
 
-    log.step("ensure global prereqs (address-pools + cluster-type; never deleted)")
+    log.step("ensure global prereqs (address-pools + cluster-types; never deleted)")
     ensure_global_prereqs(session, api_base, region)
     log.ok()
 
     vpc_custom_sg_id = resource_id(request.node.name, "demo-sg", run_id=run_id)
-    cluster_sg_id = resource_id(request.node.name, "cluster-sg", run_id=run_id)
-    cluster_id = resource_id(request.node.name, "cluster", run_id=run_id)
+    ig_sg_id = resource_id(request.node.name, "ig-sg", run_id=run_id)
+    ig_id = resource_id(request.node.name, "ig", run_id=run_id)
 
     sg_collection = api.region_url(
         api_base, region, "networking/security-groups", project=project
     )
-    log.step(f"ensure security groups {vpc_custom_sg_id!r} and {cluster_sg_id!r}")
+    log.step(f"ensure security groups {vpc_custom_sg_id!r} and {ig_sg_id!r}")
     _ensure_security_group(
         session, sg_collection, "security-group-demo-sg.yaml", vpc_custom_sg_id
     )
-    cluster_sg = _ensure_security_group(
-        session, sg_collection, "security-group-cluster-sg.yaml", cluster_sg_id
+    ig_sg = _ensure_security_group(
+        session, sg_collection, "security-group-ig-sg.yaml", ig_sg_id
     )
     log.ok("both SGs active")
 
-    cluster = stamp_id(load_scenario_template(_SCENARIO, "cluster.yaml"), cluster_id)
-    clusters_url = api.region_url(api_base, region, "compute/clusters", project=project)
-    cluster_url = f"{clusters_url}/{cluster_id}"
+    ig = stamp_id(load_scenario_template(_SCENARIO, "instance-group.yaml"), ig_id)
+    groups_url = api.region_url(
+        api_base, region, "compute/instance-groups", project=project
+    )
+    ig_url = f"{groups_url}/{ig_id}"
 
-    log.step(f"create cluster {cluster_id} (delete leftover if any)")
-    _fresh_cluster(session, clusters_url, cluster)
+    log.step(f"create instance group {ig_id} (delete leftover if any)")
+    _fresh_instance_group(session, groups_url, ig)
     log.ok("create accepted")
 
-    def _get_cluster():
-        return api.get_json(session, cluster_url)
+    def _get_ig():
+        return api.get_json(session, ig_url)
 
-    log.step("wait for cluster API state=active")
-    cluster_obj = wait.await_api_state(
-        _get_cluster, "active", timeout=1800, interval=15, steps=log, log_every=2
+    log.step("wait for instance group API state=active")
+    ig_obj = wait.await_api_state(
+        _get_ig, "active", timeout=1800, interval=15, steps=log, log_every=2
     )
-    cluster_uid = cluster_obj["uid"]
-    log.info(f"cluster uid={cluster_uid}")
+    ig_uid = ig_obj["uid"]
+    log.info(f"instance group uid={ig_uid}")
 
-    log.step("find NICo VPC owned by cluster")
-    vpcs = _cluster_vpcs(session, api_base, region, project, cluster_uid)
-    assert vpcs, f"no nico VPC owned by cluster uid={cluster_uid}"
+    log.step("find NICo VPC owned by instance group")
+    vpcs = _ig_vpcs(session, api_base, region, project, ig_uid)
+    assert vpcs, f"no nico VPC owned by instance group uid={ig_uid}"
     vpc = vpcs[0]
     vpc_id = vpc["id"]
     vpc_url = api.region_url(
@@ -306,9 +310,9 @@ def test_hcp_cluster_vpc_security_groups(
         log_every=2,
     )
     assert list(vpc.get("securityGroups") or []) == [vpc_custom_sg_id, default_sg_id]
-    log.info("wait for cluster to settle after VPC re-render")
+    log.info("wait for instance group to settle after VPC re-render")
     wait.await_api_state(
-        _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+        _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
     )
     log.ok("VPC binding settled")
 
@@ -319,7 +323,7 @@ def test_hcp_cluster_vpc_security_groups(
     sgs_by_id = {
         vpc_custom_sg_id: _await_sg_active(session, sg_collection, vpc_custom_sg_id),
         default_sg_id: _await_sg_active(session, sg_collection, default_sg_id),
-        cluster_sg_id: cluster_sg,
+        ig_sg_id: ig_sg,
     }
     for sg_id in (vpc_custom_sg_id, default_sg_id):
         log.info(f"check UFO CR for {sg_id} → sg-{sgs_by_id[sg_id]['uid']}")
@@ -425,26 +429,26 @@ def test_hcp_cluster_vpc_security_groups(
     )
     log.ok()
 
-    log.step(f"PATCH cluster securityGroups=[{cluster_sg_id}]")
-    patched = api.set_cluster_security_groups(session, cluster_url, [cluster_sg_id])
-    assert list(patched.get("securityGroups") or []) == [cluster_sg_id]
+    log.step(f"PATCH instance group securityGroups=[{ig_sg_id}]")
+    patched = api.set_instance_group_security_groups(session, ig_url, [ig_sg_id])
+    assert list(patched.get("securityGroups") or []) == [ig_sg_id]
     wait.await_api_state(
-        _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+        _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
     )
-    cluster_obj = _get_cluster()
-    assert list(cluster_obj.get("securityGroups") or []) == [cluster_sg_id]
-    log.ok("cluster binding settled")
+    ig_obj = _get_ig()
+    assert list(ig_obj.get("securityGroups") or []) == [ig_sg_id]
+    log.ok("instance group binding settled")
 
-    log.step(f"assert UFO CR for cluster SG {cluster_sg_id}")
-    sgs_by_id[cluster_sg_id] = _await_sg_active(session, sg_collection, cluster_sg_id)
+    log.step(f"assert UFO CR for instance-group SG {ig_sg_id}")
+    sgs_by_id[ig_sg_id] = _await_sg_active(session, sg_collection, ig_sg_id)
     _assert_ufo_security_group_cr(
-        kube, ns, sgs_by_id[cluster_sg_id], api_id=cluster_sg_id
+        kube, ns, sgs_by_id[ig_sg_id], api_id=ig_sg_id
     )
     log.ok()
 
-    cluster_rule_names = {
+    ig_rule_names = {
         r.get("name")
-        for r in _sg_api_rules(sgs_by_id[cluster_sg_id])["ingress"]
+        for r in _sg_api_rules(sgs_by_id[ig_sg_id])["ingress"]
         if r.get("name")
     }
     vpc_rule_names = {
@@ -453,12 +457,12 @@ def test_hcp_cluster_vpc_security_groups(
         for r in _sg_api_rules(sgs_by_id[sg_id])["ingress"]
         if r.get("name")
     }
-    assert cluster_rule_names, "cluster SG must have named ingress rules for precedence"
-    assert "cluster-allow-ssh" in cluster_rule_names
+    assert ig_rule_names, "IG SG must have named ingress rules for precedence"
+    assert "ig-allow-ssh" in ig_rule_names
 
-    log.step("assert NICo NSG has cluster+VPC rules; cluster ingress precedes VPC")
+    log.step("assert NICo NSG has IG+VPC rules; IG ingress precedes VPC")
 
-    def _nsg_has_cluster_and_precedence():
+    def _nsg_has_ig_and_precedence():
         fresh = k8s.get_custom(
             kube,
             group="nico.mirantis.com",
@@ -471,7 +475,7 @@ def test_hcp_cluster_vpc_security_groups(
             return None
         have = _nsg_rule_fingerprints(fresh)
         want = (
-            _api_rule_fingerprints(sgs_by_id[cluster_sg_id])
+            _api_rule_fingerprints(sgs_by_id[ig_sg_id])
             | _api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
             | _api_rule_fingerprints(sgs_by_id[default_sg_id])
         )
@@ -479,27 +483,27 @@ def test_hcp_cluster_vpc_security_groups(
             return None
 
         order = _nsg_named_ingress_order(fresh)
-        cluster_idx = _first_index(order, cluster_rule_names)
+        ig_idx = _first_index(order, ig_rule_names)
         vpc_idx = _first_index(order, vpc_rule_names)
-        if cluster_idx is None or vpc_idx is None:
+        if ig_idx is None or vpc_idx is None:
             return None
-        if cluster_idx >= vpc_idx:
+        if ig_idx >= vpc_idx:
             return None
         return fresh
 
     nsg_final = wait.await_predicate(
-        _nsg_has_cluster_and_precedence,
+        _nsg_has_ig_and_precedence,
         timeout=900,
         interval=10,
-        desc="NICo NSG has cluster+VPC rules with cluster precedence",
+        desc="NICo NSG has IG+VPC rules with IG precedence",
         steps=log,
         log_every=2,
     )
     order = _nsg_named_ingress_order(nsg_final)
     log.info(f"named ingress order: {order}")
-    log.ok("cluster rules have higher precedence than VPC")
+    log.ok("instance-group rules have higher precedence than VPC")
 
-    cluster_fps = _api_rule_fingerprints(sgs_by_id[cluster_sg_id])
+    ig_fps = _api_rule_fingerprints(sgs_by_id[ig_sg_id])
     vpc_custom_fps = _api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
     default_fps = _api_rule_fingerprints(sgs_by_id[default_sg_id])
 
@@ -513,37 +517,36 @@ def test_hcp_cluster_vpc_security_groups(
             name=nsg_name,
         )
 
-    log.step("detach cluster SG and assert its rules leave the NICo NSG")
+    log.step("detach IG SG and assert its rules leave the NICo NSG")
     try:
         wait.await_api_state(
-            _get_cluster, "active", timeout=300, interval=10, steps=log, log_every=2
+            _get_ig, "active", timeout=300, interval=10, steps=log, log_every=2
         )
-        api.set_cluster_security_groups(session, cluster_url, [])
+        api.set_instance_group_security_groups(session, ig_url, [])
         wait.await_api_state(
-            _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+            _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
         )
-        assert list(_get_cluster().get("securityGroups") or []) == []
+        assert list(_get_ig().get("securityGroups") or []) == []
 
-        def _nsg_without_cluster_rules():
+        def _nsg_without_ig_rules():
             fresh = _nsg_fresh()
             if not fresh:
                 return None
             have = _nsg_rule_fingerprints(fresh)
-            # Cluster rules gone; VPC custom + default still present.
-            if have & cluster_fps:
+            if have & ig_fps:
                 return None
             want = vpc_custom_fps | default_fps
             return fresh if want <= have else None
 
         wait.await_predicate(
-            _nsg_without_cluster_rules,
+            _nsg_without_ig_rules,
             timeout=900,
             interval=10,
-            desc="NICo NSG dropped cluster SG rules (VPC rules remain)",
+            desc="NICo NSG dropped IG SG rules (VPC rules remain)",
             steps=log,
             log_every=2,
         )
-        log.ok("cluster-sg rules gone from NICo NSG")
+        log.ok("ig-sg rules gone from NICo NSG")
 
         log.step("detach VPC custom SG ([] → default only) and assert custom rules leave NICo")
         wait.await_api_state(
@@ -563,9 +566,8 @@ def test_hcp_cluster_vpc_security_groups(
             steps=log,
             log_every=2,
         )
-        # Cluster re-renders after VPC binding change.
         wait.await_api_state(
-            _get_cluster, "active", timeout=900, interval=10, steps=log, log_every=2
+            _get_ig, "active", timeout=900, interval=10, steps=log, log_every=2
         )
         vpc_after = api.get_json(session, vpc_url)
         remaining = list(vpc_after.get("securityGroups") or [])
@@ -578,8 +580,7 @@ def test_hcp_cluster_vpc_security_groups(
             if not fresh:
                 return None
             have = _nsg_rule_fingerprints(fresh)
-            # Custom VPC + cluster rules must be gone; default VPC rules remain.
-            if have & cluster_fps:
+            if have & ig_fps:
                 return None
             if have & vpc_custom_fps:
                 return None
@@ -595,18 +596,18 @@ def test_hcp_cluster_vpc_security_groups(
         )
         log.ok("demo-sg rules gone from NICo NSG; default rules remain")
     finally:
-        log.step(f"DELETE cluster {cluster_id}")
-        deleted = api.delete(session, cluster_url)
+        log.step(f"DELETE instance group {ig_id}")
+        deleted = api.delete(session, ig_url)
         assert deleted.status_code in (202, 204), deleted.text
         wait.await_api_absent(
-            lambda: None if api.get(session, cluster_url).status_code == 404 else True,
+            lambda: None if api.get(session, ig_url).status_code == 404 else True,
             timeout=1800,
             interval=15,
-            desc=f"cluster {cluster_id} deleted",
+            desc=f"instance group {ig_id} deleted",
             steps=log,
             log_every=2,
         )
-        log.step(f"DELETE security groups {cluster_sg_id!r} and {vpc_custom_sg_id!r}")
-        _delete_security_group(session, sg_collection, cluster_sg_id, log=log)
+        log.step(f"DELETE security groups {ig_sg_id!r} and {vpc_custom_sg_id!r}")
+        _delete_security_group(session, sg_collection, ig_sg_id, log=log)
         _delete_security_group(session, sg_collection, vpc_custom_sg_id, log=log)
     log.done()
