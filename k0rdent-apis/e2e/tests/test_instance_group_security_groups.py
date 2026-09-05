@@ -266,6 +266,9 @@ def test_instance_group_vpc_security_groups(
     ig_uid = ig_obj["uid"]
     log.info(f"instance group uid={ig_uid}")
 
+    default_sg_id: str | None = None
+    default_sg_uid: str | None = None
+
     log.step("find NICo VPC owned by instance group")
     vpcs = _ig_vpcs(session, api_base, region, project, ig_uid)
     assert vpcs, f"no nico VPC owned by instance group uid={ig_uid}"
@@ -293,11 +296,12 @@ def test_instance_group_vpc_security_groups(
         f"default SG id shape: want *-default, got {default_sg_id!r}"
     )
     default_sg = api.get_json(session, f"{sg_collection}/{default_sg_id}")
+    default_sg_uid = default_sg["uid"]
     assert default_sg.get("ownerKind") == "vpc", (
         f"default SG ownerKind={default_sg.get('ownerKind')!r}, want vpc"
     )
     assert default_sg.get("state") == "active"
-    log.ok(f"default SG {default_sg_id!r} (ownerKind=vpc)")
+    log.ok(f"default SG {default_sg_id!r} (ownerKind=vpc uid={default_sg_uid})")
 
     log.step(
         f"attach VPC SGs [{vpc_custom_sg_id}, {default_sg_id}] (custom + default)"
@@ -648,6 +652,55 @@ def test_instance_group_vpc_security_groups(
             steps=log,
             log_every=2,
         )
+        if default_sg_id:
+            log.step(
+                f"assert vpc {vpc_id} and its default SG {default_sg_id!r} are gone"
+            )
+            wait.await_api_absent(
+                lambda: None if api.get(session, vpc_url).status_code == 404 else True,
+                timeout=900,
+                interval=10,
+                desc=f"vpc {vpc_id} deleted with instance group",
+                steps=log,
+                log_every=2,
+            )
+            wait.await_api_absent(
+                lambda: None
+                if api.get(session, f"{sg_collection}/{default_sg_id}").status_code
+                == 404
+                else True,
+                timeout=900,
+                interval=10,
+                desc=f"vpc default security group {default_sg_id} deleted with vpc",
+                steps=log,
+                log_every=2,
+            )
+            if default_sg_uid:
+                cr_name = k8s.ufo_security_group_name(default_sg_uid)
+
+                def _ufo_default_sg_gone():
+                    return (
+                        True
+                        if not k8s.get_custom(
+                            kube,
+                            group="ufo.mirantis.com",
+                            version="v1alpha1",
+                            plural="securitygroups",
+                            namespace=ns,
+                            name=cr_name,
+                        )
+                        else None
+                    )
+
+                wait.await_predicate(
+                    _ufo_default_sg_gone,
+                    timeout=300,
+                    interval=5,
+                    desc=f"UFO SecurityGroup {cr_name} for vpc default SG gone",
+                    steps=log,
+                    log_every=2,
+                )
+            log.ok("vpc default SG removed with vpc")
         log.step(f"DELETE security groups {ig_sg_id!r} and {vpc_custom_sg_id!r}")
         _delete_security_group(session, sg_collection, ig_sg_id, log=log)
         _delete_security_group(session, sg_collection, vpc_custom_sg_id, log=log)
