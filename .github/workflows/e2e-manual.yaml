@@ -1,0 +1,103 @@
+name: "WFI: Manual"
+
+# Manual Heat-stack lab deploy via KSI (mirrored from
+# k0rdent/unified-fabric-operator `.github/workflows/e2e-manual.yaml`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      ci_ksi_image:
+        default: "ghcr.io/k0rdent/ksi:latest"
+        description: "KSI Repository image artifact"
+        required: false
+        type: string
+      ci_ksi_refspec:
+        description: "KSI Repository ref. Only for actions!"
+        default: "main"
+      #####
+      CI_KEEP_ENV_FAIL:
+        default: false
+      CI_KEEP_ENV_AFTER:
+        default: false
+      KSI_ENV_NAME:
+        description: |
+          Environment name. Default: gh-ci-<your GitHub username>-<current time>
+        required: false
+        type: string
+      KSI_KCM_SOURCE:
+        default: "enterprise"
+      KSI_KCM_CHART_VERSION:
+        default: "1.2.0"
+      KSI_KEEP_ENV_BEFORE:
+        default: false
+      KSI_BAREMETAL_CAPI_PROVIDER_METAL3_CHART_VERSION:
+        default: "0.4.0"
+      KSI_K0S_VERSION:
+        description: "for child cluster spec"
+        default: "v1.34.2+k0s.0"
+      ci_environment:
+        type: choice
+        options:
+          - "[Manual] k0rdent-dev-ai EU"
+      KSI_ENV_CONFIG_FILE_NAME:
+        description: "Heat env filename under os-ufo-aio-generic heat_data"
+        type: choice
+        options:
+          - "env-netris.yaml"
+          - "env-verity.yaml"
+      UFO_SIMULATOR_REFSPEC:
+        description: >
+          Git ref of ufo-simulator to clone into the stack
+          (branch, tag, sha, or pull/N/head). Empty = branch/ref that triggered this run.
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  set-env-name:
+    name: Set defaults
+    runs-on: ubuntu-latest
+    outputs:
+      env_name: ${{ steps.env-name.outputs.env_name }}
+      ufo_simulator_refspec: ${{ steps.refspec.outputs.ufo_simulator_refspec }}
+
+    steps:
+      - name: Create default env name
+        run: echo "env_name=gh-ci-${{ github.event.sender.login }}-$(date +%s)" >> $GITHUB_ENV
+
+      - id: env-name
+        name: Set env_name output
+        run: |
+          echo "env_name=${{ inputs.KSI_ENV_NAME || env.env_name }}" >> $GITHUB_OUTPUT
+
+      - id: refspec
+        name: Resolve UFO_SIMULATOR_REFSPEC
+        run: |
+          set -euo pipefail
+          refspec="${{ inputs.UFO_SIMULATOR_REFSPEC }}"
+          if [ -z "$refspec" ]; then
+            refspec="${{ github.ref_name }}"
+          fi
+          echo "ufo_simulator_refspec=${refspec}" >> "$GITHUB_OUTPUT"
+          echo "Using UFO_SIMULATOR_REFSPEC=${refspec}"
+
+  e2e-test:
+    name: E2E test
+    uses: ./.github/workflows/e2e-test.yaml
+    needs: set-env-name
+    secrets: inherit
+    with:
+      ci_ksi_image: ${{ inputs.ci_ksi_image }}
+      ci_ksi_refspec: ${{ inputs.ci_ksi_refspec }}
+      CI_KEEP_ENV_FAIL: ${{ inputs.CI_KEEP_ENV_FAIL }}
+      CI_KEEP_ENV_AFTER: ${{ inputs.CI_KEEP_ENV_AFTER }}
+      KSI_BAREMETAL_CAPI_PROVIDER_METAL3_CHART_VERSION: ${{ inputs.KSI_BAREMETAL_CAPI_PROVIDER_METAL3_CHART_VERSION }}
+      KSI_ENV_NAME: ${{ needs.set-env-name.outputs.env_name }}
+      KSI_K0S_VERSION: ${{ inputs.KSI_K0S_VERSION }}
+      KSI_KCM_CHART_VERSION: ${{ inputs.KSI_KCM_CHART_VERSION }}
+      KSI_KCM_SOURCE: ${{ inputs.KSI_KCM_SOURCE }}
+      KSI_KEEP_ENV_BEFORE: ${{ inputs.KSI_KEEP_ENV_BEFORE }}
+      ci_environment: ${{ inputs.ci_environment }}
+      KSI_ENV_CONFIG_NAME: os-ufo-aio-generic
+      KSI_ENV_CONFIG_FILE_NAME: ${{ inputs.KSI_ENV_CONFIG_FILE_NAME }}
+      UFO_SIMULATOR_REFSPEC: ${{ needs.set-env-name.outputs.ufo_simulator_refspec }}

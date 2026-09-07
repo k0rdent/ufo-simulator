@@ -1,0 +1,119 @@
+name: "WFI: e2e-test"
+
+# Reusable Heat-stack deploy via KSI (mirrored from
+# k0rdent/unified-fabric-operator `.github/workflows/e2e-test.yaml`).
+
+on:
+  workflow_call:
+    inputs:
+      ci_ksi_image:
+        default: "ghcr.io/k0rdent/ksi:latest"
+        description: "KSI Repository image artifact"
+        required: false
+        type: string
+      ci_ksi_refspec:
+        description: "KSI Repository ref. Only for actions!"
+        type: string
+        default: "main"
+      #####
+      CI_KEEP_ENV_FAIL:
+        default: false
+        type: string
+      CI_KEEP_ENV_AFTER:
+        default: false
+        type: string
+      KSI_ENV_NAME:
+        required: true
+        type: string
+      KSI_KCM_SOURCE:
+        default: "enterprise"
+        type: string
+      KSI_KCM_CHART_VERSION:
+        default: "1.2.0"
+        type: string
+      KSI_KEEP_ENV_BEFORE:
+        default: false
+        type: string
+      KSI_BAREMETAL_CAPI_PROVIDER_METAL3_CHART_VERSION:
+        default: "0.4.0"
+        type: string
+      KSI_K0S_VERSION:
+        description: "for child cluster spec"
+        type: string
+        default: "v1.34.2+k0s.0"
+      ci_environment:
+        type: string
+        default: "[Manual] k0rdent-dev-ai EU"
+      KSI_ENV_CONFIG_NAME:
+        type: string
+        default: "os-ufo-aio-generic"
+      KSI_ENV_CONFIG_FILE_NAME:
+        description: "Heat env filename under the lab heat_data directory"
+        type: string
+        default: "env-netris.yaml"
+      UFO_SIMULATOR_REFSPEC:
+        description: "Git ref for this repo cloned into the Heat stack VMs"
+        type: string
+        default: "main"
+
+jobs:
+  run-bm-integration-tests:
+    timeout-minutes: 180
+    runs-on: arc-runner-set-k0rdent-private
+    environment: ${{ inputs.ci_environment }}
+    steps:
+      - name: Checkout KSI repository
+        uses: actions/checkout@v6
+        with:
+          repository: k0rdent/ksi
+          ref: ${{ inputs.ci_ksi_refspec }}
+          path: ./actions_repos/k0rdent/ksi
+          token: ${{ secrets.KSI_PAT }}
+          fetch-depth: 0
+
+      - name: "Set commons ENVs"
+        run: |
+          echo "KSI_ENV_NAME=${{ inputs.KSI_ENV_NAME }}" >> $GITHUB_ENV
+          echo "CI_KSI_IMAGE=${{ inputs.ci_ksi_image }}" >> $GITHUB_ENV
+          echo "KSI_KCM_SOURCE=${{ inputs.KSI_KCM_SOURCE }}" >> $GITHUB_ENV
+          echo "KSI_KCM_CHART_VERSION=${{ inputs.KSI_KCM_CHART_VERSION }}" >> $GITHUB_ENV
+          echo "KSI_BAREMETAL_CAPI_PROVIDER_METAL3_CHART_VERSION=${{ inputs.KSI_BAREMETAL_CAPI_PROVIDER_METAL3_CHART_VERSION }}" >> $GITHUB_ENV
+          echo "KSI_K0S_VERSION=${{ inputs.KSI_K0S_VERSION }}" >> $GITHUB_ENV
+          echo "KSI_KEEP_ENV_BEFORE=${{ inputs.KSI_KEEP_ENV_BEFORE }}" >> $GITHUB_ENV
+          echo "KSI_SKIP_EXPECTED_PODS_REGISTRY_CHECK=true" >> $GITHUB_ENV
+
+      - name: "KSI: Generate initial ksi_config.yaml"
+        uses: ./actions_repos/k0rdent/ksi/.github/actions/helpers/prepare_ksi_config
+        id: prepare_ksi_config
+        with:
+          KSI_SEED_SSH_LOGIN: ksiuser
+          ci_artifacts_base: "_temp/"
+          ci_ksi_pull_token: ${{ secrets.KSI_PAT }}
+          ci_secret_ksi_seed_ssh_priv_key_data: ${{ secrets.BM_KSI_SEED_SSH_PRIV_KEY_FILE }}
+
+      - name: "KSI: Create Heat stack"
+        uses: ./actions_repos/k0rdent/ksi/.github/actions/tests/infra/create_heat_stack
+        id: create_heat_stack
+        with:
+          KSI_OS_CLOUD_NAME: "ic-eu-k0rdent-dev-ai"
+          KSI_ENV_NAME: ${{ env.KSI_ENV_NAME }}
+          KSI_OS_APP_SECRET: ${{ secrets.KSI_OS_APP_SECRET }}
+          KSI_ENV_CONFIG_NAME: "${{ inputs.KSI_ENV_CONFIG_NAME }}"
+          KSI_ENV_CONFIG_FILE_NAME: "${{ inputs.KSI_ENV_CONFIG_FILE_NAME }}"
+          KSI_INFRA_OS_KEYPAIR_NAME: "k0s-ksiuser"
+          KSI_KEEP_ENV_BEFORE: ${{ env.KSI_KEEP_ENV_BEFORE }}
+          #
+          ci_src_ksi_config_path: ${{ steps.prepare_ksi_config.outputs.ksi_config_path }}
+          ci_ksi_image: ${{ env.CI_KSI_IMAGE }}
+          ci_artifacts_base: "_temp/"
+          ci_ksi_pull_token: ${{ secrets.KSI_PAT }}
+          KSI_HEAT_STACK_CREATE_TRIES: 500
+          KSI_HEAT_EXTRA_ENV: '{"parameters": {"netris_license": "${{ secrets.NETRIS_LICENSE }}", "ufo_simulator_refspec": "${{ inputs.UFO_SIMULATOR_REFSPEC }}", "k0rdent_apis_pull_secret_username": "${{ secrets.REGISTRY_CI_RO_USERNAME }}", "k0rdent_apis_pull_secret_password": "${{ secrets.REGISTRY_CI_RO_PASSWORD }}" }}'
+
+      - name: Upload test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ env.KSI_ENV_NAME }}
+          path: "_temp/"
+          retention-days: 1
