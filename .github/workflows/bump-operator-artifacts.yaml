@@ -5,7 +5,7 @@ name: bump-operator-artifacts
 # k0rdent/core-services `.github/workflows/e2e-periodic-ufo.yaml`), then open a
 # PR that bumps ansible/vars/common.yml.
 #
-# Requires repo secret UFO_REPOS_TOKEN (PAT that can read Actions artifacts from
+# Requires repo secret GH_RUNNERS_READ_PAT (PAT that can read Actions artifacts from
 # k0rdent/unified-fabric-operator, k0rdent/verity-operator, k0rdent/nico-operator).
 
 on:
@@ -33,7 +33,7 @@ jobs:
       - name: Get latest unified-fabric-operator
         id: fetch
         env:
-          GH_TOKEN: ${{ secrets.UFO_REPOS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
           TARGET_REPO: k0rdent/unified-fabric-operator
           WORKFLOW_ID: dev-build-artifacts.yml
           OUT_DIR: /tmp/ufo-artifacts
@@ -51,7 +51,7 @@ jobs:
       - name: Get latest verity-operator
         id: fetch
         env:
-          GH_TOKEN: ${{ secrets.UFO_REPOS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
           TARGET_REPO: k0rdent/verity-operator
           WORKFLOW_ID: dev-build-artifacts.yml
           OUT_DIR: /tmp/verity-artifacts
@@ -69,7 +69,7 @@ jobs:
       - name: Get latest nico-operator
         id: fetch
         env:
-          GH_TOKEN: ${{ secrets.UFO_REPOS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
           TARGET_REPO: k0rdent/nico-operator
           WORKFLOW_ID: dev-build-artifacts.yml
           OUT_DIR: /tmp/nico-artifacts
