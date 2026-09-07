@@ -52,6 +52,13 @@ on:
         required: false
         type: string
         default: ""
+      ARTIFACTS_RELEASE:
+        description: Operator artifact pin set under ansible/vars/artifacts-<name>.yaml
+        type: choice
+        options:
+          - main
+          - release-v0.3.x
+        default: main
 
 jobs:
   set-env-name:
@@ -60,6 +67,7 @@ jobs:
     outputs:
       env_name: ${{ steps.env-name.outputs.env_name }}
       ufo_simulator_refspec: ${{ steps.refspec.outputs.ufo_simulator_refspec }}
+      artifacts_vars_file: ${{ steps.artifacts.outputs.artifacts_vars_file }}
 
     steps:
       - name: Create default env name
@@ -81,6 +89,15 @@ jobs:
           echo "ufo_simulator_refspec=${refspec}" >> "$GITHUB_OUTPUT"
           echo "Using UFO_SIMULATOR_REFSPEC=${refspec}"
 
+      - id: artifacts
+        name: Resolve ARTIFACTS_VARS_FILE
+        run: |
+          set -euo pipefail
+          release="${{ inputs.ARTIFACTS_RELEASE }}"
+          file="artifacts-${release}.yaml"
+          echo "artifacts_vars_file=${file}" >> "$GITHUB_OUTPUT"
+          echo "Using ARTIFACTS_VARS_FILE=${file}"
+
   e2e-test:
     name: E2E test
     uses: ./.github/workflows/e2e-test.yaml
@@ -101,3 +118,4 @@ jobs:
       KSI_ENV_CONFIG_NAME: os-ufo-aio-generic
       KSI_ENV_CONFIG_FILE_NAME: ${{ inputs.KSI_ENV_CONFIG_FILE_NAME }}
       UFO_SIMULATOR_REFSPEC: ${{ needs.set-env-name.outputs.ufo_simulator_refspec }}
+      ARTIFACTS_VARS_FILE: ${{ needs.set-env-name.outputs.artifacts_vars_file }}

@@ -37,6 +37,10 @@ parameters:
   ufo_simulator_refspec:
     type: string
     default: 'main'
+  artifacts_vars_file:
+    type: string
+    description: Ansible vars file under ansible/vars/ (e.g. artifacts-main.yaml)
+    default: 'artifacts-main.yaml'
 
 resources:
   keypair_name:
@@ -57,6 +61,7 @@ resources:
     type: MCP2::SrvInstances
     properties:
       ufo_simulator_refspec: { get_param: ufo_simulator_refspec }
+      artifacts_vars_file: { get_param: artifacts_vars_file }
       netris_license: { get_param: netris_license }
       image: { get_param: image }
       flavor: { get_param: controller_flavor }

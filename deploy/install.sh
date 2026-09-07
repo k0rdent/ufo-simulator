@@ -13,6 +13,7 @@ export PIP_BREAK_SYSTEM_PACKAGES=1
 export KUBECONFIG=/root/.kube/config
 export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
 export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
+export ARTIFACTS_VARS_FILE=${ARTIFACTS_VARS_FILE:-'artifacts-main.yaml'}
 export FABRIC_BACKEND=${FABRIC_BACKEND:-"netris"}
 export NODE_TYPE=${NODE_TYPE:-"cmp"}
 export NICO_ENABLE="true"
@@ -51,6 +52,12 @@ sed -i "s/<NETRIS_LICENSE>/${NETRIS_LICENSE}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/var
 sed -i "s|<K0RDENT_APIS_PULL_SECRET_USERNAME>|${K0RDENT_APIS_PULL_SECRET_USERNAME}|g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
 sed -i "s|<K0RDENT_APIS_PULL_SECRET_PASSWORD>|${K0RDENT_APIS_PULL_SECRET_PASSWORD}|g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
 sed -i "s/sdn_provider:.*$/sdn_provider: ${FABRIC_BACKEND}/g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
+sed -i "s|^artifacts_vars_file:.*$|artifacts_vars_file: ${ARTIFACTS_VARS_FILE}|g" ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/common.yml
+
+if [[ ! -f "${UFO_SIMULATOR_ANSIBLE_DIR}/vars/${ARTIFACTS_VARS_FILE}" ]]; then
+    echo "ERROR: artifacts vars file not found: ${UFO_SIMULATOR_ANSIBLE_DIR}/vars/${ARTIFACTS_VARS_FILE}" >&2
+    exit 1
+fi
 
 # TODO: fix ugly hack
 if [[ ${NODE_TYPE} == "cmp" ]]; then

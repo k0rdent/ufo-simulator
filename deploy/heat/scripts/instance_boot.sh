@@ -8,6 +8,8 @@ declare -r -g _INSTALL_SCRIPT=1
 export NETRIS_LICENSE=$netris_license
 export UFO_SIMULATOR_REFSPEC=$ufo_simulator_refspec
 export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-"main"}
+export ARTIFACTS_VARS_FILE=$artifacts_vars_file
+export ARTIFACTS_VARS_FILE=${ARTIFACTS_VARS_FILE:-"artifacts-main.yaml"}
 
 function wait_condition_send {
     local status=${1:-SUCCESS}

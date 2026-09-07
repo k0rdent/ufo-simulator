@@ -24,6 +24,9 @@ parameters:
   ufo_simulator_refspec:
     type: string
     default: 'main'
+  artifacts_vars_file:
+    type: string
+    default: 'artifacts-main.yaml'
 
 resources:
   software_config:
@@ -37,6 +40,7 @@ resources:
             $wait_condition_notify: { get_attr: [ wait_handle, curl_cli ] }
             $netris_license: { get_param: netris_license }
             $ufo_simulator_refspec: { get_param: ufo_simulator_refspec }
+            $artifacts_vars_file: { get_param: artifacts_vars_file }
   software_config_multi:
     type: "OS::Heat::MultipartMime"
     properties:

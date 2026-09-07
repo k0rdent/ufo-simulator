@@ -55,6 +55,10 @@ on:
         description: "Git ref for this repo cloned into the Heat stack VMs"
         type: string
         default: "main"
+      ARTIFACTS_VARS_FILE:
+        description: "Ansible vars file under ansible/vars/ (e.g. artifacts-main.yaml)"
+        type: string
+        default: "artifacts-main.yaml"
 
 jobs:
   run-bm-integration-tests:
@@ -108,7 +112,7 @@ jobs:
           ci_artifacts_base: "_temp/"
           ci_ksi_pull_token: ${{ secrets.KSI_PAT }}
           KSI_HEAT_STACK_CREATE_TRIES: 500
-          KSI_HEAT_EXTRA_ENV: '{"parameters": {"netris_license": "${{ secrets.NETRIS_LICENSE }}", "ufo_simulator_refspec": "${{ inputs.UFO_SIMULATOR_REFSPEC }}", "k0rdent_apis_pull_secret_username": "${{ secrets.REGISTRY_CI_RO_USERNAME }}", "k0rdent_apis_pull_secret_password": "${{ secrets.REGISTRY_CI_RO_PASSWORD }}" }}'
+          KSI_HEAT_EXTRA_ENV: '{"parameters": {"netris_license": "${{ secrets.NETRIS_LICENSE }}", "ufo_simulator_refspec": "${{ inputs.UFO_SIMULATOR_REFSPEC }}", "artifacts_vars_file": "${{ inputs.ARTIFACTS_VARS_FILE }}", "k0rdent_apis_pull_secret_username": "${{ secrets.REGISTRY_CI_RO_USERNAME }}", "k0rdent_apis_pull_secret_password": "${{ secrets.REGISTRY_CI_RO_PASSWORD }}" }}'
 
       - name: Upload test results
         if: ${{ always() }}
