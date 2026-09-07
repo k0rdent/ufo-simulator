@@ -16,17 +16,17 @@ netris_operator_chart_version: 0.0.1-f125b11
 netris_operator_image_tag: 0.0.1-f125b11.1775730529
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.3.1-f558c1a
-ufo_image_tag: 0.3.1-f558c1a
+ufo_chart_version: 0.3.1-c6ab3e2
+ufo_image_tag: 0.3.1-c6ab3e2
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
-verity_operator_chart_version: 0.3.1-db2b962
-verity_operator_image_tag: 0.3.1-db2b962
+verity_operator_chart_version: 0.3.1-41b6ef9
+verity_operator_image_tag: 0.3.1-41b6ef9
 
 nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator
-nico_operator_chart_version: 0.3.1-8eb21ff
+nico_operator_chart_version: 0.3.1-38782c9
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
-nico_operator_image_tag: 0.3.1-8eb21ff
+nico_operator_image_tag: 0.3.1-38782c9
 
 nico_capi_provider_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/cluster-api-provider-nico
 nico_capi_provider_chart_version: v0.2.0-rc1-10-g340928f043b698
