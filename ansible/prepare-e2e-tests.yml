@@ -15,6 +15,7 @@
 
   vars_files:
     - ./vars/common.yml
+    - ./vars/{{ artifacts_vars_file }}
 
   vars:
     # User-requested venv root (outside /opt/ufo_lab).

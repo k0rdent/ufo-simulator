@@ -1,21 +1,30 @@
 name: bump-operator-artifacts
 
 # Fetch latest UFO / Verity / NICo operator chart+image tags from each repo's
-# successful main `dev-build-artifacts.yml` run (same approach as
-# k0rdent/core-services `.github/workflows/e2e-periodic-ufo.yaml`), then open a
-# PR that bumps ansible/vars/common.yml.
+# successful `dev-build-artifacts.yml` run on the chosen branch (same approach as
+# k0rdent/core-services e2e-periodic-ufo), then open a PR that bumps:
+#   - ansible/vars/artifacts-main.yaml              when release is "main"
+#   - ansible/vars/artifacts-<release>.yaml         otherwise (create or update)
 #
 # Requires repo secret GH_RUNNERS_READ_PAT (PAT that can read Actions artifacts from
 # k0rdent/unified-fabric-operator, k0rdent/verity-operator, k0rdent/nico-operator).
 
 on:
   schedule:
-    # Weekdays 06:20 UTC — after typical overnight operator artifact builds.
+    # Weekdays 06:20 UTC — bumps main → ansible/vars/artifacts-main.yaml
     - cron: "20 6 * * 1-5"
   workflow_dispatch:
+    inputs:
+      release:
+        description: >
+          Operator git branch to fetch artifacts from (e.g. main, release-v0.3.x).
+          Writes ansible/vars/artifacts-main.yaml or ansible/vars/artifacts-<release>.yaml
+        required: true
+        type: string
+        default: main
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ inputs.release || 'main' }}
   cancel-in-progress: true
 
 permissions:
@@ -23,7 +32,34 @@ permissions:
   pull-requests: write
 
 jobs:
+  resolve-release:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.resolve.outputs.branch }}
+      vars_file: ${{ steps.resolve.outputs.vars_file }}
+      pr_branch: ${{ steps.resolve.outputs.pr_branch }}
+    steps:
+      - id: resolve
+        name: Resolve release branch and vars file path
+        run: |
+          set -euo pipefail
+          branch="${{ inputs.release || 'main' }}"
+          # Reject path traversal / odd names so we only write under ansible/vars/
+          if ! [[ "$branch" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+            echo "invalid release/branch name: ${branch}" >&2
+            exit 1
+          fi
+          vars_file="ansible/vars/artifacts-${branch}.yaml"
+          slug="${branch//\//-}"
+          {
+            echo "branch=${branch}"
+            echo "vars_file=${vars_file}"
+            echo "pr_branch=chore/bump-operator-artifacts-${slug}"
+          } >> "$GITHUB_OUTPUT"
+          echo "branch=${branch} vars_file=${vars_file}"
+
   get-latest-ufo:
+    needs: resolve-release
     runs-on: ubuntu-latest
     outputs:
       chart_version: ${{ steps.fetch.outputs.chart_version }}
@@ -36,12 +72,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
           TARGET_REPO: k0rdent/unified-fabric-operator
           WORKFLOW_ID: dev-build-artifacts.yml
+          TARGET_BRANCH: ${{ needs.resolve-release.outputs.branch }}
           OUT_DIR: /tmp/ufo-artifacts
         run: |
           chmod +x .github/scripts/get-latest-build-artifacts.sh
           .github/scripts/get-latest-build-artifacts.sh
 
   get-latest-verity:
+    needs: resolve-release
     runs-on: ubuntu-latest
     outputs:
       chart_version: ${{ steps.fetch.outputs.chart_version }}
@@ -54,12 +92,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
           TARGET_REPO: k0rdent/verity-operator
           WORKFLOW_ID: dev-build-artifacts.yml
+          TARGET_BRANCH: ${{ needs.resolve-release.outputs.branch }}
           OUT_DIR: /tmp/verity-artifacts
         run: |
           chmod +x .github/scripts/get-latest-build-artifacts.sh
           .github/scripts/get-latest-build-artifacts.sh
 
   get-latest-nico:
+    needs: resolve-release
     runs-on: ubuntu-latest
     outputs:
       chart_version: ${{ steps.fetch.outputs.chart_version }}
@@ -72,6 +112,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
           TARGET_REPO: k0rdent/nico-operator
           WORKFLOW_ID: dev-build-artifacts.yml
+          TARGET_BRANCH: ${{ needs.resolve-release.outputs.branch }}
           OUT_DIR: /tmp/nico-artifacts
         run: |
           chmod +x .github/scripts/get-latest-build-artifacts.sh
@@ -79,13 +120,15 @@ jobs:
 
   bump-and-pr:
     name: Bump versions and open PR
-    needs: [get-latest-ufo, get-latest-verity, get-latest-nico]
+    needs: [resolve-release, get-latest-ufo, get-latest-verity, get-latest-nico]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply version bumps to ansible/vars/common.yml
+      - name: Apply version bumps
         env:
+          VARS_FILE: ${{ needs.resolve-release.outputs.vars_file }}
+          RELEASE_BRANCH: ${{ needs.resolve-release.outputs.branch }}
           UFO_CHART: ${{ needs.get-latest-ufo.outputs.chart_version }}
           UFO_IMAGE: ${{ needs.get-latest-ufo.outputs.image_version }}
           VERITY_CHART: ${{ needs.get-latest-verity.outputs.chart_version }}
@@ -94,26 +137,48 @@ jobs:
           NICO_IMAGE: ${{ needs.get-latest-nico.outputs.image_version }}
         run: |
           set -euo pipefail
-          file=ansible/vars/common.yml
+          file="$VARS_FILE"
 
           set_key() {
             local key="$1" value="$2"
-            if ! grep -qE "^${key}:" "$file"; then
-              echo "missing key ${key} in ${file}" >&2
-              exit 1
+            if grep -qE "^${key}:" "$file"; then
+              sed -i -E "s|^(${key}:).*|\1 ${value}|" "$file"
+            else
+              printf '%s: %s\n' "$key" "$value" >> "$file"
             fi
-            sed -i -E "s|^(${key}:).*|\1 ${value}|" "$file"
           }
 
-          set_key ufo_chart_version "$UFO_CHART"
-          set_key ufo_image_tag "$UFO_IMAGE"
-          set_key verity_operator_chart_version "$VERITY_CHART"
-          set_key verity_operator_image_tag "$VERITY_IMAGE"
-          set_key nico_operator_chart_version "$NICO_CHART"
-          set_key nico_operator_image_tag "$NICO_IMAGE"
+          if [ ! -f "$file" ]; then
+            echo "Creating ${file} for release branch ${RELEASE_BRANCH}"
+            {
+              echo "# Operator artifact pins for branch ${RELEASE_BRANCH}"
+              echo "# Managed by .github/workflows/bump-operator-artifacts.yaml"
+              echo
+              echo "ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator"
+              echo "ufo_chart_version: ${UFO_CHART}"
+              echo "ufo_image_tag: ${UFO_IMAGE}"
+              echo
+              echo "verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator"
+              echo "verity_operator_chart_version: ${VERITY_CHART}"
+              echo "verity_operator_image_tag: ${VERITY_IMAGE}"
+              echo
+              echo "nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator"
+              echo "nico_operator_chart_version: ${NICO_CHART}"
+              echo "nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator"
+              echo "nico_operator_image_tag: ${NICO_IMAGE}"
+            } > "$file"
+          else
+            echo "Updating existing ${file}"
+            set_key ufo_chart_version "$UFO_CHART"
+            set_key ufo_image_tag "$UFO_IMAGE"
+            set_key verity_operator_chart_version "$VERITY_CHART"
+            set_key verity_operator_image_tag "$VERITY_IMAGE"
+            set_key nico_operator_chart_version "$NICO_CHART"
+            set_key nico_operator_image_tag "$NICO_IMAGE"
+          fi
 
           {
-            echo "## Proposed bumps"
+            echo "## Proposed bumps (\`${RELEASE_BRANCH}\` → \`${file}\`)"
             echo ""
             echo "| Component | Chart | Image |"
             echo "|---|---|---|"
@@ -129,15 +194,17 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: |
-            chore: bump UFO, Verity, and NICo operator artifacts
+            chore: bump UFO / Verity / NICo artifacts (${{ needs.resolve-release.outputs.branch }})
 
-            Update chart/image pins in ansible/vars/common.yml from the latest
-            successful main dev-build-artifacts.yml runs.
-          title: "chore: bump UFO / Verity / NICo operator artifacts"
+            Update pins in ${{ needs.resolve-release.outputs.vars_file }} from the latest
+            successful ${{ needs.resolve-release.outputs.branch }} dev-build-artifacts.yml runs.
+          title: "chore: bump operator artifacts (${{ needs.resolve-release.outputs.branch }})"
           body: |
-            Automated bump of operator artifacts in `ansible/vars/common.yml`.
+            Automated bump of operator artifacts for branch `${{ needs.resolve-release.outputs.branch }}`.
 
-            Versions come from the latest successful `dev-build-artifacts.yml` run on `main` (same pattern as [core-services e2e-periodic-ufo](https://github.com/k0rdent/core-services/blob/main/.github/workflows/e2e-periodic-ufo.yaml)):
+            Target file: `${{ needs.resolve-release.outputs.vars_file }}` (created if missing).
+
+            Versions from the latest successful `dev-build-artifacts.yml` run on `${{ needs.resolve-release.outputs.branch }}`:
 
             | Component | Chart | Image |
             |---|---|---|
@@ -146,8 +213,8 @@ jobs:
             | nico-operator | `${{ needs.get-latest-nico.outputs.chart_version }}` | `${{ needs.get-latest-nico.outputs.image_version }}` |
 
             Source workflow: `bump-operator-artifacts`.
-          branch: chore/bump-operator-artifacts
+          branch: ${{ needs.resolve-release.outputs.pr_branch }}
           delete-branch: true
           labels: dependencies
           add-paths: |
-            ansible/vars/common.yml
+            ${{ needs.resolve-release.outputs.vars_file }}

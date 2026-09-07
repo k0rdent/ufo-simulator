@@ -6,6 +6,7 @@
   hosts: cmps
   vars_files:
     - ./vars/common.yml
+    - ./vars/{{ artifacts_vars_file }}
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
@@ -51,6 +52,7 @@
 
   vars_files:
     - ./vars/common.yml
+    - ./vars/{{ artifacts_vars_file }}
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
