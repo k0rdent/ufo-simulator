@@ -1,0 +1,153 @@
+name: bump-operator-artifacts
+
+# Fetch latest UFO / Verity / NICo operator chart+image tags from each repo's
+# successful main `dev-build-artifacts.yml` run (same approach as
+# k0rdent/core-services `.github/workflows/e2e-periodic-ufo.yaml`), then open a
+# PR that bumps ansible/vars/common.yml.
+#
+# Requires repo secret UFO_REPOS_TOKEN (PAT that can read Actions artifacts from
+# k0rdent/unified-fabric-operator, k0rdent/verity-operator, k0rdent/nico-operator).
+
+on:
+  schedule:
+    # Weekdays 06:20 UTC — after typical overnight operator artifact builds.
+    - cron: "20 6 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  get-latest-ufo:
+    runs-on: ubuntu-latest
+    outputs:
+      chart_version: ${{ steps.fetch.outputs.chart_version }}
+      image_version: ${{ steps.fetch.outputs.image_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get latest unified-fabric-operator
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.UFO_REPOS_TOKEN }}
+          TARGET_REPO: k0rdent/unified-fabric-operator
+          WORKFLOW_ID: dev-build-artifacts.yml
+          OUT_DIR: /tmp/ufo-artifacts
+        run: |
+          chmod +x .github/scripts/get-latest-build-artifacts.sh
+          .github/scripts/get-latest-build-artifacts.sh
+
+  get-latest-verity:
+    runs-on: ubuntu-latest
+    outputs:
+      chart_version: ${{ steps.fetch.outputs.chart_version }}
+      image_version: ${{ steps.fetch.outputs.image_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get latest verity-operator
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.UFO_REPOS_TOKEN }}
+          TARGET_REPO: k0rdent/verity-operator
+          WORKFLOW_ID: dev-build-artifacts.yml
+          OUT_DIR: /tmp/verity-artifacts
+        run: |
+          chmod +x .github/scripts/get-latest-build-artifacts.sh
+          .github/scripts/get-latest-build-artifacts.sh
+
+  get-latest-nico:
+    runs-on: ubuntu-latest
+    outputs:
+      chart_version: ${{ steps.fetch.outputs.chart_version }}
+      image_version: ${{ steps.fetch.outputs.image_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get latest nico-operator
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.UFO_REPOS_TOKEN }}
+          TARGET_REPO: k0rdent/nico-operator
+          WORKFLOW_ID: dev-build-artifacts.yml
+          OUT_DIR: /tmp/nico-artifacts
+        run: |
+          chmod +x .github/scripts/get-latest-build-artifacts.sh
+          .github/scripts/get-latest-build-artifacts.sh
+
+  bump-and-pr:
+    name: Bump versions and open PR
+    needs: [get-latest-ufo, get-latest-verity, get-latest-nico]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply version bumps to ansible/vars/common.yml
+        env:
+          UFO_CHART: ${{ needs.get-latest-ufo.outputs.chart_version }}
+          UFO_IMAGE: ${{ needs.get-latest-ufo.outputs.image_version }}
+          VERITY_CHART: ${{ needs.get-latest-verity.outputs.chart_version }}
+          VERITY_IMAGE: ${{ needs.get-latest-verity.outputs.image_version }}
+          NICO_CHART: ${{ needs.get-latest-nico.outputs.chart_version }}
+          NICO_IMAGE: ${{ needs.get-latest-nico.outputs.image_version }}
+        run: |
+          set -euo pipefail
+          file=ansible/vars/common.yml
+
+          set_key() {
+            local key="$1" value="$2"
+            if ! grep -qE "^${key}:" "$file"; then
+              echo "missing key ${key} in ${file}" >&2
+              exit 1
+            fi
+            sed -i -E "s|^(${key}:).*|\1 ${value}|" "$file"
+          }
+
+          set_key ufo_chart_version "$UFO_CHART"
+          set_key ufo_image_tag "$UFO_IMAGE"
+          set_key verity_operator_chart_version "$VERITY_CHART"
+          set_key verity_operator_image_tag "$VERITY_IMAGE"
+          set_key nico_operator_chart_version "$NICO_CHART"
+          set_key nico_operator_image_tag "$NICO_IMAGE"
+
+          {
+            echo "## Proposed bumps"
+            echo ""
+            echo "| Component | Chart | Image |"
+            echo "|---|---|---|"
+            echo "| unified-fabric-operator | \`${UFO_CHART}\` | \`${UFO_IMAGE}\` |"
+            echo "| verity-operator | \`${VERITY_CHART}\` | \`${VERITY_IMAGE}\` |"
+            echo "| nico-operator | \`${NICO_CHART}\` | \`${NICO_IMAGE}\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          git diff -- "$file" || true
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: bump UFO, Verity, and NICo operator artifacts
+
+            Update chart/image pins in ansible/vars/common.yml from the latest
+            successful main dev-build-artifacts.yml runs.
+          title: "chore: bump UFO / Verity / NICo operator artifacts"
+          body: |
+            Automated bump of operator artifacts in `ansible/vars/common.yml`.
+
+            Versions come from the latest successful `dev-build-artifacts.yml` run on `main` (same pattern as [core-services e2e-periodic-ufo](https://github.com/k0rdent/core-services/blob/main/.github/workflows/e2e-periodic-ufo.yaml)):
+
+            | Component | Chart | Image |
+            |---|---|---|
+            | unified-fabric-operator | `${{ needs.get-latest-ufo.outputs.chart_version }}` | `${{ needs.get-latest-ufo.outputs.image_version }}` |
+            | verity-operator | `${{ needs.get-latest-verity.outputs.chart_version }}` | `${{ needs.get-latest-verity.outputs.image_version }}` |
+            | nico-operator | `${{ needs.get-latest-nico.outputs.chart_version }}` | `${{ needs.get-latest-nico.outputs.image_version }}` |
+
+            Source workflow: `bump-operator-artifacts`.
+          branch: chore/bump-operator-artifacts
+          delete-branch: true
+          labels: dependencies
+          add-paths: |
+            ansible/vars/common.yml
