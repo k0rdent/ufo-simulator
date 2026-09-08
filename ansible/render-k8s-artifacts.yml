@@ -14,7 +14,7 @@
     all_switches: "{{ all_topology_switches }}"
     all_servers: "{{ topology.nodes }}"
     all_softgates: "{{ topology.softgates }}"
-    topology_resolved_links: "{{ (topology.links + topology_ew.links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
+    topology_resolved_links: "{{ (topology.links + topology_ew_links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
     k8s_inventory_dir: "{{ k8s_artifacts_dir }}/inventory"
 
   tasks:
