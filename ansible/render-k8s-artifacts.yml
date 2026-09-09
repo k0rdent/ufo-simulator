@@ -27,7 +27,7 @@
         - "{{ k8s_artifacts_dir }}"
         - "{{ k8s_inventory_dir }}"
         - "{{ k8s_inventory_dir }}/ufo"
-        - "{{ k8s_inventory_dir }}/links"
+        - "{{ k8s_inventory_dir }}/ufo/links"
 
     - name: Render Netris artifacts
       when: sdn_provider == "netris"
@@ -132,7 +132,7 @@
         all_nodes: "{{ topology.nodes }}"
       ansible.builtin.template:
         src: "k8s/ufo_link.j2"
-        dest: "{{ k8s_inventory_dir }}/links/{{ switch_name }}.yaml"
+        dest: "{{ k8s_inventory_dir }}/ufo/links/{{ switch_name }}.yaml"
       loop: "{{ (topology.leafs + topology_ew.leafs) | zip(range((topology.leafs + topology_ew.leafs) | length)) | list }}"
       loop_control:
         loop_var: item

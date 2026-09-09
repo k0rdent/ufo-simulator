@@ -157,14 +157,8 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         fi
     done
     if [ -d "${INVENTORY_DIR}/ufo" ]; then
-        for manifest in "${INVENTORY_DIR}/ufo"/*.yaml; do
-            [ -e "${manifest}" ] || continue
-            [ -s "${manifest}" ] || continue
-            kubectl apply -f "${manifest}"
-        done
-    fi
-    if [ -d "${INVENTORY_DIR}/links" ]; then
-        kubectl apply -f "${INVENTORY_DIR}/links/"
+        # UFO Switch + Link CRs (links live under ufo/links/)
+        kubectl apply -R -f "${INVENTORY_DIR}/ufo/"
     fi
 
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then

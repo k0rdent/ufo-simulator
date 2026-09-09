@@ -11,14 +11,13 @@
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Link
 metadata:
-  name: {{ link.remote }}-{{ link.remote_port }}
+  name: {{ link.remote }}-{{ link.remote_port | replace('/', '-') }}
   namespace: platform-admin
 spec:
   switch:
     name: {{ switch_name }}
     portName: {{ link.local_port }}
   peer:
-    type: machine.nico.mirantis.com
     name: {{ link.remote }}
     portName: {{ link.remote_port }}
   roles:

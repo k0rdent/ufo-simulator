@@ -130,9 +130,10 @@ topology:
 
 # East-west leaf-spine fabric (shared by netris and verity). Each VM connects to
 # every ew-leaf (eth5→ew-leaf-0 … eth12→ew-leaf-7). Leaf→server ports use 2-way
-# breakouts: even nodes on odd physical ports, odd nodes on even ports
-# (1/1→vm-0, 1/2→vm-2, 2/1→vm-1, 2/2→vm-3, …). Switch-side names use
-# switch_port_name_prefix (swp for netris, eth1/ for verity) → e.g. eth1/1/1.
+# breakouts: even nodes on odd physical ports, odd nodes on even ports.
+# Cumulus (netris, swp): swp1s0/swp1s1. Verity (eth1/): eth1/1/1, eth1/1/2.
+# Netris Switch CR create-time breakout for all EW switches (2 ports per physical port).
+ew_switch_breakout: "2x100"
 topology_ew:
   spines:
     - name: ew-spine-0
@@ -142,46 +143,36 @@ topology_ew:
   leafs:
     - name: ew-leaf-0
       mgmt_ip: 10.200.0.120
+      type: spectrum-x
     - name: ew-leaf-1
       mgmt_ip: 10.200.0.121
+      type: spectrum-x
     - name: ew-leaf-2
       mgmt_ip: 10.200.0.122
+      type: spectrum-x
     - name: ew-leaf-3
       mgmt_ip: 10.200.0.123
+      type: spectrum-x
     - name: ew-leaf-4
       mgmt_ip: 10.200.0.124
+      type: spectrum-x
     - name: ew-leaf-5
       mgmt_ip: 10.200.0.125
+      type: spectrum-x
     - name: ew-leaf-6
       mgmt_ip: 10.200.0.126
+      type: spectrum-x
     - name: ew-leaf-7
       mgmt_ip: 10.200.0.127
-  # ew-leaf ↔ ew-spine (server links generated via ew_breakout_server_links)
-  fabric_links:
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}1", remote: "ew-leaf-0", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}2", remote: "ew-leaf-1", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}3", remote: "ew-leaf-2", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}4", remote: "ew-leaf-3", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}5", remote: "ew-leaf-4", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}6", remote: "ew-leaf-5", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}7", remote: "ew-leaf-6", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-0", local_port: "{{ switch_port_name_prefix }}8", remote: "ew-leaf-7", remote_port: "{{ switch_port_name_prefix }}27" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}1", remote: "ew-leaf-0", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}2", remote: "ew-leaf-1", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}3", remote: "ew-leaf-2", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}4", remote: "ew-leaf-3", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}5", remote: "ew-leaf-4", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}6", remote: "ew-leaf-5", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}7", remote: "ew-leaf-6", remote_port: "{{ switch_port_name_prefix }}28" }
-    - { local: "ew-spine-1", local_port: "{{ switch_port_name_prefix }}8", remote: "ew-leaf-7", remote_port: "{{ switch_port_name_prefix }}28" }
+      type: spectrum-x
 
-# EW leaf→VM (2-way breakout) + leaf↔spine fabric links.
-topology_ew_links: "{{ (topology_ew.leafs | ew_breakout_server_links(topology.nodes, switch_port_name_prefix)) + topology_ew.fabric_links }}"
+# EW leaf→VM (2-way breakout) + leaf↔spine fabric links (breakout lane 0 / /1).
+topology_ew_links: "{{ (topology_ew.leafs | ew_breakout_server_links(topology.nodes, switch_port_name_prefix)) + (topology_ew.spines | ew_fabric_links(topology_ew.leafs, switch_port_name_prefix)) }}"
 
 # Aggregates used by create/configure/destroy playbooks and link wiring.
 # all_topology_links renumbers non-breakout switch-side ports to match Cumulus
 # NIC order (local links first, then remote — same as create-switch-vm.yml).
-# Breakout names (e.g. eth1/1/1) are preserved.
+# Breakout names (e.g. swp1s0 or eth1/1/1) are preserved.
 all_topology_switches: "{{ topology.spines + topology.leafs + topology_ew.spines + topology_ew.leafs }}"
 all_topology_links: "{{ (topology.links + topology_ew_links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
 
