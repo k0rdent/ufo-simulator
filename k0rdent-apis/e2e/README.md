@@ -46,6 +46,7 @@ and login settings. The operator JWT is minted in Python on first API call
 pytest -m smoke -s
 
 # Single files
+pytest tests/test_security_groups_effective.py -s   # seconds; creates nothing
 pytest tests/test_hcp_cluster.py -s
 pytest tests/test_hcp_cluster_security_groups.py -s
 pytest tests/test_instance_group.py -s
@@ -86,6 +87,13 @@ Tests **create** missing region-scoped prerequisites (address pools, HCP + BM
 cluster types) and leave them in place. They delete the clusters / instance
 groups they create.
 
+The `security-groups-effective` assertions need a k0rdent-apis build carrying
+**KNF-469**. The lab builds from the `/opt/ufo_lab/k0rdent-apis` checkout on the
+CMP (see `ansible/k0rdent-apis.yml`), so that checkout decides whether the
+endpoint exists. Each SG scenario probes the route once and skips only its
+effective steps when it is absent; `test_security_groups_effective.py` skips
+whole.
+
 ---
 
 ## Environment variables
@@ -121,9 +129,10 @@ Resource ids for clusters, instance groups, and security groups are
 | Test | Marker | Summary |
 |---|---|---|
 | `test_hcp_cluster.py` | `smoke`, `hcp` | Ensure address pools + cluster types; create HCP cluster; wait API `active` + ClusterDeployment Ready; delete |
-| `test_hcp_cluster_security_groups.py` | `smoke`, `hcp` | Create cluster; VPC default + custom SG; cluster SG; UFO CRs; NICo NSG merge + precedence; detach and assert rules leave NICo NSG; teardown |
+| `test_hcp_cluster_security_groups.py` | `smoke`, `hcp` | Create cluster; VPC default + custom SG; cluster SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=cluster`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
 | `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
-| `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; detach and assert rules leave NICo NSG; teardown |
+| `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=instance_group`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
+| `test_security_groups_effective.py` | `smoke` | `security-groups-effective` negatives (422 on missing/unknown `objectKind`/`objectId`, 404 on an unknown or cross-kind id) and the `vpc` arm against a materialized VPC. Creates nothing, needs no cluster — run it first to confirm Kong routes the path |
 
 Do not run these against the same project in parallel — they share address
 pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
@@ -144,6 +153,7 @@ e2e/
     auth.py            # Python k0r_login/k0r_token (mint + cache)
     names.py           # per-run resource ids ({test}-{kind}-{run_id})
     k8s.py             # list/get CRs in project namespace
+    secgroups.py       # SG lifecycle, one rule vocabulary, effective-read asserts
     steps.py           # numbered runtime STEP progress (pytest -s)
     wait.py            # await_predicate / await_api_state
   tests/
@@ -151,7 +161,14 @@ e2e/
     test_hcp_cluster_security_groups.py
     test_instance_group.py
     test_instance_group_security_groups.py
+    test_security_groups_effective.py
 ```
+
+`helpers/secgroups.py` holds everything both SG scenarios share. Its
+`rule_fingerprint` is the one vocabulary the four surfaces are compared in — the
+API security group, the UFO `SecurityGroup` CR, the NICo `NetworkSecurityGroup`
+CR, and `security-groups-effective` each spell a rule differently, so a second
+copy that drifted would silently compare nothing.
 
 Templates live under [`../scenarios/templates`](../scenarios/templates):
 
