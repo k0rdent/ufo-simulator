@@ -143,6 +143,11 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
         kubectl apply -f ${UFO_K8S_ARTIFACTS_DIR}/netris_ipam.yaml
         # Wait ipam to be handled before applying other resources
         sleep 30
+        # Inventory profiles must exist before Switch CRs reference them
+        if [ -f "${UFO_K8S_ARTIFACTS_DIR}/inventory/00-roce-profile.yaml" ]; then
+            kubectl apply -f "${UFO_K8S_ARTIFACTS_DIR}/inventory/00-roce-profile.yaml"
+            sleep 5
+        fi
     fi
 
     INVENTORY_DIR=${UFO_K8S_ARTIFACTS_DIR}/inventory
