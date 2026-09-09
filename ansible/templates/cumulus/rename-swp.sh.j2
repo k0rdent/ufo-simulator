@@ -1,0 +1,19 @@
+#!/bin/bash
+# Managed by ufo-simulator configure-switches — rename Cumulus VX NICs by MAC.
+set -euo pipefail
+
+declare -A MAP=(
+{% for nic in switch_breakout_nics %}
+  ["{{ nic.mac | lower }}"]="{{ nic.port }}"
+{% endfor %}
+)
+
+for mac in "${!MAP[@]}"; do
+  iface=$(ip -o link | grep -i "$mac" | awk -F': ' '{print $2}' | awk '{print $1}')
+  desired=${MAP[$mac]}
+  if [[ -n "${iface:-}" && "$iface" != "$desired" ]]; then
+    ip link set "$iface" down
+    ip link set "$iface" name "$desired"
+    ip link set "$desired" up
+  fi
+done

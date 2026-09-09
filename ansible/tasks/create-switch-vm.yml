@@ -11,65 +11,17 @@
   failed_when: false
   changed_when: false
 
-- name: "{{ switch_name }} - Build link list"
-  set_fact:
-    switch_links: []
-
-- name: "{{ switch_name }} - Add links where this switch is local"
-  set_fact:
-    switch_links: "{{ switch_links + [{'port': link_item.local_port, 'udp_local': udp_base_port + (link_idx * 2), 'udp_remote': udp_base_port + (link_idx * 2) + 1}] }}"
-  loop: "{{ all_topology_links }}"
-  loop_control:
-    loop_var: link_item
-    index_var: link_idx
-    label: "{{ link_item.local }}:{{ link_item.local_port }}"
-  when: link_item.local == switch_name
-
-- name: "{{ switch_name }} - Add links where this switch is remote"
-  set_fact:
-    switch_links: "{{ switch_links + [{'port': link_item.remote_port, 'udp_local': udp_base_port + (link_idx * 2) + 1, 'udp_remote': udp_base_port + (link_idx * 2)}] }}"
-  loop: "{{ all_topology_links }}"
-  loop_control:
-    loop_var: link_item
-    index_var: link_idx
-    label: "{{ link_item.remote }}:{{ link_item.remote_port }}"
-  when: link_item.remote == switch_name
-
-- name: "{{ switch_name }} - Determine extra host bridge attachment"
-  set_fact:
-    switch_host_bridge: >-
-      {{
-        br_ext_name
-        if switch_name.startswith('ext-leaf-')
-        else br_pxe_name
-        if switch_name.startswith('leaf-')
-        else ''
-      }}
-    switch_host_bridge_port: "{{ switch_port_name_prefix }}{{ switch_links | length + 1 }}"
-
-- name: "{{ switch_name }} - Assign mgmt MAC (EW uses separate base)"
-  vars:
-    ns_switch_names: "{{ (topology.spines + topology.leafs) | map(attribute='name') | list }}"
-    ew_switch_names: "{{ (topology_ew.spines + topology_ew.leafs) | map(attribute='name') | list }}"
-    ns_mac_by_name: "{{ dict(ns_switch_names | zip(range(ns_switch_names | length))) }}"
-    ew_mac_by_name: "{{ dict(ew_switch_names | zip(range(ew_switch_names | length))) }}"
-  set_fact:
-    switch_mgmt_mac: >-
-      {{
-        (
-          (ew_switch_base_mac ~ ':' ~ ('%02x' | format(ew_mac_by_name[switch_name] | int)) ~ ':00')
-          if switch_name.startswith('ew-')
-          else (switch_base_mac ~ ':' ~ ('%02x' | format(ns_mac_by_name[switch_name] | int)) ~ ':00')
-        )
-      }}
+- name: "{{ switch_name }} - Build NIC / link facts"
+  ansible.builtin.include_tasks: tasks/build-switch-nics.yml
 
 - name: "{{ switch_name }} - Debug links"
   debug:
     msg: >-
       Links for {{ switch_name }}: {{ switch_links }}
       ; mgmt MAC {{ switch_mgmt_mac }}
+      ; breakout names={{ switch_uses_breakout_names }}
       {%- if switch_host_bridge %}
-      ; host bridge {{ switch_host_bridge }} is connected to {{ switch_host_bridge_port }}
+      ; host bridge {{ switch_host_bridge }} is connected to {{ switch_host_bridge_port }} ({{ switch_host_bridge_mac }})
       {%- endif %}
 
 - name: "{{ switch_name }} - Render VM xml"

@@ -198,6 +198,14 @@ sg_base_mac: "52:54:00:13"
 # Mgmt NIC (eth0) OUI for north-south switches vs east-west switches.
 switch_base_mac: "00:01:00:00"
 ew_switch_base_mac: "00:01:00:01"
+# Data-plane NIC MAC bases (libvirt + rename-swp.service for port-grid names).
+# Final MAC: <base>:<switch_idx>:<nic_idx>  e.g. 52:54:00:21:00:01
+switch_data_mac_base: "52:54:00:20"
+ew_switch_data_mac_base: "52:54:00:21"
+# Physical ports per leaf/spine VM (Netris portsCount). EW breakout 2x → 2 NICs/port.
+switch_ports_count: 48
+switch_stub_udp_base: 40000
+
 sg_port_count: 2
 sg_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 sg_image: "/var/lib/libvirt/images/noble-server-cloudimg-amd64.img"
