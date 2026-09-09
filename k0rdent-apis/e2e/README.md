@@ -54,10 +54,17 @@ pytest tests/test_hcp_cluster.py -s
 pytest tests/test_hcp_cluster_security_groups.py -s
 pytest tests/test_instance_group.py -s
 pytest tests/test_instance_group_security_groups.py -s
+pytest tests/test_vpc_peering.py -s
 
 # By marker
 pytest -m hcp -s
 pytest -m bmaas -s
+
+# VPC peering — needs MOCK_MODE off and two free nico-lab servers.
+# Both tests carry `peering`; only the same-project one carries `smoke`.
+pytest -m "peering and not crossorg" -s   # same-project handshake alone
+pytest -m peering -s                      # both, incl. the extra IG in E2E_PEER_PROJECT
+pytest -m crossorg -s                     # cross-org only
 ```
 
 `-s` shows print/log output; default timeout is 1800s (`pytest.ini`).
@@ -110,6 +117,7 @@ Set automatically by `source …/env`:
 | `API_BASE` / `BASE` | `http://10.200.0.254:30080` | k0rdent-apis Kong URL |
 | `E2E_REGION` / `REGION` | `local` | Region path segment |
 | `PROJECT` | `kind-main` | Tenant project id |
+| `E2E_PEER_PROJECT` | `acme-main` | Second project, in a **different org**, for the cross-org peering test |
 | `KUBECONFIG` | `/root/.kube/config` | Cluster for CR asserts + token mint |
 | `K0R_TOKEN_FILE` | `/tmp/k0r-token` | JWT cache (mode 0600) |
 | `TOKEN_SLACK_SEC` | `60` | Re-mint if expiring within N seconds |
@@ -138,11 +146,28 @@ Resource ids for clusters, instance groups, and security groups are
 | `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
 | `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=instance_group`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
 | `test_security_groups_effective.py` | `smoke` | `security-groups-effective` negatives (422 on missing/unknown `objectKind`/`objectId`, 404 on an unknown or cross-kind id) and the `vpc` arm against a materialized VPC. Creates nothing, needs no cluster — run it first to confirm Kong routes the path |
+| `test_vpc_peering.py::test_vpc_peering_cluster_to_instance_group` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`; teardown |
+| `test_vpc_peering.py::test_vpc_peering_cross_org` | `peering`, `crossorg` | Same handshake across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
 
 Do not run these against the same project in parallel — they share address
 pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
 collisions across sequential runs; use a distinct `PROJECT` for true parallel
 suites.
+
+The peering tests have two extra requirements:
+
+- **`MOCK_MODE` must be off** (`lab-inject.sh mock off`). Under mock,
+  `VPCPeeringCreate` returns before applying anything, so no UFO `VpcPeering`
+  CR exists and every CR assertion fails. Closing exactly that gap is the point
+  of these tests.
+- **Two available `nico-lab` servers.** A cluster and an instance group are
+  alive simultaneously (they are POSTed together so provisioning overlaps, then
+  awaited together). Every other scenario needs only one.
+
+`crossorg` is a *narrowing* marker, not an exclusion: both peering tests carry
+`peering`, so `-m peering` runs both. Use `-m "peering and not crossorg"` to skip
+the cross-org one. Only the same-project test carries `smoke`, so the default
+`-m smoke` run never provisions in the peer project.
 
 ---
 
@@ -157,16 +182,17 @@ e2e/
     api.py             # REST create/get/delete / VPC+cluster/IG SG bind
     auth.py            # Python k0r_login/k0r_token (mint + cache)
     names.py           # per-run resource ids ({test}-{kind}-{run_id})
-    k8s.py             # list/get CRs in project namespace
+    k8s.py             # list/get CRs; find UFO/NICo peering objects by label + owner
     secgroups.py       # SG lifecycle, one rule vocabulary, effective-read asserts
     steps.py           # numbered runtime STEP progress (pytest -s)
-    wait.py            # await_predicate / await_api_state
+    wait.py            # await_predicate / await_api_state / await_api_states
   tests/
     test_hcp_cluster.py
     test_hcp_cluster_security_groups.py
     test_instance_group.py
     test_instance_group_security_groups.py
     test_security_groups_effective.py
+    test_vpc_peering.py
 ```
 
 `helpers/secgroups.py` holds everything both SG scenarios share. Its
@@ -183,18 +209,24 @@ scenarios/templates/
     address-pool-global-*.yaml
     cluster-type-nico-verity-hcp.yaml
     cluster-type-nico-verity-bm.yaml
-  hcp_cluster/                         # test_hcp_cluster.py
+  hcp_cluster/                         # test_hcp_cluster.py + test_vpc_peering.py
     cluster.yaml
   hcp_cluster_security_groups/         # test_hcp_cluster_security_groups.py
     cluster.yaml
     security-group-*.yaml
     vpc-security-groups.yaml
-  instance_group/                      # test_instance_group.py
+  instance_group/                      # test_instance_group.py + test_vpc_peering.py
     instance-group.yaml
   instance_group_security_groups/      # test_instance_group_security_groups.py
     instance-group.yaml
     security-group-*.yaml
+  vpc_peering/                         # test_vpc_peering.py
+    peering.yaml
 ```
+
+`test_vpc_peering.py` deliberately reuses the `hcp_cluster` and
+`instance_group` bodies rather than keeping its own copies, so those two are no
+longer single-consumer — edit them with that in mind.
 
 ---
 
@@ -208,6 +240,10 @@ scenarios/templates/
 | Cluster stuck `creating` / timeout | Lab capacity, NICo inventory, UFO/NetworkBundle events in `prj-$PROJECT` |
 | `no host cluster registered for ClusterType "nico-verity-hcp"` | Re-run `ansible-playbook prepare-e2e-tests.yml`; check `kubectl -n kcm-system get cm hcp-host-clusters -o yaml` |
 | SG attach `409 CONFLICT_IN_USE` | Wait for VPC/cluster `active` before the next binding write (tests already poll) |
+| Peering DELETE `409 CONFLICT_IN_USE` | DELETE is a CAS over `state IN ('active','failed')`; against a row still `creating` it refuses and the row keeps its direction. Settle first (the tests already do) |
+| Peering create `409` "already peered" | The previous run's row is not tombstoned yet — `uq_vpc_peering_direction` is partial on `deleted_at IS NULL`, so a direction frees only at tombstone, not at the 204 |
+| UFO `VpcPeering` CR never appears | `MOCK_MODE` is on — the workflow returns before `ApplyUFOVpcPeering`. `lab-inject.sh mock off` |
+| Backend `VPCPeering` never appears | Only one side is declared. A one-sided peering programs no fabric by design; both mutual CRs must exist |
 
 Optional wipe of leftovers in the project namespace:
 
