@@ -3,6 +3,7 @@ apiVersion: k8s.netris.ai/v1alpha1
 kind: Switch
 metadata:
   name: {{ switch_name }}
+  namespace: platform-admin
 spec:
   tenant: Admin
   description: Spine switch
@@ -13,6 +14,10 @@ spec:
   mainIp: {{ loopback_ip }}
   mgmtIp: {{ mgmt_ip }}
   portsCount: 48
+{# EW fabric (leaf + spine) uses 2-way breakout; set on Netris create only. #}
+{% if switch_name.startswith('ew-') %}
+  breakout: "{{ ew_switch_breakout | default('2x100') }}"
+{% endif %}
 ### LINKS ####
 {# VM/softgate links live in netris_server.j2 / netris_sg.j2 only. Emit switch-to-switch links here when this switch is the remote endpoint. #}
 {% for link in links %}
@@ -21,7 +26,7 @@ spec:
 apiVersion: k8s.netris.ai/v1alpha1 
 kind: Link 
 metadata: 
-  name: {{ switch_name }}-{{ link.remote_port }}
+  name: {{ switch_name }}-{{ link.remote_port | replace('/', '-') }}
   namespace: platform-admin
 spec:
   ports: 
