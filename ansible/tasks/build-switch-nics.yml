@@ -1,0 +1,80 @@
+---
+# Build switch_links (port + udp + mac) and mgmt/host-bridge facts for one switch.
+# Requires: switch_name, all_topology_links, topology*, udp_base_port, *_mac* vars.
+- name: "{{ switch_name }} - Build wired link list"
+  set_fact:
+    switch_wired_links: []
+
+- name: "{{ switch_name }} - Add links where this switch is local"
+  set_fact:
+    switch_wired_links: "{{ switch_wired_links + [{'port': link_item.local_port, 'udp_local': udp_base_port + (link_idx * 2), 'udp_remote': udp_base_port + (link_idx * 2) + 1}] }}"
+  loop: "{{ all_topology_links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.local }}:{{ link_item.local_port }}"
+  when: link_item.local == switch_name
+
+- name: "{{ switch_name }} - Add links where this switch is remote"
+  set_fact:
+    switch_wired_links: "{{ switch_wired_links + [{'port': link_item.remote_port, 'udp_local': udp_base_port + (link_idx * 2) + 1, 'udp_remote': udp_base_port + (link_idx * 2)}] }}"
+  loop: "{{ all_topology_links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: link_idx
+    label: "{{ link_item.remote }}:{{ link_item.remote_port }}"
+  when: link_item.remote == switch_name
+
+- name: "{{ switch_name }} - Resolve switch MAC index and bases"
+  vars:
+    ns_switch_names: "{{ (topology.spines + topology.leafs) | map(attribute='name') | list }}"
+    ew_switch_names: "{{ (topology_ew.spines + topology_ew.leafs) | map(attribute='name') | list }}"
+    ns_mac_by_name: "{{ dict(ns_switch_names | zip(range(ns_switch_names | length))) }}"
+    ew_mac_by_name: "{{ dict(ew_switch_names | zip(range(ew_switch_names | length))) }}"
+  set_fact:
+    switch_mac_index: "{{ (ew_mac_by_name[switch_name] | int) if switch_name.startswith('ew-') else (ns_mac_by_name[switch_name] | int) }}"
+    switch_mgmt_mac: "{{ (ew_switch_base_mac ~ ':' ~ ('%02x' | format(ew_mac_by_name[switch_name] | int)) ~ ':00') if switch_name.startswith('ew-') else (switch_base_mac ~ ':' ~ ('%02x' | format(ns_mac_by_name[switch_name] | int)) ~ ':00') }}"
+    switch_nic_mac_prefix: "{{ ew_switch_data_mac_base if switch_name.startswith('ew-') else switch_data_mac_base }}"
+    switch_is_leaf_or_spine: "{{ ('leaf' in switch_name) or ('spine' in switch_name) }}"
+    switch_breakout_lanes: "{{ 2 if (switch_name.startswith('ew-') and (ew_switch_breakout | default('') | length) > 0) else 1 }}"
+
+- name: "{{ switch_name }} - Expand leaf/spine NICs to full {{ switch_ports_count | default(48) }}-port grid"
+  set_fact:
+    switch_links: "{{ switch_wired_links | expand_switch_port_nics(switch_port_name_prefix, switch_ports_count | default(48), switch_breakout_lanes | int, switch_mac_index | int, switch_stub_udp_base | default(40000)) }}"
+  when: switch_is_leaf_or_spine | bool
+
+- name: "{{ switch_name }} - Keep wired-only NICs for non leaf/spine"
+  set_fact:
+    switch_links: "{{ switch_wired_links }}"
+  when: not (switch_is_leaf_or_spine | bool)
+
+- name: "{{ switch_name }} - Determine extra host bridge attachment"
+  set_fact:
+    switch_host_bridge: >-
+      {{
+        br_ext_name
+        if switch_name.startswith('ext-leaf-')
+        else br_pxe_name
+        if (switch_name.startswith('leaf-') and not switch_name.startswith('ew-'))
+        else ''
+      }}
+    switch_host_bridge_port: "{{ switch_port_name_prefix }}{{ switch_links | length + 1 }}"
+
+- name: "{{ switch_name }} - Reset MAC-enriched link list"
+  set_fact:
+    switch_links_mac: []
+
+- name: "{{ switch_name }} - Attach MAC to each data NIC"
+  set_fact:
+    switch_links_mac: "{{ switch_links_mac + [link_item | combine({'mac': switch_nic_mac_prefix ~ ':' ~ ('%02x' | format(switch_mac_index | int)) ~ ':' ~ ('%02x' | format((idx | int) + 1))})] }}"
+  loop: "{{ switch_links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: idx
+    label: "{{ link_item.port }}"
+
+- name: "{{ switch_name }} - Finalize switch_links with MACs"
+  set_fact:
+    switch_links: "{{ switch_links_mac }}"
+    switch_host_bridge_mac: "{{ switch_nic_mac_prefix }}:{{ '%02x' | format(switch_mac_index | int) }}:{{ '%02x' | format((switch_links_mac | length) + 1) }}"
+    switch_uses_breakout_names: "{{ (switch_breakout_lanes | int) > 1 }}"

@@ -61,6 +61,7 @@
     </interface>
     {% for link in switch_links %}
     <interface type='udp'>
+      <mac address='{{ link.mac }}'/>
       <source address='127.0.0.1' port='{{ link.udp_remote }}'>
         <local address='127.0.0.1' port='{{ link.udp_local }}'/>
       </source>
@@ -73,6 +74,7 @@
         <host csum='off'/>
         <guest csum='off'/>
       </driver>
+      <mac address='{{ switch_host_bridge_mac }}'/>
       <source bridge='{{ switch_host_bridge }}'/>
       <model type='virtio'/>
     </interface>

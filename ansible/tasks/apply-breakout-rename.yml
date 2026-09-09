@@ -1,0 +1,77 @@
+---
+# Install a oneshot systemd service that renames Cumulus VX NICs by MAC at runtime.
+# Uses live libvirt MAC order so names match the full port grid (e.g. swp27s0).
+# Requires: switch_name, switch_links
+- name: "{{ switch_name }} - Read NIC MACs from libvirt domain XML"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    virsh dumpxml "{{ switch_name }}" | python3 -c '
+    import sys
+    import xml.etree.ElementTree as ET
+    root = ET.parse(sys.stdin).getroot()
+    for iface in root.findall("./devices/interface"):
+        mac = iface.find("mac")
+        if mac is not None and mac.get("address"):
+            print(mac.get("address").lower())
+    '
+  args:
+    executable: /bin/bash
+  register: switch_dump_macs
+  delegate_to: localhost
+  changed_when: false
+
+- name: "{{ switch_name }} - Fail if libvirt NIC count is too low"
+  ansible.builtin.assert:
+    that:
+      - (switch_dump_macs.stdout_lines | length) >= (1 + (switch_links | length))
+    fail_msg: >-
+      {{ switch_name }} has {{ switch_dump_macs.stdout_lines | length }} NICs in libvirt,
+      expected at least {{ 1 + (switch_links | length) }} (mgmt + {{ switch_links | length }} data).
+      Recreate the switch VM so the full {{ switch_ports_count | default(48) }}-port grid exists.
+
+- name: "{{ switch_name }} - Reset rename NIC map"
+  set_fact:
+    switch_breakout_nics: []
+
+- name: "{{ switch_name }} - Pair each grid port with live MAC"
+  set_fact:
+    switch_breakout_nics: "{{ switch_breakout_nics + [{'port': link_item.port, 'mac': switch_dump_macs.stdout_lines[(idx | int) + 1]}] }}"
+  loop: "{{ switch_links }}"
+  loop_control:
+    loop_var: link_item
+    index_var: idx
+    label: "{{ link_item.port }}"
+
+- name: "{{ switch_name }} - Remove legacy breakout udev rules if present"
+  ansible.builtin.file:
+    path: /etc/udev/rules.d/10-persistent-net.rules
+    state: absent
+  become: true
+
+- name: "{{ switch_name }} - Install rename-swp.sh"
+  ansible.builtin.template:
+    src: cumulus/rename-swp.sh.j2
+    dest: /usr/local/bin/rename-swp.sh
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  register: switch_rename_script
+
+- name: "{{ switch_name }} - Install rename-swp.service"
+  ansible.builtin.template:
+    src: cumulus/rename-swp.service.j2
+    dest: /etc/systemd/system/rename-swp.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  register: switch_rename_unit
+
+- name: "{{ switch_name }} - Enable and run rename-swp.service"
+  ansible.builtin.systemd:
+    name: rename-swp.service
+    enabled: true
+    state: restarted
+    daemon_reload: true
+  become: true
