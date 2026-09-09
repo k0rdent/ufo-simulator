@@ -1,4 +1,12 @@
-"""HCP cluster + VPC/cluster security-group binding and NICo/UFO materialization."""
+"""HCP cluster + VPC/cluster security-group binding, NICo/UFO materialization,
+and the security-groups-effective read (KNF-469).
+
+The effective read is asserted here rather than in a scenario of its own because
+this is the only place a REAL owner-level binding exists: the upstream MOCK_MODE
+suite cannot create a cluster, so ``objectKind=cluster`` — the merge arm — and the
+agreement between the read and what NICo actually renders are untestable there.
+Standing up a second cluster to check them would double a 30-minute run.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +20,7 @@ from conftest import (
     ensure_global_prereqs,
     load_scenario_template,
 )
-from helpers import api, k8s, wait
+from helpers import api, k8s, secgroups, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -22,191 +30,6 @@ pytestmark = [pytest.mark.smoke, pytest.mark.hcp]
 _SCENARIO = "hcp_cluster_security_groups"
 
 
-def _await_sg_active(session, sg_collection: str, sg_id: str) -> dict[str, Any]:
-    return wait.await_api_state(
-        lambda: api.get_json(session, f"{sg_collection}/{sg_id}"),
-        "active",
-        what=f"security group {sg_id}",
-        timeout=300,
-        interval=5,
-    )
-
-
-def _ensure_security_group(
-    session, sg_collection: str, template_name: str, sg_id: str
-) -> dict[str, Any]:
-    api.ensure_exists(
-        session,
-        sg_collection,
-        stamp_id(load_scenario_template(_SCENARIO, template_name), sg_id),
-    )
-    return _await_sg_active(session, sg_collection, sg_id)
-
-
-def _delete_security_group(
-    session, sg_collection: str, sg_id: str, *, log: Steps
-) -> None:
-    url = f"{sg_collection}/{sg_id}"
-    deleted = api.delete(session, url)
-    assert deleted.status_code in (204, 404), deleted.text
-    wait.await_api_absent(
-        lambda: None if api.get(session, url).status_code == 404 else True,
-        timeout=300,
-        interval=5,
-        desc=f"security group {sg_id} deleted",
-        steps=log,
-        log_every=2,
-    )
-
-
-def _fresh_cluster(session, clusters_url: str, cluster: dict[str, Any]) -> None:
-    cluster_url = f"{clusters_url}/{cluster['id']}"
-    existing = api.get(session, cluster_url)
-    if existing.status_code == 200:
-        api.delete(session, cluster_url)
-        wait.await_api_absent(
-            lambda: None if api.get(session, cluster_url).status_code == 404 else True,
-            timeout=1800,
-            interval=15,
-            desc=f"cluster {cluster['id']} gone before recreate",
-        )
-    elif existing.status_code != 404:
-        existing.raise_for_status()
-
-    created = session.post(clusters_url, json=cluster, timeout=60)
-    assert created.status_code in (200, 201), created.text
-
-
-def _cluster_vpcs(
-    session,
-    api_base: str,
-    region: str,
-    project: str,
-    cluster_uid: str,
-) -> list[dict[str, Any]]:
-    vpcs_url = api.region_url(api_base, region, "networking/vpcs", project=project)
-    items = api.list_items(session, vpcs_url)
-    return [
-        v
-        for v in items
-        if v.get("ownerKind") == "cluster"
-        and v.get("ownerId") == cluster_uid
-        and (v.get("backend") or "").lower() == "nico"
-    ]
-
-
-def _sg_api_rules(sg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    rules = sg.get("rules") or {}
-    return {
-        "ingress": list(rules.get("ingress") or []),
-        "egress": list(rules.get("egress") or []),
-    }
-
-
-def _rule_fingerprint(rule: dict[str, Any], *, direction: str | None = None) -> tuple:
-    """Compare API / UFO / NICo rules ignoring case on protocol/action."""
-    return (
-        (direction or "").lower(),
-        (rule.get("name") or "").lower(),
-        (rule.get("protocol") or "").lower(),
-        (rule.get("action") or "").lower(),
-        rule.get("sourcePrefix") or rule.get("source_prefix") or "",
-        rule.get("destinationPrefix") or rule.get("destination_prefix") or "",
-        rule.get("sourcePortRange") or rule.get("source_port_range") or "",
-        rule.get("destinationPortRange") or rule.get("destination_port_range") or "",
-    )
-
-
-def _api_rule_fingerprints(sg: dict[str, Any]) -> set[tuple]:
-    out: set[tuple] = set()
-    rules = _sg_api_rules(sg)
-    for direction, items in rules.items():
-        for rule in items:
-            out.add(_rule_fingerprint(rule, direction=direction))
-    return out
-
-
-def _ufo_cr_rule_fingerprints(cr: dict[str, Any]) -> set[tuple]:
-    spec = cr.get("spec") or {}
-    rules = spec.get("rules") or {}
-    out: set[tuple] = set()
-    for direction in ("ingress", "egress"):
-        for rule in rules.get(direction) or []:
-            out.add(_rule_fingerprint(rule, direction=direction))
-    return out
-
-
-def _nsg_rule_fingerprints(nsg: dict[str, Any]) -> set[tuple]:
-    """Flatten NICo NetworkSecurityGroup.spec.rules into comparable fingerprints."""
-    out: set[tuple] = set()
-    for rule in (nsg.get("spec") or {}).get("rules") or []:
-        direction = (rule.get("direction") or "").lower()
-        name = rule.get("name") or ""
-        if name.startswith("ufo-default-"):
-            continue
-        out.add(_rule_fingerprint(rule, direction=direction))
-    return out
-
-
-def _assert_rules_present(haystack: set[tuple], needle: set[tuple], *, label: str) -> None:
-    missing = needle - haystack
-    assert not missing, f"{label}: missing rules {missing!r}; have {haystack!r}"
-
-
-def _assert_ufo_security_group_cr(
-    kube, ns: str, sg: dict[str, Any], *, api_id: str
-) -> None:
-    cr_name = k8s.ufo_security_group_name(sg["uid"])
-
-    def _ufo_sg():
-        return k8s.get_custom(
-            kube,
-            group="ufo.mirantis.com",
-            version="v1alpha1",
-            plural="securitygroups",
-            namespace=ns,
-            name=cr_name,
-        )
-
-    cr = wait.await_predicate(
-        _ufo_sg,
-        timeout=300,
-        interval=5,
-        desc=f"UFO SecurityGroup {cr_name} for API id {api_id}",
-    )
-    _assert_rules_present(
-        _ufo_cr_rule_fingerprints(cr),
-        _api_rule_fingerprints(sg),
-        label=f"UFO CR {cr_name} rules vs API {api_id}",
-    )
-
-
-def _nsg_named_ingress_order(nsg: dict[str, Any]) -> list[str]:
-    """Named INGRESS rules in NICo evaluation order (priority ascending / list order)."""
-    rules = list((nsg.get("spec") or {}).get("rules") or [])
-
-    def _priority(rule: dict[str, Any]) -> int:
-        p = rule.get("priority")
-        return int(p) if p is not None else 10**9
-
-    ingress = [
-        r
-        for r in rules
-        if (r.get("direction") or "").upper() == "INGRESS"
-        and (r.get("name") or "")
-        and not (r.get("name") or "").startswith("ufo-default-")
-    ]
-    ingress.sort(key=_priority)
-    return [r["name"] for r in ingress]
-
-
-def _first_index(names: list[str], candidates: set[str]) -> int | None:
-    for i, name in enumerate(names):
-        if name in candidates:
-            return i
-    return None
-
-
 @pytest.mark.skipif(
     not auth_configured(),
     reason="API_BASE required",
@@ -214,13 +37,30 @@ def _first_index(names: list[str], candidates: set[str]) -> int | None:
 def test_hcp_cluster_vpc_security_groups(
     session, api_base, region, project, run_id, request
 ):
-    """Create cluster, VPC+cluster SG attach, UFO CRs, NICo merge + precedence."""
+    """Create cluster, VPC+cluster SG attach, UFO CRs, NICo merge + precedence,
+    and the effective read at every binding stage."""
     log = Steps("HCP cluster security-group scenario")
     log.info(f"run_id={run_id}")
 
     log.step("ensure global prereqs (address-pools + cluster-type; never deleted)")
     ensure_global_prereqs(session, api_base, region)
     log.ok()
+
+    log.step("probe security-groups-effective (KNF-469)")
+    effective_ready = secgroups.effective_endpoint_available(
+        session, api_base, region, project
+    )
+    log.ok(
+        "endpoint available"
+        if effective_ready
+        else "endpoint ABSENT — this k0rdent-apis build predates KNF-469; "
+        "effective assertions skipped"
+    )
+
+    def _effective(kind: str, object_id: str) -> dict[str, Any]:
+        return secgroups.get_effective(
+            session, api_base, region, project, kind=kind, object_id=object_id
+        )
 
     vpc_custom_sg_id = resource_id(request.node.name, "demo-sg", run_id=run_id)
     cluster_sg_id = resource_id(request.node.name, "cluster-sg", run_id=run_id)
@@ -230,11 +70,11 @@ def test_hcp_cluster_vpc_security_groups(
         api_base, region, "networking/security-groups", project=project
     )
     log.step(f"ensure security groups {vpc_custom_sg_id!r} and {cluster_sg_id!r}")
-    _ensure_security_group(
-        session, sg_collection, "security-group-demo-sg.yaml", vpc_custom_sg_id
+    secgroups.ensure_security_group(
+        session, sg_collection, _SCENARIO, "security-group-demo-sg.yaml", vpc_custom_sg_id
     )
-    cluster_sg = _ensure_security_group(
-        session, sg_collection, "security-group-cluster-sg.yaml", cluster_sg_id
+    cluster_sg = secgroups.ensure_security_group(
+        session, sg_collection, _SCENARIO, "security-group-cluster-sg.yaml", cluster_sg_id
     )
     log.ok("both SGs active")
 
@@ -243,7 +83,7 @@ def test_hcp_cluster_vpc_security_groups(
     cluster_url = f"{clusters_url}/{cluster_id}"
 
     log.step(f"create cluster {cluster_id} (delete leftover if any)")
-    _fresh_cluster(session, clusters_url, cluster)
+    secgroups.fresh_resource(session, clusters_url, cluster, what="cluster")
     log.ok("create accepted")
 
     def _get_cluster():
@@ -266,7 +106,9 @@ def test_hcp_cluster_vpc_security_groups(
     default_sg_uid: str | None = None
 
     log.step("find NICo VPC owned by cluster")
-    vpcs = _cluster_vpcs(session, api_base, region, project, cluster_uid)
+    vpcs = secgroups.owner_vpcs(
+        session, api_base, region, project, owner_kind="cluster", owner_uid=cluster_uid
+    )
     assert vpcs, f"no nico VPC owned by cluster uid={cluster_uid}"
     vpc = vpcs[0]
     vpc_id = vpc["id"]
@@ -283,6 +125,7 @@ def test_hcp_cluster_vpc_security_groups(
         steps=log,
         log_every=2,
     )
+    vpc_uid = vpc["uid"]
 
     log.step("assert VPC has only the platform default security group")
     bound = list(vpc.get("securityGroups") or [])
@@ -298,6 +141,48 @@ def test_hcp_cluster_vpc_security_groups(
     )
     assert default_sg.get("state") == "active"
     log.ok(f"default SG {default_sg_id!r} (ownerKind=vpc uid={default_sg_uid})")
+
+    if effective_ready:
+        log.step("effective read: fresh VPC reports only the platform default")
+        eff = _effective("vpc", vpc_id)
+        secgroups.assert_effective_object(eff, kind="vpc", obj_id=vpc_id, uid=vpc_uid)
+        assert [b.get("id") for b in eff.get("vpcs") or []] == [vpc_id], (
+            "a vpc read returns exactly one block, that VPC: "
+            f"{[b.get('id') for b in eff.get('vpcs') or []]!r}"
+        )
+        block = secgroups.effective_block(eff, vpc_id)
+        assert secgroups.effective_group_ids(block) == [default_sg_id]
+        secgroups.assert_effective_group(
+            block, default_sg_id, source="vpc", source_id=vpc_id, sg=default_sg
+        )
+
+        eff = _effective("cluster", cluster_id)
+        secgroups.assert_effective_object(
+            eff, kind="cluster", obj_id=cluster_id, uid=cluster_uid
+        )
+        assert secgroups.effective_group_ids(
+            secgroups.effective_block(eff, vpc_id)
+        ) == [default_sg_id], (
+            "the cluster binding is still empty, so only the VPC floor applies"
+        )
+        # A VPC on a backend with no security-group construct must come back as an
+        # empty block rather than with the owner's binding merged into it.
+        all_vpcs = {
+            v["id"]: v
+            for v in secgroups.owner_vpcs(
+                session,
+                api_base,
+                region,
+                project,
+                owner_kind="cluster",
+                owner_uid=cluster_uid,
+                backend=None,
+            )
+        }
+        secgroups.assert_backend_gate(eff, all_vpcs)
+        log.ok(
+            f"{len(eff.get('vpcs') or [])} block(s); non-nico blocks empty"
+        )
 
     log.step(
         f"attach VPC SGs [{vpc_custom_sg_id}, {default_sg_id}] (custom + default)"
@@ -336,14 +221,52 @@ def test_hcp_cluster_vpc_security_groups(
 
     log.step(f"assert UFO SecurityGroup CRs in {ns}")
     sgs_by_id = {
-        vpc_custom_sg_id: _await_sg_active(session, sg_collection, vpc_custom_sg_id),
-        default_sg_id: _await_sg_active(session, sg_collection, default_sg_id),
+        vpc_custom_sg_id: secgroups.await_sg_active(
+            session, sg_collection, vpc_custom_sg_id
+        ),
+        default_sg_id: secgroups.await_sg_active(session, sg_collection, default_sg_id),
         cluster_sg_id: cluster_sg,
     }
     for sg_id in (vpc_custom_sg_id, default_sg_id):
         log.info(f"check UFO CR for {sg_id} → sg-{sgs_by_id[sg_id]['uid']}")
-        _assert_ufo_security_group_cr(kube, ns, sgs_by_id[sg_id], api_id=sg_id)
+        secgroups.assert_ufo_security_group_cr(
+            kube, ns, sgs_by_id[sg_id], api_id=sg_id
+        )
     log.ok("VPC-attached UFO SGs present with matching rules")
+
+    if effective_ready:
+        log.step("effective read: VPC block matches the binding, rules in write order")
+        block = secgroups.effective_block(_effective("vpc", vpc_id), vpc_id)
+        assert secgroups.effective_group_ids(block) == [
+            vpc_custom_sg_id,
+            default_sg_id,
+        ], (
+            f"a vpc read must report the ids GET /vpcs/{vpc_id} lists, in the same "
+            f"order; got {secgroups.effective_group_ids(block)!r}"
+        )
+        for sg_id in (vpc_custom_sg_id, default_sg_id):
+            secgroups.assert_effective_group(
+                block, sg_id, source="vpc", source_id=vpc_id, sg=sgs_by_id[sg_id]
+            )
+        want = secgroups.api_rule_fingerprints(
+            sgs_by_id[vpc_custom_sg_id]
+        ) | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
+        have = secgroups.effective_rule_fingerprints(block)
+        assert have == want, (
+            f"effective rules for vpc {vpc_id}: missing {want - have!r}, "
+            f"unexpected {have - want!r}"
+        )
+        # First-match evaluation applies within one group's run, so the
+        # flattening across groups must not re-sort a group's own rules.
+        for direction in ("ingress", "egress"):
+            assert secgroups.effective_rule_names(
+                block, vpc_custom_sg_id, direction
+            ) == [
+                r["name"]
+                for r in secgroups.sg_api_rules(sgs_by_id[vpc_custom_sg_id])[direction]
+            ], f"{direction} order for {vpc_custom_sg_id} lost in the flattening"
+        secgroups.assert_effective_self_consistent(block)
+        log.ok("effective vpc read agrees with the VPC binding")
 
     log.step("wait for NICo NetworkSecurityGroup + config attachment")
 
@@ -357,12 +280,12 @@ def test_hcp_cluster_vpc_security_groups(
         ).get("items", [])
         if not items:
             return None
-        custom_fps = _api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
+        custom_fps = secgroups.api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
         for item in items:
             status_id = (item.get("status") or {}).get("id") or ""
             if not status_id:
                 continue
-            have = _nsg_rule_fingerprints(item)
+            have = secgroups.nsg_rule_fingerprints(item)
             if custom_fps and custom_fps <= have:
                 return item
         for item in items:
@@ -382,6 +305,44 @@ def test_hcp_cluster_vpc_security_groups(
     assert nsg_id, f"NetworkSecurityGroup missing status.id: {nsg!r}"
     nsg_name = nsg["metadata"]["name"]
     log.info(f"NSG name={nsg_name} status.id={nsg_id}")
+
+    def _nsg_fresh():
+        return k8s.get_custom(
+            kube,
+            group="nico.mirantis.com",
+            version="v1alpha1",
+            plural="networksecuritygroups",
+            namespace=ns,
+            name=nsg_name,
+        )
+
+    def _await_effective_matches_nsg(label: str) -> None:
+        """The effective read and the rendered NSG must report the same rule set.
+
+        Equality, not containment: the read exists so a tenant does not have to
+        reproduce the merge, and a subset assertion is exactly what would let the
+        read and the fabric drift apart unnoticed.
+        """
+
+        def _pred():
+            fresh = _nsg_fresh()
+            if not fresh:
+                return None
+            block = secgroups.effective_block(_effective("cluster", cluster_id), vpc_id)
+            eff_fps = secgroups.effective_rule_fingerprints(block)
+            nsg_fps = secgroups.nsg_rule_fingerprints(fresh)
+            if eff_fps != nsg_fps:
+                return None
+            return block
+
+        wait.await_predicate(
+            _pred,
+            timeout=900,
+            interval=10,
+            desc=f"effective read and NICo NSG report the same rules ({label})",
+            steps=log,
+            log_every=2,
+        )
 
     def _nico_cfg_attached():
         for group, plural in (
@@ -418,20 +379,13 @@ def test_hcp_cluster_vpc_security_groups(
     log.step("assert NICo NSG rules include VPC custom + default")
 
     def _nsg_has_vpc_merged_rules():
-        fresh = k8s.get_custom(
-            kube,
-            group="nico.mirantis.com",
-            version="v1alpha1",
-            plural="networksecuritygroups",
-            namespace=ns,
-            name=nsg_name,
-        )
+        fresh = _nsg_fresh()
         if not fresh:
             return None
-        have = _nsg_rule_fingerprints(fresh)
-        want = _api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id]) | _api_rule_fingerprints(
-            sgs_by_id[default_sg_id]
-        )
+        have = secgroups.nsg_rule_fingerprints(fresh)
+        want = secgroups.api_rule_fingerprints(
+            sgs_by_id[vpc_custom_sg_id]
+        ) | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
         return fresh if want <= have else None
 
     wait.await_predicate(
@@ -443,6 +397,11 @@ def test_hcp_cluster_vpc_security_groups(
         log_every=2,
     )
     log.ok()
+
+    if effective_ready:
+        log.step("effective read agrees with the rendered NICo NSG (VPC binding)")
+        _await_effective_matches_nsg("VPC binding only")
+        log.ok()
 
     log.step(f"PATCH cluster securityGroups=[{cluster_sg_id}]")
     patched = api.set_cluster_security_groups(session, cluster_url, [cluster_sg_id])
@@ -461,21 +420,23 @@ def test_hcp_cluster_vpc_security_groups(
     log.ok("cluster binding settled")
 
     log.step(f"assert UFO CR for cluster SG {cluster_sg_id}")
-    sgs_by_id[cluster_sg_id] = _await_sg_active(session, sg_collection, cluster_sg_id)
-    _assert_ufo_security_group_cr(
+    sgs_by_id[cluster_sg_id] = secgroups.await_sg_active(
+        session, sg_collection, cluster_sg_id
+    )
+    secgroups.assert_ufo_security_group_cr(
         kube, ns, sgs_by_id[cluster_sg_id], api_id=cluster_sg_id
     )
     log.ok()
 
     cluster_rule_names = {
         r.get("name")
-        for r in _sg_api_rules(sgs_by_id[cluster_sg_id])["ingress"]
+        for r in secgroups.sg_api_rules(sgs_by_id[cluster_sg_id])["ingress"]
         if r.get("name")
     }
     vpc_rule_names = {
         r.get("name")
         for sg_id in (vpc_custom_sg_id, default_sg_id)
-        for r in _sg_api_rules(sgs_by_id[sg_id])["ingress"]
+        for r in secgroups.sg_api_rules(sgs_by_id[sg_id])["ingress"]
         if r.get("name")
     }
     assert cluster_rule_names, "cluster SG must have named ingress rules for precedence"
@@ -484,28 +445,21 @@ def test_hcp_cluster_vpc_security_groups(
     log.step("assert NICo NSG has cluster+VPC rules; cluster ingress precedes VPC")
 
     def _nsg_has_cluster_and_precedence():
-        fresh = k8s.get_custom(
-            kube,
-            group="nico.mirantis.com",
-            version="v1alpha1",
-            plural="networksecuritygroups",
-            namespace=ns,
-            name=nsg_name,
-        )
+        fresh = _nsg_fresh()
         if not fresh:
             return None
-        have = _nsg_rule_fingerprints(fresh)
+        have = secgroups.nsg_rule_fingerprints(fresh)
         want = (
-            _api_rule_fingerprints(sgs_by_id[cluster_sg_id])
-            | _api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
-            | _api_rule_fingerprints(sgs_by_id[default_sg_id])
+            secgroups.api_rule_fingerprints(sgs_by_id[cluster_sg_id])
+            | secgroups.api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
+            | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
         )
         if not want <= have:
             return None
 
-        order = _nsg_named_ingress_order(fresh)
-        cluster_idx = _first_index(order, cluster_rule_names)
-        vpc_idx = _first_index(order, vpc_rule_names)
+        order = secgroups.nsg_named_ingress_order(fresh)
+        cluster_idx = secgroups.first_index(order, cluster_rule_names)
+        vpc_idx = secgroups.first_index(order, vpc_rule_names)
         if cluster_idx is None or vpc_idx is None:
             return None
         if cluster_idx >= vpc_idx:
@@ -520,23 +474,64 @@ def test_hcp_cluster_vpc_security_groups(
         steps=log,
         log_every=2,
     )
-    order = _nsg_named_ingress_order(nsg_final)
+    order = secgroups.nsg_named_ingress_order(nsg_final)
     log.info(f"named ingress order: {order}")
     log.ok("cluster rules have higher precedence than VPC")
 
-    cluster_fps = _api_rule_fingerprints(sgs_by_id[cluster_sg_id])
-    vpc_custom_fps = _api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
-    default_fps = _api_rule_fingerprints(sgs_by_id[default_sg_id])
+    cluster_fps = secgroups.api_rule_fingerprints(sgs_by_id[cluster_sg_id])
+    vpc_custom_fps = secgroups.api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
+    default_fps = secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
 
-    def _nsg_fresh():
-        return k8s.get_custom(
-            kube,
-            group="nico.mirantis.com",
-            version="v1alpha1",
-            plural="networksecuritygroups",
-            namespace=ns,
-            name=nsg_name,
+    if effective_ready:
+        log.step("effective read: cluster binding merges ahead of the VPC floor")
+        want_ids = [cluster_sg_id, vpc_custom_sg_id, default_sg_id]
+
+        def _effective_merged():
+            block = secgroups.effective_block(_effective("cluster", cluster_id), vpc_id)
+            return block if secgroups.effective_group_ids(block) == want_ids else None
+
+        block = wait.await_predicate(
+            _effective_merged,
+            timeout=900,
+            interval=10,
+            desc=f"effective cluster block for {vpc_id} == {want_ids!r}",
+            steps=log,
+            log_every=2,
         )
+        secgroups.assert_effective_group(
+            block,
+            cluster_sg_id,
+            source="cluster",
+            source_id=cluster_id,
+            sg=sgs_by_id[cluster_sg_id],
+        )
+        for sg_id in (vpc_custom_sg_id, default_sg_id):
+            secgroups.assert_effective_group(
+                block, sg_id, source="vpc", source_id=vpc_id, sg=sgs_by_id[sg_id]
+            )
+        have = secgroups.effective_rule_fingerprints(block)
+        want = cluster_fps | vpc_custom_fps | default_fps
+        assert have == want, (
+            f"merged effective rules: missing {want - have!r}, "
+            f"unexpected {have - want!r}"
+        )
+        secgroups.assert_effective_self_consistent(block)
+        log.ok("owner-bound group first, then the VPC floor, deduplicated")
+
+        log.step("effective read: a vpc read does not merge the owner's groups in")
+        vpc_block = secgroups.effective_block(_effective("vpc", vpc_id), vpc_id)
+        assert secgroups.effective_group_ids(vpc_block) == [
+            vpc_custom_sg_id,
+            default_sg_id,
+        ], (
+            "a vpc read reports that VPC's own binding only; the owner's groups "
+            f"are read from the owner. Got {secgroups.effective_group_ids(vpc_block)!r}"
+        )
+        log.ok()
+
+        log.step("effective read agrees with the rendered NICo NSG (both bindings)")
+        _await_effective_matches_nsg("cluster + VPC bindings")
+        log.ok()
 
     log.step("detach cluster SG and assert its rules leave the NICo NSG")
     try:
@@ -565,7 +560,7 @@ def test_hcp_cluster_vpc_security_groups(
             fresh = _nsg_fresh()
             if not fresh:
                 return None
-            have = _nsg_rule_fingerprints(fresh)
+            have = secgroups.nsg_rule_fingerprints(fresh)
             # Cluster rules gone; VPC custom + default still present.
             if have & cluster_fps:
                 return None
@@ -581,6 +576,34 @@ def test_hcp_cluster_vpc_security_groups(
             log_every=2,
         )
         log.ok("cluster-sg rules gone from NICo NSG")
+
+        if effective_ready:
+            log.step("effective read: cluster SG gone from the block")
+
+            def _effective_without_cluster_sg():
+                block = secgroups.effective_block(
+                    _effective("cluster", cluster_id), vpc_id
+                )
+                if secgroups.effective_group_ids(block) != [
+                    vpc_custom_sg_id,
+                    default_sg_id,
+                ]:
+                    return None
+                if secgroups.effective_rule_fingerprints(
+                    block, security_group_id=cluster_sg_id
+                ):
+                    return None
+                return block
+
+            wait.await_predicate(
+                _effective_without_cluster_sg,
+                timeout=900,
+                interval=10,
+                desc=f"effective cluster block dropped {cluster_sg_id}",
+                steps=log,
+                log_every=2,
+            )
+            log.ok()
 
         log.step("detach VPC custom SG ([] → default only) and assert custom rules leave NICo")
         wait.await_api_state(
@@ -622,7 +645,7 @@ def test_hcp_cluster_vpc_security_groups(
             fresh = _nsg_fresh()
             if not fresh:
                 return None
-            have = _nsg_rule_fingerprints(fresh)
+            have = secgroups.nsg_rule_fingerprints(fresh)
             # Custom VPC + cluster rules must be gone; default VPC rules remain.
             if have & cluster_fps:
                 return None
@@ -639,6 +662,31 @@ def test_hcp_cluster_vpc_security_groups(
             log_every=2,
         )
         log.ok("demo-sg rules gone from NICo NSG; default rules remain")
+
+        if effective_ready:
+            log.step("effective read: only the VPC default remains")
+
+            def _effective_default_only():
+                block = secgroups.effective_block(
+                    _effective("cluster", cluster_id), vpc_id
+                )
+                if secgroups.effective_group_ids(block) != [default_sg_id]:
+                    return None
+                return (
+                    block
+                    if secgroups.effective_rule_fingerprints(block) == default_fps
+                    else None
+                )
+
+            wait.await_predicate(
+                _effective_default_only,
+                timeout=900,
+                interval=10,
+                desc=f"effective cluster block for {vpc_id} == [{default_sg_id}]",
+                steps=log,
+                log_every=2,
+            )
+            log.ok()
     finally:
         log.step(f"DELETE cluster {cluster_id}")
         deleted = api.delete(session, cluster_url)
@@ -651,6 +699,20 @@ def test_hcp_cluster_vpc_security_groups(
             steps=log,
             log_every=2,
         )
+        if effective_ready:
+            log.step(f"effective read: deleted cluster {cluster_id} is 404")
+            gone = secgroups.get_effective_raw(
+                session,
+                api_base,
+                region,
+                project,
+                params={"objectKind": "cluster", "objectId": cluster_id},
+            )
+            assert gone.status_code == 404, (
+                f"effective read of a deleted cluster must be 404, got "
+                f"{gone.status_code}: {gone.text[:300]}"
+            )
+            log.ok()
         if default_sg_id:
             log.step(
                 f"assert vpc {vpc_id} and its default SG {default_sg_id!r} are gone"
@@ -701,6 +763,8 @@ def test_hcp_cluster_vpc_security_groups(
                 )
             log.ok("vpc default SG removed with vpc")
         log.step(f"DELETE security groups {cluster_sg_id!r} and {vpc_custom_sg_id!r}")
-        _delete_security_group(session, sg_collection, cluster_sg_id, log=log)
-        _delete_security_group(session, sg_collection, vpc_custom_sg_id, log=log)
+        secgroups.delete_security_group(session, sg_collection, cluster_sg_id, log=log)
+        secgroups.delete_security_group(
+            session, sg_collection, vpc_custom_sg_id, log=log
+        )
     log.done()
