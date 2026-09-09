@@ -15,6 +15,16 @@ def region_url(api_base: str, region: str, resource: str, project: str | None = 
     return f"{base}/{resource}"
 
 
+def vpc_uri(region: str, project: str, vpc_id: str) -> str:
+    """Build the `remoteVpc` value: a URI *path*, with no API_BASE prefix.
+
+    VPCPeeringCreateRequest.remoteVpc is matched as
+    /v1/regions/{region}/projects/{project}/networking/vpcs/{id}, so this cannot
+    reuse region_url() — that returns an absolute URL and the API would reject it.
+    """
+    return f"/v1/regions/{region}/projects/{project}/networking/vpcs/{vpc_id}"
+
+
 def create(
     session: requests.Session,
     url: str,
@@ -71,7 +81,14 @@ def list_items(
     body = resp.json()
     if isinstance(body, list):
         return body
-    for key in ("items", "vpcs", "securityGroups", "clusters", "instanceGroups"):
+    for key in (
+        "items",
+        "vpcs",
+        "securityGroups",
+        "clusters",
+        "instanceGroups",
+        "peerings",
+    ):
         if key in body and isinstance(body[key], list):
             return body[key]
     raise AssertionError(f"unexpected list envelope from {collection_url}: {body!r}")

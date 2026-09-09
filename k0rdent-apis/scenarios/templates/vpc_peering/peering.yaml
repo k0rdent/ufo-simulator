@@ -1,0 +1,14 @@
+# POST .../networking/vpcs/{vpcId}/peerings — declare ONE SIDE of a peering.
+#
+# `id` is stamped per run by stamp_id(). `remoteVpc` is injected by the test,
+# not templated here: it is a URI path that embeds the live region and project
+# (/v1/regions/{region}/projects/{project}/networking/vpcs/{id}).
+#
+# The body is strict-decoded server-side, so nothing read-only may be added —
+# a GET response cannot be posted back.
+#
+# One side alone declares half a peering and programs no fabric. The mutual
+# object (remote -> local, created under the other VPC) is what makes the
+# backend program anything; that mutual creation IS the authorization model.
+displayName: Lab VPC peering e2e
+description: Created by k0rdent-apis lab e2e (tests/test_vpc_peering.py)

@@ -52,6 +52,19 @@ def project() -> str:
 
 
 @pytest.fixture(scope="session")
+def peer_project() -> str:
+    """Second project, in a DIFFERENT org, for cross-org peering.
+
+    `acme-main` (org `acme`) is declared by the k0rdent-apis provision manifest
+    alongside `kind-main` (org `kind`), so no extra provisioning is needed. The
+    e2e identity can write to it because the lab's
+    02-manifest-admin-roles.patch binds admin@kind.test compute-admin at
+    PLATFORM scope, not just on kind-main.
+    """
+    return os.environ.get("E2E_PEER_PROJECT", "acme-main")
+
+
+@pytest.fixture(scope="session")
 def region() -> str:
     return os.environ.get("E2E_REGION") or os.environ.get("REGION") or "local"
 
