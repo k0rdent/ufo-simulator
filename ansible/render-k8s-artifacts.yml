@@ -37,6 +37,11 @@
             src: "k8s/netris_site_default.yaml.j2"
             dest: "{{ k8s_artifacts_dir }}/site-default.yaml"
 
+        - name: Render EW RoCE inventory profile
+          ansible.builtin.template:
+            src: "k8s/netris_inventory_profile_roce.j2"
+            dest: "{{ k8s_inventory_dir }}/00-roce-profile.yaml"
+
         - name: Render Netris switch templates
           vars:
             switch_name: "{{ item.0.name }}"

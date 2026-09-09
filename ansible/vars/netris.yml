@@ -5,6 +5,10 @@ ufo_fabric_backend: 'netris'
 netris_charts_repo: https://github.com/netrisai/charts
 netris_charts_branch: main
 
+# Inventory profiles (InventoryProfile CRs in platform-admin)
+inventory_profile_name: default-inventory-profile
+ew_inventory_profile_name: roce-profile
+
 switch_port_name_prefix: "swp"
 br_mgmt_phys_interface: ens5
 br_ext_phys_interface: "ens4"
