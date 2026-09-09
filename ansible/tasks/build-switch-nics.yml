@@ -37,10 +37,17 @@
     switch_nic_mac_prefix: "{{ ew_switch_data_mac_base if switch_name.startswith('ew-') else switch_data_mac_base }}"
     switch_is_leaf_or_spine: "{{ ('leaf' in switch_name) or ('spine' in switch_name) }}"
     switch_breakout_lanes: "{{ 2 if (switch_name.startswith('ew-') and (ew_switch_breakout | default('') | length) > 0) else 1 }}"
+    # switch_mac_index restarts at 0 for the EW family, so it cannot be used to
+    # carve stub UDP windows. Index across every switch instead.
+    switch_global_index: "{{ (all_topology_switches | map(attribute='name') | list).index(switch_name) }}"
 
 - name: "{{ switch_name }} - Expand leaf/spine NICs to full {{ switch_ports_count | default(48) }}-port grid"
+  vars:
+    # Pre-offset the base and pass index 0 so each switch owns a disjoint window
+    # regardless of its lane count (96 NICs = 192 ports, so 512 leaves headroom).
+    switch_stub_window: "{{ (switch_stub_udp_base | default(40000) | int) + ((switch_global_index | int) * 512) }}"
   set_fact:
-    switch_links: "{{ switch_wired_links | expand_switch_port_nics(switch_port_name_prefix, switch_ports_count | default(48), switch_breakout_lanes | int, switch_mac_index | int, switch_stub_udp_base | default(40000)) }}"
+    switch_links: "{{ switch_wired_links | expand_switch_port_nics(switch_port_name_prefix, switch_ports_count | default(48), switch_breakout_lanes | int, 0, switch_stub_window | int) }}"
   when: switch_is_leaf_or_spine | bool
 
 - name: "{{ switch_name }} - Keep wired-only NICs for non leaf/spine"
