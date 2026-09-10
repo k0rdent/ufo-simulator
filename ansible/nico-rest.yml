@@ -117,5 +117,8 @@
     - ./vars/{{ sdn_provider }}.yml
 
   tasks:
+    - name: Render inventory from topology (UUID/MAC/LLDP match cmp01 VMs)
+      ansible.builtin.include_tasks: tasks/nico_rest/render_mock_inventory.yml
+
     - name: Deploy mock core Helm release
       ansible.builtin.include_tasks: tasks/nico_rest/deploy_mock_core.yml

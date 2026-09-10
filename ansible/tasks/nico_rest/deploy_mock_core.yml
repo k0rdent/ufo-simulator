@@ -5,6 +5,8 @@
       helm upgrade --install {{ nico_core_mock_helm_release }}
       helm/nico-rest-mock-core/
       --namespace {{ nico_core_mock_helm_namespace }}
+      --create-namespace
+      -f {{ nico_core_mock_inventory_values_file }}
       --set image.repository={{ nico_core_mock_image_repo }}
       --set image.tag={{ nico_core_mock_image_tag }}
       --set image.pullPolicy=Never
