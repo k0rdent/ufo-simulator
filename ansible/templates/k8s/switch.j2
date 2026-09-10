@@ -1,9 +1,10 @@
 {%- set server_ports = [] %}
 {%- set rail_ports = {} %}
+{%- set is_spectrum = switch.type is defined and switch.type == 'spectrum-x' %}
 {%- for link in links %}
 {%-   if link.local == switch_name and link.remote.startswith('vm-') %}
 {%-     set _ = server_ports.append(link.local_port) %}
-{%-     if link.rail_id is defined %}
+{%-     if is_spectrum and link.rail_id is defined %}
 {%-       if link.rail_id not in rail_ports %}
 {%-         set _ = rail_ports.update({link.rail_id: []}) %}
 {%-       endif %}
@@ -26,6 +27,7 @@ spec:
 {% if switch.type is defined %}
   type: {{ switch.type }}
 {% endif %}
+{% if is_spectrum %}
 {% if switch.plane_id is defined %}
   plane_id: {{ switch.plane_id }}
 {% endif %}
@@ -44,5 +46,6 @@ spec:
     - ports: "{{ ports | join(',') }}"
       rail_id: {{ rail_id }}
 {% endfor %}
+{% endif %}
 {% endif %}
 {% endif %}

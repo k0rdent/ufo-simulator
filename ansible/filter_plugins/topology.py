@@ -134,6 +134,11 @@ def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breako
         leaf_name = leaf["name"] if isinstance(leaf, dict) else leaf
         eth = "eth%d" % (eth_base + leaf_i)
         role = "ew%d" % (leaf_i + 1)
+        # Prefer explicit leaf rail_id; default to leaf index (ew-leaf-N → rail N).
+        if isinstance(leaf, dict) and leaf.get("rail_id") is not None:
+            rail_id = int(leaf["rail_id"])
+        else:
+            rail_id = leaf_i
         for phys, lane, node_name in assignments:
             links.append(
                 {
@@ -142,6 +147,7 @@ def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breako
                     "remote": node_name,
                     "remote_port": eth,
                     "role": role,
+                    "rail_id": rail_id,
                 }
             )
     return links
@@ -357,6 +363,41 @@ def nico_core_mock_machines(
             if nics
             else _mac_from_offset(vm_base_mac, base_offset)
         )
+        # Match static nico-core-mock values.yaml: A30 GPU (NVLink) + 4× ConnectX-5 Ex IB.
+        gpus = [
+            {
+                "driverVersion": "580.126.16",
+                "frequency": "930 MHz",
+                "inforomVersion": "1001.0205.00.02",
+                "name": "NVIDIA A30",
+                "pciBusId": "00000000:C1:00.0",
+                "serial": str(1651922012475 + vm_index),
+                "totalMemory": "24576 MiB",
+                "vbiosVersion": "92.00.66.00.04",
+            }
+        ]
+        ib_ports = (
+            ("0000:e1:00.0", "ibp225s0f0", "0000:e0:01.4"),
+            ("0000:e1:00.1", "ibp225s0f1", "0000:e0:01.4"),
+            ("0000:e2:00.0", "ibp226s0f0", "0000:e0:01.5"),
+            ("0000:e2:00.1", "ibp226s0f1", "0000:e0:01.5"),
+        )
+        infiniband_interfaces = []
+        for i, (slot, ifname, bridge) in enumerate(ib_ports):
+            guid = "%016x" % (vm_index * 4 + i + 1)
+            infiniband_interfaces.append(
+                {
+                    "guid": guid,
+                    "pciProperties": {
+                        "description": "MT28800 Family [ConnectX-5 Ex]",
+                        "device": "MT28800 Family [ConnectX-5 Ex]",
+                        "path": "/devices/pci0000:e0/%s/%s/infiniband/%s"
+                        % (bridge, slot, ifname),
+                        "slot": slot,
+                        "vendor": "Mellanox Technologies",
+                    },
+                }
+            )
         machines.append(
             {
                 "id": machine_id,
@@ -393,6 +434,8 @@ def nico_core_mock_machines(
                         "productSerial": "DPG5NS621A%04d" % vm_index,
                         "sysVendor": "Giga Computing",
                     },
+                    "gpus": gpus,
+                    "infinibandInterfaces": infiniband_interfaces,
                     "machineArch": "X86_64",
                     "machineType": "x86_64",
                     "networkInterfaces": nics,
@@ -409,6 +452,20 @@ def nico_core_mock_machines(
                         "name": "I350 Gigabit Network Connection",
                         "vendor": "Intel Corporation",
                         "count": len(nics),
+                    },
+                    {
+                        "type": "GPU",
+                        "name": "NVIDIA A30",
+                        "count": 1,
+                        "frequency": "930 MHz",
+                        "capacity": "24576 MiB",
+                        "device_type": "NVLink",
+                    },
+                    {
+                        "type": "InfiniBand",
+                        "name": "MT28800 Family [ConnectX-5 Ex]",
+                        "vendor": "Mellanox Technologies",
+                        "count": len(infiniband_interfaces),
                     },
                     {"type": "Memory", "name": "DDR5", "count": 1, "capacity": "262144 MB"},
                 ],

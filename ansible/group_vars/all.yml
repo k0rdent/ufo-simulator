@@ -39,18 +39,13 @@ topology:
     - name: spine-1
       mgmt_ip: 10.200.0.111
   leafs:
+    # NS leaves: UFO Switch type north-south (webhook rejects rail/pod/su topology).
     - name: leaf-0
       mgmt_ip: 10.200.0.100
-      pod_id: 1
-      su_id: 2
-      rail_id: 0
-      type: spectrum-x
+      type: north-south
     - name: leaf-1
       mgmt_ip: 10.200.0.101
-      pod_id: 1
-      su_id: 2
-      rail_id: 1
-      type: spectrum-x
+      type: north-south
     - name: ext-leaf-0
       mgmt_ip: 10.200.0.102
     - name: ext-leaf-1
@@ -86,29 +81,30 @@ topology:
   # Links format: [local_switch, local_port, remote_switch, remote_port]
   # Each link will get a unique UDP port pair
   links:
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}1", remote: "vm-0", remote_port: "eth1", role: "rail1", rail_id: 0 }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}2", remote: "vm-1", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}3", remote: "vm-2", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}4", remote: "vm-3", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}5", remote: "vm-4", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}6", remote: "vm-5", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}7", remote: "vm-6", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}8", remote: "vm-7", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth1", role: "rail1", rail_id: 0  }
-    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth1", role: "rail1", rail_id: 0  }
+    # NS leaf↔VM: no rail_id (north-south Switch CRs must not carry rail topology).
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}1", remote: "vm-0", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}2", remote: "vm-1", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}3", remote: "vm-2", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}4", remote: "vm-3", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}5", remote: "vm-4", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}6", remote: "vm-5", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}7", remote: "vm-6", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}8", remote: "vm-7", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth1", role: "ns" }
+    - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth1", role: "ns" }
 
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}1", remote: "vm-0", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}2", remote: "vm-1", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}3", remote: "vm-2", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}4", remote: "vm-3", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}5", remote: "vm-4", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}6", remote: "vm-5", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}7", remote: "vm-6", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}8", remote: "vm-7", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth2", role: "rail2", rail_id: 1  }
-    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth2", role: "rail2", rail_id: 1  }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}1", remote: "vm-0", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}2", remote: "vm-1", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}3", remote: "vm-2", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}4", remote: "vm-3", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}5", remote: "vm-4", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}6", remote: "vm-5", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}7", remote: "vm-6", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}8", remote: "vm-7", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}9", remote: "vm-8", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}10", remote: "vm-9", remote_port: "eth2", role: "ns" }
+    - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}11", remote: "vm-10", remote_port: "eth2", role: "ns" }
 
     - { local: "leaf-0", local_port: "{{ switch_port_name_prefix }}23", remote: "sg-0", remote_port: "eth1", role: ext }
     - { local: "leaf-1", local_port: "{{ switch_port_name_prefix }}23", remote: "sg-0", remote_port: "eth2", role: ext }
@@ -141,30 +137,47 @@ topology_ew:
     - name: ew-spine-1
       mgmt_ip: 10.200.0.131
   leafs:
+    # EW leaves: spectrum-x with rail_id (rail topology allowed only on this type).
     - name: ew-leaf-0
       mgmt_ip: 10.200.0.120
       type: spectrum-x
+      su_id: 0
+      rail_id: 0
     - name: ew-leaf-1
       mgmt_ip: 10.200.0.121
       type: spectrum-x
+      su_id: 0
+      rail_id: 1
     - name: ew-leaf-2
       mgmt_ip: 10.200.0.122
       type: spectrum-x
+      su_id: 0
+      rail_id: 2
     - name: ew-leaf-3
       mgmt_ip: 10.200.0.123
       type: spectrum-x
+      su_id: 0
+      rail_id: 3
     - name: ew-leaf-4
       mgmt_ip: 10.200.0.124
       type: spectrum-x
+      su_id: 0
+      rail_id: 4
     - name: ew-leaf-5
       mgmt_ip: 10.200.0.125
       type: spectrum-x
+      su_id: 0
+      rail_id: 5
     - name: ew-leaf-6
       mgmt_ip: 10.200.0.126
       type: spectrum-x
+      su_id: 0
+      rail_id: 6
     - name: ew-leaf-7
       mgmt_ip: 10.200.0.127
       type: spectrum-x
+      su_id: 0
+      rail_id: 7
 
 # EW leaf→VM (2-way breakout) + leaf↔spine fabric links (breakout lane 0 / /1).
 topology_ew_links: "{{ (topology_ew.leafs | ew_breakout_server_links(topology.nodes, switch_port_name_prefix)) + (topology_ew.spines | ew_fabric_links(topology_ew.leafs, switch_port_name_prefix)) }}"
