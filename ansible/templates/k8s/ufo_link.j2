@@ -2,11 +2,12 @@
 {% for link in links %}
 {% if link.local == switch_name and link.remote in node_names %}
 {%   set vm = all_nodes | selectattr('name', 'equalto', link.remote) | first | default({}) %}
-{%   set is_rail = link.rail_id is defined %}
-{%   set link_rail_id = link.rail_id if is_rail else switch.rail_id %}
-{%   set has_location = is_rail and (switch.plane_id is defined or switch.pod_id is defined
-                          or switch.su_id is defined or link_rail_id is defined
-                          or vm.host_id is defined) %}
+{%   set is_spectrum = switch.type is defined and switch.type == 'spectrum-x' %}
+{%   set link_rail_id = link.rail_id if link.rail_id is defined else switch.rail_id %}
+{%   set has_location = is_spectrum and link_rail_id is defined and (
+                            switch.plane_id is defined or switch.pod_id is defined
+                            or switch.su_id is defined or link_rail_id is defined
+                            or vm.host_id is defined) %}
 ---
 apiVersion: ufo.mirantis.com/v1alpha1
 kind: Link
