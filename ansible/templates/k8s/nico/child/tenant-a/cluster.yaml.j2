@@ -73,7 +73,7 @@ spec:
       - {{ ssh_key_group_id }}
 {% endfor %}
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: K0sWorkerConfigTemplate
 metadata:
   name: tenant-a-cluster-default-wct
@@ -83,17 +83,20 @@ metadata:
 spec:
   template:
     spec:
-      version: v1.36.1
-      preStartCommands:
-        - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
-        - sudo mkdir -vp /home/rescue/.ssh/
-        - sudo chown rescue /home/rescue/.ssh/authorized_keys
-        - /usr/bin/sleep 180
+      args:
+      - --kubelet-extra-args=--feature-gates=DynamicResourceAllocation=true
       files:
       - content: |
           PasswordAuthentication yes
         path: /etc/ssh/sshd_config.d/99-cloudimg-settings.conf
         permissions: "0644"
+      k0sInstallDir: /usr/local/bin
+      preK0sCommands:
+      - sudo useradd -G sudo -s /bin/bash -d /home/rescue -p $(openssl passwd -1 rescue) rescue
+      - sudo mkdir -vp /home/rescue/.ssh/
+      - /usr/bin/sleep 180
+      useSystemHostname: false
+      version: v1.36.3+k0s.1
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
@@ -126,4 +129,4 @@ spec:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: NicoMachineTemplate
         name: tenant-a-cluster-default-cmt
-      version: v1.36.1
+      version: v1.36.3+k0s.1
