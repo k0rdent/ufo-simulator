@@ -56,7 +56,7 @@ nodePools:
             - ipFromSubnet: sub-verity-l3
         verity_l2_net:
           match:
-            pciSlot: "0000:a3:00.2"
+            pciSlot: "0000:a3:00.1"
           dhcp4: false
           connectToNetwork:
             name: net-verity-l2

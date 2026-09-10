@@ -193,25 +193,21 @@ where each interface is pinned to a specific physical NIC by PCI slot.
 
 `match.pciSlot` resolves against the machine's advertised inventory via
 the Link CR's `spec.peer.pciSlot`, not against on-VM `ip link` output.
-The nico-core-mock helm chart advertises this ethernet inventory per
-mocked machine (see
-[`helm/nico-rest-mock-core/values.yaml`](../../nico-core-mock/helm/nico-rest-mock-core/values.yaml)):
+`nico-rest.yml` renders a topology-derived inventory overlay
+([`templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2`](templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2))
+and passes it to Helm with `-f`, overriding the chart defaults. UUID/MAC/LLDP
+match `create-vms.yml` on cmp01 (calculable on gtw01 — no libvirt query):
 
 ```
-eth0   0000:01:00.0   Mellanox ConnectX-7 (BlueField-3 integrated)   — no LLDP → no Link CR
-eth1   0000:a3:00.0   Intel I350   (LLDP: leaf-0 port eth1/1)         ← ns_verity byslot target
-eth2   0000:a3:00.1   Intel I350   (LLDP: leaf-0 port eth1/12)
-eth3   0000:a3:00.2   Intel I350   (LLDP: leaf-1 port eth1/12)
-eth4   0000:a3:00.3   Intel I350   (LLDP: leaf-1 port eth1/12)
+eth1   0000:a3:00.0   → leaf-0   swp{N+1}     (MAC offset vm_index * vm_port_count + 0)
+eth2   0000:a3:00.1   → leaf-1   swp{N+1}
+eth5…eth12            → ew-leaf-0…7 breakout ports (swpXsY)
 ```
 
-Only the LLDP-attached interfaces (`eth1`..`eth4`) get a NicoMachine
-Link CR, so those are the only slots `byslot` can resolve. `eth0` has
-no LLDP peer → no Link CR → `match.pciSlot: 0000:01:00.0` fails
-resolution. For the nico interface we therefore use the OS interface
-name (`enp1s0` per systemd-predictable naming, matching what `ip link`
-shows on the running worker) as the ethernet map key and skip `match`
-entirely. The schema declares:
+Only LLDP-attached interfaces get a NicoMachine Link CR, so those are the
+slots `byslot` can resolve. For the nico mgmt interface we therefore use the
+OS interface name (`enp1s0` per systemd-predictable naming) as the ethernet
+map key and skip `match` entirely. The schema declares:
 
 - `vpc-nico` (backend `nico`) with `net-nico` and a subnet from
   `global-default`.
@@ -297,14 +293,12 @@ its OS-predictable name (`enp1s0`) as the ethernet-map key because the
 `0000:01:00.0` NIC (mock `eth0`, Mellanox) has no LLDP peer → no Link
 CR → `byslot` can't resolve it. The verity side exercises two
 byslot-pinned interfaces, both against LLDP-attached slots that carry a
-Link CR (per the mock inventory in
-[`helm/nico-rest-mock-core/values.yaml`](../../nico-core-mock/helm/nico-rest-mock-core/values.yaml)):
+Link CR (per the topology-rendered nico-core-mock inventory from
+[`nico_core_mock_inventory_values.yaml.j2`](templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2)):
 
-- `verity-l3-addr` → slot `0000:a3:00.0` (mock `eth1`, leaf-0 port
-  `eth1/1`) on the l3vpn network `net-verity-l3`, addressed via
+- `verity-l3-addr` → slot `0000:a3:00.0` (eth1 → leaf-0) on the l3vpn network `net-verity-l3`, addressed via
   `addresses[].ipFromSubnet: "sub-verity-l3"`.
-- `verity-l2-net` → slot `0000:a3:00.2` (mock `eth3`, leaf-1 port
-  `eth1/1`) on the l2vpn network `net-verity-l2` (VLAN 500), joined via
+- `verity-l2-net` → slot `0000:a3:00.1` (eth2 → leaf-1) on the l2vpn network `net-verity-l2` (VLAN 500), joined via
   `connectToNetwork: { name: "net-verity-l2" }` with no `addresses` —
   L2 addressing is left to the fabric / DHCP.
 

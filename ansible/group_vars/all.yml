@@ -318,6 +318,10 @@ nico_core_mock_helm_release: nico-rest-mock-core
 nico_core_mock_helm_namespace: nico-rest
 nico_core_mock_libvirt_enabled: true
 nico_core_mock_libvirt_endpoint: qemu+tcp://10.200.0.254/system
+# Topology-derived inventory overlay (rendered on gtw01; overrides chart defaults).
+nico_core_mock_inventory_dir: "{{ k8s_artifacts_dir }}/nico"
+nico_core_mock_inventory_values_file: "{{ nico_core_mock_inventory_dir }}/nico-core-mock-inventory-values.yaml"
+nico_core_mock_machines_yaml_file: "{{ nico_core_mock_inventory_dir }}/machines.yaml"
 nico_api_base_url: "http://{{ nico_rest_external_ip }}:8388"
 nico_api_org: test-org
 nico_keycloak_base_url: "http://{{ nico_rest_external_ip }}:8082"

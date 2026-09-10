@@ -233,6 +233,190 @@ def resolve_topology_link_ports(links, switches, port_prefix="swp"):
     return resolved
 
 
+def _mac_from_offset(base_mac, offset):
+    """Format ``vm_base_mac`` + 16-bit offset as ``aa:bb:cc:dd:ee:ff``."""
+    return "%s:%02x:%02x" % (base_mac, (offset // 256) % 256, offset % 256)
+
+
+def _switch_mgmt_mac(switch_name, ns_names, ew_names, switch_base_mac, ew_switch_base_mac):
+    if switch_name in ew_names:
+        return "%s:%02x:00" % (ew_switch_base_mac, ew_names.index(switch_name))
+    if switch_name in ns_names:
+        return "%s:%02x:00" % (switch_base_mac, ns_names.index(switch_name))
+    return "%s:00:00" % switch_base_mac
+
+
+def _eth_pci_slot(port_name):
+    """Stable synthetic PCI slot for byslot matching (not libvirt-assigned)."""
+    m = re.match(r"^eth(\d+)$", str(port_name or ""))
+    if not m:
+        return "0000:a3:00.0"
+    n = int(m.group(1))
+    if 1 <= n <= 4:
+        return "0000:a3:00.%d" % (n - 1)
+    if n >= 5:
+        return "0000:b%x:00.0" % (n - 5)
+    return "0000:a3:00.0"
+
+
+def _eth_pci_path(port_name, slot):
+    if str(port_name) == "eth0" or slot.startswith("0000:01:"):
+        return "/devices/pci0000:00/0000:00:01.3/%s/net/%s" % (slot, port_name)
+    if slot.startswith("0000:a3:"):
+        return "/devices/pci0000:a0/0000:a0:01.3/%s/net/%s" % (slot, port_name)
+    bus = slot[5:7]
+    return "/devices/pci0000:%s/0000:%s:01.0/%s/net/%s" % (bus, bus, slot, port_name)
+
+
+def _vm_links_for_server(server_name, all_links):
+    """Mirror create-vm.yml: walk all_topology_links in order, keep endpoints for this VM."""
+    out = []
+    for link in all_links or []:
+        if link.get("remote") == server_name:
+            out.append(
+                {
+                    "port": link["remote_port"],
+                    "switch": link["local"],
+                    "switch_port": link["local_port"],
+                }
+            )
+        elif link.get("local") == server_name:
+            out.append(
+                {
+                    "port": link["local_port"],
+                    "switch": link["remote"],
+                    "switch_port": link["remote_port"],
+                }
+            )
+    return out
+
+
+def nico_core_mock_machines(
+    nodes,
+    all_links,
+    vm_base_mac="52:54:00:12",
+    vm_port_count=12,
+    switch_base_mac="00:01:00:00",
+    ew_switch_base_mac="00:01:00:01",
+    ns_switches=None,
+    ew_switches=None,
+    segment_id="00000000-0000-4000-9000-000000000000",
+):
+    """Build nico-core-mock ``inventory.machines`` from lab topology rules.
+
+    Must stay aligned with create-vms.yml / create-vm.yml:
+
+    - UUID ``00000000-0000-4000-8000-`` + zero-padded decimal index (12 digits)
+    - MAC ``vm_base_mac`` + ``vm_index * vm_port_count + nic_index`` (link order)
+    - LLDP peer from the matching topology link (switch name + port)
+    - Switch chassis MAC from NS/EW switch list order (same as dnsmasq/build-switch-nics)
+
+    Calculable on gtw01 — does not query libvirt on cmp01.
+    """
+    ns_names = [s["name"] if isinstance(s, dict) else s for s in (ns_switches or [])]
+    ew_names = [s["name"] if isinstance(s, dict) else s for s in (ew_switches or [])]
+    port_count = int(vm_port_count or 12)
+    machines = []
+
+    for vm_index, node in enumerate(nodes or []):
+        name = node["name"] if isinstance(node, dict) else node
+        base_offset = vm_index * port_count
+        machine_id = "00000000-0000-4000-8000-%012d" % vm_index
+        vm_links = _vm_links_for_server(name, all_links)
+
+        nics = []
+        for nic_index, link in enumerate(vm_links):
+            port = link["port"]
+            switch = link["switch"]
+            switch_port = link["switch_port"]
+            mac = _mac_from_offset(vm_base_mac, base_offset + nic_index)
+            slot = _eth_pci_slot(port)
+            chassis = _switch_mgmt_mac(
+                switch, ns_names, ew_names, switch_base_mac, ew_switch_base_mac
+            )
+            nics.append(
+                {
+                    "macAddress": mac,
+                    "lldp": {
+                        "portId": "ifname=%s" % switch_port,
+                        "switchId": "mac=%s" % chassis,
+                        "switchSystemName": switch,
+                    },
+                    "pciProperties": {
+                        "description": "I350 Gigabit Network Connection",
+                        "device": "I350 Gigabit Network Connection",
+                        "path": _eth_pci_path(port, slot),
+                        "slot": slot,
+                        "vendor": "Intel Corporation",
+                    },
+                }
+            )
+
+        primary_mac = (
+            nics[0]["macAddress"]
+            if nics
+            else _mac_from_offset(vm_base_mac, base_offset)
+        )
+        machines.append(
+            {
+                "id": machine_id,
+                "state": "Ready",
+                "interfaces": [
+                    {
+                        "hostname": "%s.lab.local" % name,
+                        "mac_address": primary_mac.lower(),
+                        "addresses": ["10.10.0.%d" % (10 + vm_index)],
+                        "segment_id": segment_id,
+                        "primary_interface": True,
+                    }
+                ],
+                "discovery_info": {
+                    "cpuInfo": [
+                        {
+                            "cores": 16,
+                            "model": "AMD EPYC 9115 16-Core Processor",
+                            "sockets": 1,
+                            "threads": 16,
+                            "vendor": "AuthenticAMD",
+                        }
+                    ],
+                    "dmiData": {
+                        "biosDate": "04/01/2026",
+                        "biosVersion": "R23_F20",
+                        "boardName": "MZG3-GU0-%03d" % vm_index,
+                        "boardSerial": "PK1N6300%04d" % vm_index,
+                        # Must include a non-digit so YAML never coerces to int
+                        # (03000308 → 3000308 int breaks proto string boardVersion).
+                        "boardVersion": "R23-%02d" % vm_index,
+                        "chassisSerial": "2451R26302R1.0U1%03d" % vm_index,
+                        "productName": "R263-ZG0-AAL2-%03d" % vm_index,
+                        "productSerial": "DPG5NS621A%04d" % vm_index,
+                        "sysVendor": "Giga Computing",
+                    },
+                    "machineArch": "X86_64",
+                    "machineType": "x86_64",
+                    "networkInterfaces": nics,
+                },
+                "machine_capabilities": [
+                    {
+                        "type": "CPU",
+                        "name": "AMD EPYC 9115 16-Core Processor",
+                        "vendor": "AuthenticAMD",
+                        "count": 1,
+                    },
+                    {
+                        "type": "Network",
+                        "name": "I350 Gigabit Network Connection",
+                        "vendor": "Intel Corporation",
+                        "count": len(nics),
+                    },
+                    {"type": "Memory", "name": "DDR5", "count": 1, "capacity": "262144 MB"},
+                ],
+            }
+        )
+    return machines
+
+
 class FilterModule(object):
     def filters(self):
         return {
@@ -240,4 +424,5 @@ class FilterModule(object):
             "ew_fabric_links": ew_fabric_links,
             "resolve_topology_link_ports": resolve_topology_link_ports,
             "expand_switch_port_nics": expand_switch_port_nics,
+            "nico_core_mock_machines": nico_core_mock_machines,
         }
