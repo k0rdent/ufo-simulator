@@ -22,6 +22,20 @@ Two things about peering shape the whole file:
     anywhere that peer across owner kinds (`ownerKind` is never consulted in
     the peering create path).
 
+Teardown order differs by test, and that is deliberate:
+
+  * Same-project tests remove the PEERINGS first, then the owners. That is the
+    only safe order there. While two VPCs in one namespace are mutually peered,
+    deleting an owner first leaves the survivor's CR naming the dead VPC in the
+    same namespace, and UFO's Vpc finalizer counts a same-namespace reference
+    unconditionally — on either leg — so the VPC is pinned in Terminating
+    indefinitely. (UFO `vpc_controller.go`: the mutual-counterpart escape hatch
+    is guarded by `peering.Namespace != vpcNamespace`.) A fix is expected;
+    until then the same-project owner-teardown case is deliberately not tested.
+  * The cross-org test deletes an OWNER with both halves still declared, which
+    is what a tenant actually does. There the survivor is foreign, loses its
+    counterpart, and releases correctly — so the real contract is assertable.
+
 Lab prerequisites beyond the other scenarios: TWO available `nico-lab` servers,
 because a cluster and an instance group are alive at the same time.
 """
@@ -306,6 +320,46 @@ def _await_peering_cr(
     )
 
 
+def _await_peering_cr_absent(
+    kube,
+    namespace: str,
+    *,
+    local_cr: str,
+    remote_cr: str,
+    remote_namespace: str | None,
+    log: Steps,
+) -> None:
+    """Wait until the UFO VpcPeering CR for one side is gone.
+
+    Matched on spec, like the positive lookup — the CR carries a finalizer that
+    is held until its backend cleanup finishes, so "deleted" here means really
+    gone, not merely marked for deletion.
+    """
+
+    def _gone():
+        return (
+            True
+            if k8s.find_ufo_vpc_peering(
+                kube,
+                namespace,
+                local_cr=local_cr,
+                remote_cr=remote_cr,
+                remote_namespace=remote_namespace,
+            )
+            is None
+            else None
+        )
+
+    wait.await_predicate(
+        _gone,
+        timeout=600,
+        interval=10,
+        desc=f"UFO VpcPeering {local_cr} -> {remote_cr} in {namespace} gone",
+        steps=log,
+        log_every=2,
+    )
+
+
 def _assert_peering_cr(cr: dict[str, Any], row: dict[str, Any], *, remote_ns: str | None) -> None:
     spec = cr.get("spec") or {}
     remote = spec.get("remote") or {}
@@ -358,6 +412,144 @@ def _await_no_backend_peering(kube, owners: list[dict], *, log: Steps) -> None:
 # --------------------------------------------------------------------------
 
 
+class _Handshake:
+    """Both declared sides of one peering, filled in as they are created.
+
+    `fwd` is the side whose local VPC is `local_vpc`; `rev` is its mirror.
+    Mutable and passed in by the caller rather than returned, so a `finally`
+    can clean up whichever sides exist when a run fails partway through.
+    """
+
+    # Empty string rather than None for the ids/urls: every caller guards on
+    # truthiness anyway, and it keeps them plain `str` for the helpers below.
+    def __init__(self) -> None:
+        self.fwd_id: str = ""
+        self.rev_id: str = ""
+        self.fwd_url: str = ""
+        self.rev_url: str = ""
+        self.crs: list[dict[str, Any]] = []
+
+
+def _declare_both_sides(
+    session,
+    api_base,
+    region,
+    kube,
+    *,
+    hs: _Handshake,
+    log: Steps,
+    run_id: str,
+    test_name: str,
+    local_project: str,
+    local_vpc: dict[str, Any],
+    remote_project: str,
+    remote_vpc: dict[str, Any],
+) -> None:
+    """Declare both sides and assert the CRs and the single backend object.
+
+    Deliberately has no teardown of its own: how the pair is torn down is the
+    thing the callers differ on, and in one of them it is the thing under test.
+
+    Cross-project only in that the two projects may differ: when they do, the
+    CRs carry spec.remote.namespace; when they do not, it must be absent.
+    """
+    cross_project = local_project != remote_project
+    local_ns = k8s.project_namespace(local_project)
+    remote_ns = k8s.project_namespace(remote_project)
+
+    hs.fwd_id = resource_id(test_name, "fwd", run_id=run_id)
+    hs.rev_id = resource_id(test_name, "rev", run_id=run_id)
+
+    fwd_row, hs.fwd_url = _create_peering(
+        session,
+        api_base,
+        region,
+        local_project=local_project,
+        local_vpc_id=local_vpc["id"],
+        remote_project=remote_project,
+        remote_vpc_id=remote_vpc["id"],
+        peering_id=hs.fwd_id,
+        log=log,
+    )
+    fwd_row = _await_peering_active(session, hs.fwd_url, hs.fwd_id, log=log)
+
+    log.step(f"assert UFO VpcPeering CR for {hs.fwd_id} in {local_ns}")
+    fwd_cr = _await_peering_cr(
+        kube,
+        local_ns,
+        local_cr=local_vpc["ufoCrName"],
+        remote_cr=remote_vpc["ufoCrName"],
+        remote_namespace=remote_ns if cross_project else None,
+        log=log,
+    )
+    _assert_peering_cr(fwd_cr, fwd_row, remote_ns=remote_ns if cross_project else None)
+    hs.crs.append(fwd_cr)
+    log.ok(f"CR {fwd_cr['metadata']['name']} ReconcileReady")
+
+    # Ordered, not raced: UFO adds its finalizer, calls the backend, and only
+    # then writes ReconcileReady=True. So by the time the CR above reports
+    # Ready, the backend has already run and skipped for want of a mirror. A
+    # backend object here would be a real defect.
+    log.step("assert NO backend peering yet (one side programs nothing)")
+    assert not k8s.backend_peerings_owned_by(kube, hs.crs), (
+        "a one-sided peering must not program the fabric"
+    )
+    log.ok("none, as expected")
+
+    rev_row, hs.rev_url = _create_peering(
+        session,
+        api_base,
+        region,
+        local_project=remote_project,
+        local_vpc_id=remote_vpc["id"],
+        remote_project=local_project,
+        remote_vpc_id=local_vpc["id"],
+        peering_id=hs.rev_id,
+        log=log,
+    )
+    rev_row = _await_peering_active(session, hs.rev_url, hs.rev_id, log=log)
+    assert rev_row["uid"] != fwd_row["uid"], "the two sides must be distinct resources"
+
+    log.step(f"assert UFO VpcPeering CR for {hs.rev_id} in {remote_ns}")
+    rev_cr = _await_peering_cr(
+        kube,
+        remote_ns,
+        local_cr=remote_vpc["ufoCrName"],
+        remote_cr=local_vpc["ufoCrName"],
+        remote_namespace=local_ns if cross_project else None,
+        log=log,
+    )
+    _assert_peering_cr(rev_cr, rev_row, remote_ns=local_ns if cross_project else None)
+    hs.crs.append(rev_cr)
+    log.ok(f"CR {rev_cr['metadata']['name']} ReconcileReady")
+
+    log.step("assert the mutual pair collapsed onto ONE backend peering")
+    backend = _await_backend_peering(kube, hs.crs, log=log)
+    log.ok(
+        f"{backend['metadata']['namespace']}/{backend['metadata']['name']}"
+        f" status.id={(backend.get('status') or {}).get('id')!r}"
+    )
+
+    log.step("assert each side is listed only under its own VPC")
+    under_local = {
+        p["id"]
+        for p in api.list_items(
+            session, _peerings_url(api_base, region, local_project, local_vpc["id"])
+        )
+    }
+    under_remote = {
+        p["id"]
+        for p in api.list_items(
+            session, _peerings_url(api_base, region, remote_project, remote_vpc["id"])
+        )
+    }
+    assert hs.fwd_id in under_local, f"{hs.fwd_id} missing under its own vpc"
+    assert hs.rev_id in under_remote, f"{hs.rev_id} missing under its own vpc"
+    assert hs.rev_id not in under_local, f"{hs.rev_id} must not be listed under the local vpc"
+    assert hs.fwd_id not in under_remote, f"{hs.fwd_id} must not be listed under the remote vpc"
+    log.ok()
+
+
 def _run_handshake(
     session,
     api_base,
@@ -372,120 +564,183 @@ def _run_handshake(
     remote_project: str,
     remote_vpc: dict[str, Any],
 ) -> None:
-    """Declare both sides, assert the CRs and the single backend object, tear down.
+    """Declare both sides, assert, then remove the PEERINGS before the owners.
 
-    Cross-project only in that the two projects may differ: when they do, the
-    CRs carry spec.remote.namespace; when they do not, it must be absent.
+    That order is load-bearing, not tidiness: while two VPCs in one namespace
+    are mutually peered, deleting an owner first leaves the survivor's CR
+    naming the dead VPC in the same namespace, which pins it in Terminating
+    indefinitely. The cross-org teardown test drives the other order, where the
+    survivor is foreign and releases correctly.
     """
-    cross_project = local_project != remote_project
+    hs = _Handshake()
+    try:
+        _declare_both_sides(
+            session,
+            api_base,
+            region,
+            kube,
+            hs=hs,
+            log=log,
+            run_id=run_id,
+            test_name=test_name,
+            local_project=local_project,
+            local_vpc=local_vpc,
+            remote_project=remote_project,
+            remote_vpc=remote_vpc,
+        )
+    finally:
+        # Reverse first: removing either half withdraws the fabric peering, and
+        # this order lets us assert that the backend object actually goes.
+        if hs.rev_url:
+            _delete_peering(session, hs.rev_url, hs.rev_id, log=log)
+            if len(hs.crs) == 2:
+                log.step("assert the backend peering went with the mirror")
+                _await_no_backend_peering(kube, hs.crs, log=log)
+                log.ok()
+        if hs.fwd_url:
+            _delete_peering(session, hs.fwd_url, hs.fwd_id, log=log)
+
+
+def _run_owner_teardown(
+    session,
+    api_base,
+    region,
+    kube,
+    *,
+    log: Steps,
+    run_id: str,
+    test_name: str,
+    local_project: str,
+    local_vpc: dict[str, Any],
+    remote_project: str,
+    remote_vpc: dict[str, Any],
+    local_owner_url: str,
+    local_owner_what: str,
+    remote_owner_url: str,
+    remote_owner_what: str,
+) -> None:
+    """Delete BOTH owners in turn, with the peerings never deleted by hand.
+
+    Two halves, covering the two different teardown implementations:
+
+      1. Delete the remote owner (the instance group, via
+         `providers/ufo/teardown_network.go`). Only its own side may go — row
+         tombstoned and UFO CR deleted by its terminate workflow — while the
+         counterpart's row and CR are left deliberately in place, dangling at a
+         VPC that no longer exists, with no signal to that tenant.
+      2. Delete the local owner (the cluster, via
+         `cluster_deployment_terminate_v2.go`). The surviving peering must now
+         go **with it**, without the test deleting it — which is what proves the
+         cleanup is the owner's, not the test's. The two paths differ: the
+         instance-group one waits for its Vpcs, the cluster one does not.
+
+    Nothing else tests either: upstream's equivalent runs under MOCK_MODE and
+    disclaims proving that any CR was applied or removed.
+
+    Cross-project only. Same-project would wedge the deleted owner's Vpc in
+    Terminating, because the survivor's CR sits in the same namespace and so is
+    counted unconditionally by UFO's finalizer check.
+    """
     local_ns = k8s.project_namespace(local_project)
     remote_ns = k8s.project_namespace(remote_project)
 
-    fwd_id = resource_id(test_name, "fwd", run_id=run_id)
-    rev_id = resource_id(test_name, "rev", run_id=run_id)
-    fwd_url = rev_url = None
-    crs: list[dict[str, Any]] = []
-
+    hs = _Handshake()
     try:
-        fwd_row, fwd_url = _create_peering(
+        _declare_both_sides(
             session,
             api_base,
             region,
-            local_project=local_project,
-            local_vpc_id=local_vpc["id"],
-            remote_project=remote_project,
-            remote_vpc_id=remote_vpc["id"],
-            peering_id=fwd_id,
-            log=log,
-        )
-        fwd_row = _await_peering_active(session, fwd_url, fwd_id, log=log)
-
-        log.step(f"assert UFO VpcPeering CR for {fwd_id} in {local_ns}")
-        fwd_cr = _await_peering_cr(
             kube,
-            local_ns,
-            local_cr=local_vpc["ufoCrName"],
-            remote_cr=remote_vpc["ufoCrName"],
-            remote_namespace=remote_ns if cross_project else None,
+            hs=hs,
             log=log,
+            run_id=run_id,
+            test_name=test_name,
+            local_project=local_project,
+            local_vpc=local_vpc,
+            remote_project=remote_project,
+            remote_vpc=remote_vpc,
         )
-        _assert_peering_cr(fwd_cr, fwd_row, remote_ns=remote_ns if cross_project else None)
-        crs.append(fwd_cr)
-        log.ok(f"CR {fwd_cr['metadata']['name']} ReconcileReady")
 
-        # Ordered, not raced: UFO adds its finalizer, calls the backend, and
-        # only then writes ReconcileReady=True. So by the time the CR above
-        # reports Ready, the backend has already run and skipped for want of a
-        # mirror. A backend object here would be a real defect.
-        log.step("assert NO backend peering yet (one side programs nothing)")
-        assert not k8s.backend_peerings_owned_by(kube, crs), (
-            "a one-sided peering must not program the fabric"
-        )
-        log.ok("none, as expected")
+        log.step(f"DELETE {remote_owner_what} with BOTH peering sides still live")
+        _delete_owner(session, remote_owner_url, remote_owner_what, log=log)
+        log.ok("owner gone")
 
-        rev_row, rev_url = _create_peering(
+        log.step(f"assert the torn-down owner's side ({hs.rev_id}) is gone")
+        _await_absent(
             session,
-            api_base,
-            region,
-            local_project=remote_project,
-            local_vpc_id=remote_vpc["id"],
-            remote_project=local_project,
-            remote_vpc_id=local_vpc["id"],
-            peering_id=rev_id,
+            hs.rev_url,
+            desc=f"peering {hs.rev_id} removed with its owner",
             log=log,
+            timeout=900,
         )
-        rev_row = _await_peering_active(session, rev_url, rev_id, log=log)
-        assert rev_row["uid"] != fwd_row["uid"], "the two sides must be distinct resources"
-
-        log.step(f"assert UFO VpcPeering CR for {rev_id} in {remote_ns}")
-        rev_cr = _await_peering_cr(
+        _await_peering_cr_absent(
             kube,
             remote_ns,
             local_cr=remote_vpc["ufoCrName"],
             remote_cr=local_vpc["ufoCrName"],
-            remote_namespace=local_ns if cross_project else None,
+            remote_namespace=local_ns,
             log=log,
         )
-        _assert_peering_cr(rev_cr, rev_row, remote_ns=local_ns if cross_project else None)
-        crs.append(rev_cr)
-        log.ok(f"CR {rev_cr['metadata']['name']} ReconcileReady")
+        hs.rev_url = ""  # already gone; keep the finally from re-deleting it
+        log.ok("row and CR both removed by the owner's teardown")
 
-        log.step("assert the mutual pair collapsed onto ONE backend peering")
-        backend = _await_backend_peering(kube, crs, log=log)
-        log.ok(
-            f"{backend['metadata']['namespace']}/{backend['metadata']['name']}"
-            f" status.id={(backend.get('status') or {}).get('id')!r}"
+        log.step(f"assert the counterpart ({hs.fwd_id}) SURVIVES, dangling")
+        survivor = api.get(session, hs.fwd_url)
+        assert survivor.status_code == 200, (
+            f"the counterpart must outlive the other owner, got {survivor.status_code}: "
+            f"{survivor.text}"
         )
+        assert (
+            k8s.find_ufo_vpc_peering(
+                kube,
+                local_ns,
+                local_cr=local_vpc["ufoCrName"],
+                remote_cr=remote_vpc["ufoCrName"],
+                remote_namespace=remote_ns,
+            )
+            is not None
+        ), "the counterpart's UFO CR must be left in place"
+        log.ok(f"row state={survivor.json().get('state')!r}, CR still present")
 
-        log.step("assert each side is listed only under its own VPC")
-        under_local = {
-            p["id"]
-            for p in api.list_items(
-                session, _peerings_url(api_base, region, local_project, local_vpc["id"])
-            )
-        }
-        under_remote = {
-            p["id"]
-            for p in api.list_items(
-                session, _peerings_url(api_base, region, remote_project, remote_vpc["id"])
-            )
-        }
-        assert fwd_id in under_local, f"{fwd_id} missing under its own vpc"
-        assert rev_id in under_remote, f"{rev_id} missing under its own vpc"
-        assert rev_id not in under_local, f"{rev_id} must not be listed under the local vpc"
-        assert fwd_id not in under_remote, f"{fwd_id} must not be listed under the remote vpc"
+        log.step("assert the fabric peering went with the torn-down side")
+        _await_no_backend_peering(kube, hs.crs, log=log)
         log.ok()
+
+        # Second half: the surviving peering is still live and still declared.
+        # Deleting its owner — never the peering itself — is what proves the
+        # cleanup belongs to the owner's terminate workflow. This also exercises
+        # the cluster path, which unlike the instance-group one does not wait
+        # for its Vpcs.
+        log.step(f"DELETE {local_owner_what} with its peering still declared")
+        _delete_owner(session, local_owner_url, local_owner_what, log=log)
+        log.ok("owner gone")
+
+        log.step(f"assert the surviving side ({hs.fwd_id}) went with its owner")
+        _await_absent(
+            session,
+            hs.fwd_url,
+            desc=f"peering {hs.fwd_id} removed with its owner",
+            log=log,
+            timeout=900,
+        )
+        _await_peering_cr_absent(
+            kube,
+            local_ns,
+            local_cr=local_vpc["ufoCrName"],
+            remote_cr=remote_vpc["ufoCrName"],
+            remote_namespace=remote_ns,
+            log=log,
+        )
+        hs.fwd_url = ""
+        log.ok("row and CR both removed by the owner's teardown")
     finally:
-        # Reverse first: removing either half withdraws the fabric peering, and
-        # this order lets us assert that the backend object actually goes.
-        if rev_url:
-            _delete_peering(session, rev_url, rev_id, log=log)
-            if len(crs) == 2:
-                log.step("assert the backend peering went with the mirror")
-                _await_no_backend_peering(kube, crs, log=log)
-                log.ok()
-        if fwd_url:
-            _delete_peering(session, fwd_url, fwd_id, log=log)
+        # Safety net only: on the happy path both sides are already gone, each
+        # removed by its own owner's teardown. These run when an assertion
+        # failed before the owners were deleted.
+        if hs.fwd_url:
+            _delete_peering(session, hs.fwd_url, hs.fwd_id, log=log)
+        if hs.rev_url:
+            _delete_peering(session, hs.rev_url, hs.rev_id, log=log)
 
 
 # --------------------------------------------------------------------------
@@ -503,20 +758,33 @@ def _peer_cluster_with_instance_group(
     test_name: str,
     cluster_project: str,
     ig_project: str,
+    owner_teardown: bool = False,
 ) -> None:
     """Peer a cluster's nico VPC with an instance group's, and tear both down.
 
-    Both tests are this same scenario; the only thing that varies is which
-    project the instance group goes in. Same project as the cluster gives the
-    plain handshake (spec.remote.namespace absent); a project in another org
-    gives the cross-org case (spec.remote.namespace set). Everything else —
-    resolving the endpoints, declaring both halves, the CR and backend-object
-    assertions, teardown — is identical, so it lives here rather than being
-    written twice.
+    Every test is this same scenario; two things vary. Which project the
+    instance group goes in: same as the cluster gives the plain handshake
+    (spec.remote.namespace absent), a project in another org gives the
+    cross-org case (spec.remote.namespace set). And `owner_teardown`, which
+    picks the teardown ORDER — the thing under test in one of them:
+
+      * False — remove the peerings, then the owners. The only safe order
+        same-project, and what the handshake tests use.
+      * True  — remove the instance group with both halves still declared, and
+        assert only its own side goes. Cross-project only.
+
+    Everything else — resolving the endpoints, declaring both halves, the CR
+    and backend-object assertions — is identical, so it lives here rather than
+    being written three times.
 
     Resources are created inline and cleaned up in `finally`, matching the rest
     of the suite; nothing is shared across tests.
     """
+    if owner_teardown and cluster_project == ig_project:
+        raise AssertionError(
+            "owner_teardown is cross-project only: same-project would wedge the "
+            "deleted owner's Vpc in Terminating"
+        )
     log.step("ensure global prereqs (address-pools + cluster-types; never deleted)")
     ensure_global_prereqs(session, api_base, region)
     log.ok()
@@ -602,7 +870,18 @@ def _peer_cluster_with_instance_group(
             f"{ig_project}/{ig_vpc['id']} ({ig_vpc['ufoCrName']})"
         )
 
-        _run_handshake(
+        scenario = _run_owner_teardown if owner_teardown else _run_handshake
+        extra = (
+            {
+                "local_owner_url": cluster_url,
+                "local_owner_what": f"cluster {cluster_id}",
+                "remote_owner_url": ig_url,
+                "remote_owner_what": f"instance group {ig_id}",
+            }
+            if owner_teardown
+            else {}
+        )
+        scenario(
             session,
             api_base,
             region,
@@ -614,6 +893,7 @@ def _peer_cluster_with_instance_group(
             local_vpc=cluster_vpc,
             remote_project=ig_project,
             remote_vpc=ig_vpc,
+            **extra,
         )
     finally:
         # Instance group first: it is the cheaper of the two to re-create, and
@@ -627,6 +907,19 @@ def _peer_cluster_with_instance_group(
 # --------------------------------------------------------------------------
 # tests
 # --------------------------------------------------------------------------
+
+
+def _require_peer_project(session, api_base, region, project: str, peer_project: str) -> None:
+    """Skip unless a second, distinct project is reachable for the cross-org tests."""
+    if peer_project == project:
+        pytest.skip("E2E_PEER_PROJECT must name a project other than PROJECT")
+    probe = api.get(
+        session,
+        api.region_url(api_base, region, "compute/instance-groups", project=peer_project),
+    )
+    if probe.status_code == 404:
+        pytest.skip(f"peer project {peer_project!r} not present on this lab")
+    probe.raise_for_status()
 
 
 @pytest.mark.smoke
@@ -671,16 +964,7 @@ def test_vpc_peering_cross_org(
     """
     log = Steps("VPC peering: cross-org")
     log.info(f"run_id={run_id} local={project} remote={peer_project}")
-
-    if peer_project == project:
-        pytest.skip("E2E_PEER_PROJECT must name a project other than PROJECT")
-    probe = api.get(
-        session,
-        api.region_url(api_base, region, "compute/instance-groups", project=peer_project),
-    )
-    if probe.status_code == 404:
-        pytest.skip(f"peer project {peer_project!r} not present on this lab")
-    probe.raise_for_status()
+    _require_peer_project(session, api_base, region, project, peer_project)
 
     _peer_cluster_with_instance_group(
         session,
@@ -691,5 +975,43 @@ def test_vpc_peering_cross_org(
         test_name=request.node.name,
         cluster_project=project,
         ig_project=peer_project,
+    )
+    log.done()
+
+
+@pytest.mark.crossorg
+@pytest.mark.skipif(not auth_configured(), reason="API_BASE required")
+def test_vpc_peering_cross_org_owner_teardown(
+    session, api_base, region, project, peer_project, run_id, request
+):
+    """Delete an owner with both peering halves live; only its own side goes.
+
+    The full teardown path, rather than the tidy one the handshake tests use:
+    the instance group is deleted while both peerings are still declared, which
+    is what a tenant deleting a cluster actually does.
+
+    What it pins (k0rdent-apis `TeardownVPCPeerings`): an owner's teardown
+    removes only the peerings whose LOCAL vpc it owns — row tombstoned, UFO CR
+    deleted by the owner's own terminate workflow — and leaves the counterpart's
+    row and CR deliberately in place, dangling at a VPC that no longer exists.
+    Nothing else tests this anywhere: upstream's equivalent runs under
+    MOCK_MODE and explicitly disclaims proving that any CR was removed.
+
+    Cross-org only, and not for tidiness — see the module docstring.
+    """
+    log = Steps("VPC peering: cross-org owner teardown")
+    log.info(f"run_id={run_id} local={project} remote={peer_project}")
+    _require_peer_project(session, api_base, region, project, peer_project)
+
+    _peer_cluster_with_instance_group(
+        session,
+        api_base,
+        region,
+        log=log,
+        run_id=run_id,
+        test_name=request.node.name,
+        cluster_project=project,
+        ig_project=peer_project,
+        owner_teardown=True,
     )
     log.done()

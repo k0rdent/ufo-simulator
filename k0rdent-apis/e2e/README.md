@@ -148,6 +148,7 @@ Resource ids for clusters, instance groups, and security groups are
 | `test_security_groups_effective.py` | `smoke` | `security-groups-effective` negatives (422 on missing/unknown `objectKind`/`objectId`, 404 on an unknown or cross-kind id) and the `vpc` arm against a materialized VPC. Creates nothing, needs no cluster — run it first to confirm Kong routes the path |
 | `test_vpc_peering.py::test_vpc_peering_cluster_to_instance_group` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`; teardown |
 | `test_vpc_peering.py::test_vpc_peering_cross_org` | `peering`, `crossorg` | Same handshake across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
+| `test_vpc_peering.py::test_vpc_peering_cross_org_owner_teardown` | `peering`, `crossorg` | Full teardown path, deleting **owners** and never the peerings. Delete the IG with both halves declared → only its own side goes (row 404 + UFO CR removed), the counterpart's row and CR survive dangling, and the NICo `VPCPeering` goes with the torn-down side. Then delete the cluster → the surviving peering goes **with it**. Covers both terminate implementations (the IG path waits for its Vpcs, the cluster path does not) |
 
 Do not run these against the same project in parallel — they share address
 pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
@@ -164,10 +165,20 @@ The peering tests have two extra requirements:
   alive simultaneously (they are POSTed together so provisioning overlaps, then
   awaited together). Every other scenario needs only one.
 
-`crossorg` is a *narrowing* marker, not an exclusion: both peering tests carry
-`peering`, so `-m peering` runs both. Use `-m "peering and not crossorg"` to skip
-the cross-org one. Only the same-project test carries `smoke`, so the default
+`crossorg` is a *narrowing* marker, not an exclusion: every peering test carries
+`peering`, so `-m peering` runs all of them. Use `-m "peering and not crossorg"`
+to keep to the same-project one. Only that test carries `smoke`, so the default
 `-m smoke` run never provisions in the peer project.
+
+**Teardown order differs by test, deliberately.** The same-project test removes
+the peerings before the owners, which is the only safe order there: while two
+VPCs in one namespace are mutually peered, deleting an owner first leaves the
+survivor's CR naming the dead VPC in the same namespace, and UFO's `Vpc`
+finalizer counts a same-namespace reference unconditionally — on either leg — so
+the VPC is pinned in `Terminating` indefinitely. Only the cross-org test deletes
+an owner with both halves live, because there the survivor is foreign, loses its
+mutual counterpart and releases correctly. The same-project owner-teardown case
+is intentionally untested pending a fix on the k0rdent-apis/UFO side.
 
 ---
 
