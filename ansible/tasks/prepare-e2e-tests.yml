@@ -1,5 +1,6 @@
 ---
-# Create /opt/ufo_simulator/venvs/e2e, install pytest deps, write sourceable env.
+# Create /opt/ufo_simulator/venvs/e2e, install pytest deps, write sourceable env,
+# and register the HCP host-cluster Secret + ConfigMap (KCM-1205).
 
 - name: Verify e2e requirements file exists
   ansible.builtin.stat:
@@ -34,8 +35,75 @@
     dest: "{{ e2e_env_file }}"
     mode: "0644"
 
+# --- HCP host-cluster registry (ResolveHCPHostCluster) -----------------------------
+# Without this, HCP cluster creates fail with:
+#   no host cluster registered for ClusterType "nico-verity-hcp"
+# (checked prj-<project> and kcm-system). See docs/operations/hcp-host-clusters.md
+# in k0rdent-apis.
+
+- name: Verify management-cluster kubeconfig exists
+  ansible.builtin.stat:
+    path: "{{ e2e_kubeconfig }}"
+  register: e2e_kubeconfig_stat
+
+- name: Fail if management-cluster kubeconfig is missing
+  ansible.builtin.fail:
+    msg: >-
+      Missing kubeconfig at {{ e2e_kubeconfig }} — needed to create the HCP
+      host-cluster Secret in {{ e2e_hcp_host_cluster_secret_namespace }}.
+  when: not e2e_kubeconfig_stat.stat.exists
+
+- name: Read management-cluster kubeconfig for HCP host Secret
+  ansible.builtin.slurp:
+    src: "{{ e2e_kubeconfig }}"
+  register: e2e_hcp_kubeconfig_slurp
+  no_log: true
+
+- name: Ensure HCP host-cluster kubeconfig Secret exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ e2e_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: Opaque
+      metadata:
+        name: "{{ e2e_hcp_host_cluster_secret_name }}"
+        namespace: "{{ e2e_hcp_host_cluster_secret_namespace }}"
+      stringData:
+        # CAPI / ResolveHCPHostCluster adminSecretDataKey
+        value: "{{ e2e_hcp_kubeconfig_slurp.content | b64decode }}"
+  no_log: true
+
+- name: Build hcp-host-clusters ConfigMap data
+  ansible.builtin.set_fact:
+    e2e_hcp_host_clusters_data: >-
+      {{
+        e2e_hcp_host_clusters_data | default({})
+        | combine({
+            item: '{"secretName":"' ~ e2e_hcp_host_cluster_secret_name ~ '"}'
+          })
+      }}
+  loop: "{{ e2e_hcp_cluster_type_ids }}"
+
+- name: Ensure hcp-host-clusters ConfigMap registers lab HCP ClusterTypes
+  kubernetes.core.k8s:
+    kubeconfig: "{{ e2e_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: hcp-host-clusters
+        namespace: "{{ e2e_hcp_host_cluster_secret_namespace }}"
+      data: "{{ e2e_hcp_host_clusters_data }}"
+
 - name: Show how to use the e2e env
   ansible.builtin.debug:
     msg:
       - "source {{ e2e_env_file }}"
       - "cd \"$E2E_DIR\" && pytest -m smoke -s"
+      - >-
+        HCP host cluster: Secret
+        {{ e2e_hcp_host_cluster_secret_namespace }}/{{ e2e_hcp_host_cluster_secret_name }}
+        registered for ClusterTypes {{ e2e_hcp_cluster_type_ids | join(', ') }}

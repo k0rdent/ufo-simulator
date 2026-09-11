@@ -1,5 +1,5 @@
 ---
-# Prepare lab e2e pytest venv + sourceable env file.
+# Prepare lab e2e pytest venv + sourceable env file + HCP host-cluster registry.
 #
 #   cd /opt/ufo_lab/ufo-simulator/ansible
 #   ansible-playbook prepare-e2e-tests.yml
@@ -7,6 +7,10 @@
 # Then on the CMP:
 #   source /opt/ufo_simulator/venvs/e2e/env
 #   cd "$E2E_DIR" && pytest -m smoke -s
+#
+# Also creates kcm-system/host-cluster-a-kubeconfig (from the management
+# kubeconfig) and kcm-system/hcp-host-clusters keyed by nico-verity-hcp so
+# ResolveHCPHostCluster succeeds for HCP e2e creates.
 - name: Prepare k0rdent-apis e2e tests
   hosts: cmps
   connection: local
@@ -29,6 +33,13 @@
     e2e_kubeconfig: "{{ kubeconfig_path | default('/root/.kube/config') }}"
     e2e_token_file: /tmp/k0r-token
     e2e_token_slack_sec: 60
+    # KCM-1205: ResolveHCPHostCluster needs a kubeconfig Secret in kcm-system
+    # plus an hcp-host-clusters ConfigMap entry keyed by ClusterType id.
+    # Lab HCP CPs land on the management cluster itself.
+    e2e_hcp_host_cluster_secret_name: host-cluster-a-kubeconfig
+    e2e_hcp_host_cluster_secret_namespace: kcm-system
+    e2e_hcp_cluster_type_ids:
+      - nico-verity-hcp
 
   tasks:
     - name: Prepare e2e tests

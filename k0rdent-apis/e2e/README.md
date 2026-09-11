@@ -22,12 +22,15 @@ ansible-playbook prepare-e2e-tests.yml
 
 This creates:
 
-| Path | Purpose |
+| Path / object | Purpose |
 |---|---|
 | `/opt/ufo_simulator/venvs/e2e` | Python venv with pytest + deps |
 | `/opt/ufo_simulator/venvs/e2e/env` | Sourceable env (activates venv, sets API/KUBECONFIG/login vars) |
+| `kcm-system/host-cluster-a-kubeconfig` Secret | Management-cluster kubeconfig (`value` key) for HCP |
+| `kcm-system/hcp-host-clusters` ConfigMap | Maps ClusterType `nico-verity-hcp` → that Secret |
 
-Re-run the playbook after `requirements.txt` changes to refresh packages.
+Re-run the playbook after `requirements.txt` changes to refresh packages, or
+whenever HCP creates fail with `no host cluster registered for ClusterType …`.
 
 ### 2. Source env and run
 
@@ -82,6 +85,8 @@ rm -f /tmp/k0r-token
 - Project namespace exists (default `prj-kind-main`)
 - CMP can reach Kong (`http://10.200.0.254:30080`) and in-cluster
   `auth` / `mock-oauth2-server` Services (for token minting)
+- `prepare-e2e-tests.yml` has registered the HCP host-cluster Secret + ConfigMap
+  (required by `ResolveHCPHostCluster` for `nico-verity-hcp`)
 
 Tests **create** missing region-scoped prerequisites (address pools, HCP + BM
 cluster types) and leave them in place. They delete the clusters / instance
@@ -201,6 +206,7 @@ scenarios/templates/
 | Tests skipped (`API_BASE required`) | `source` the env file; confirm `echo $API_BASE` |
 | `401` mid-run | Should auto-remint once; if it persists, check kube access for `k0r_login` |
 | Cluster stuck `creating` / timeout | Lab capacity, NICo inventory, UFO/NetworkBundle events in `prj-$PROJECT` |
+| `no host cluster registered for ClusterType "nico-verity-hcp"` | Re-run `ansible-playbook prepare-e2e-tests.yml`; check `kubectl -n kcm-system get cm hcp-host-clusters -o yaml` |
 | SG attach `409 CONFLICT_IN_USE` | Wait for VPC/cluster `active` before the next binding write (tests already poll) |
 
 Optional wipe of leftovers in the project namespace:
