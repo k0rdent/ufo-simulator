@@ -56,9 +56,9 @@ on:
         type: string
         default: "main"
       ARTIFACTS_VARS_FILE:
-        description: "Ansible vars file under ansible/vars/ (e.g. artifacts-main.yaml)"
+        description: "Ansible vars under ansible/vars/ (basename or file, e.g. artifacts-main or artifacts-main.yaml)"
         type: string
-        default: "artifacts-main.yaml"
+        default: "artifacts-main"
 
 jobs:
   run-bm-integration-tests:

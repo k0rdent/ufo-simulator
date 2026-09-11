@@ -39,8 +39,10 @@ parameters:
     default: 'main'
   artifacts_vars_file:
     type: string
-    description: Ansible vars file under ansible/vars/ (e.g. artifacts-main.yaml)
-    default: 'artifacts-main.yaml'
+    description: >
+      Ansible vars file under ansible/vars/ (basename or filename).
+      Examples: artifacts-main, artifacts-main.yaml, artifacts-release-v0.3.x.yaml
+    default: 'artifacts-main'
 
 resources:
   keypair_name:

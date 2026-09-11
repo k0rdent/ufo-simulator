@@ -11,6 +11,7 @@ sdn_provider: netris
 
 # Which ansible/vars/artifacts-*.yaml to load (after this file).
 # Override with -e artifacts_vars_file=artifacts-release-v0.3.x.yaml
+# Heat/install may pass basename (artifacts-main); install.sh normalizes to *.yaml.
 artifacts_vars_file: artifacts-main.yaml
 
 netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator

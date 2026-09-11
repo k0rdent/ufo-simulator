@@ -13,7 +13,12 @@ export PIP_BREAK_SYSTEM_PACKAGES=1
 export KUBECONFIG=/root/.kube/config
 export NETRIS_LICENSE=${NETRIS_LICENSE:-''}
 export UFO_SIMULATOR_REFSPEC=${UFO_SIMULATOR_REFSPEC:-'main'}
-export ARTIFACTS_VARS_FILE=${ARTIFACTS_VARS_FILE:-'artifacts-main.yaml'}
+export ARTIFACTS_VARS_FILE=${ARTIFACTS_VARS_FILE:-'artifacts-main'}
+# Accept basename (artifacts-main) or full filename (artifacts-main.yaml).
+case "${ARTIFACTS_VARS_FILE}" in
+  *.yaml|*.yml) ;;
+  *) ARTIFACTS_VARS_FILE="${ARTIFACTS_VARS_FILE}.yaml" ;;
+esac
 export FABRIC_BACKEND=${FABRIC_BACKEND:-"netris"}
 export NODE_TYPE=${NODE_TYPE:-"cmp"}
 export NICO_ENABLE="true"
