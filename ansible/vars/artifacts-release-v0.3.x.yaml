@@ -2,8 +2,8 @@
 # Managed by .github/workflows/bump-operator-artifacts.yaml
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.3.1-0501f25
-ufo_image_tag: 0.3.1-0501f25
+ufo_chart_version: 0.3.1-77ecbdb
+ufo_image_tag: 0.3.1-77ecbdb
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
 verity_operator_chart_version: 0.3.1-bc5b921
