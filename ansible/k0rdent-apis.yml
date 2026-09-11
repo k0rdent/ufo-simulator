@@ -281,6 +281,42 @@
           stringData:
             KIND_IDP_SECRET: unused-placeholder
 
+    - name: Point provision-apply at registry.ci k0r-tools image
+      ansible.builtin.replace:
+        path: "{{ k0rdent_apis_dir }}/deploy/k8s/k0r-tools/provision-apply.yaml"
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - regexp: '^(\s+)image:\s*.*k0r-tools.*$'
+          replace: '\1image: registry.ci.mirantis.com/k0rdent-apis/images/k0r-tools:main'
+        - regexp: '^(\s+)imagePullPolicy:\s*IfNotPresent\s*$'
+          replace: '\1imagePullPolicy: Always'
+
+    - name: Ensure provision-apply has imagePullSecrets
+      ansible.builtin.lineinfile:
+        path: "{{ k0rdent_apis_dir }}/deploy/k8s/k0r-tools/provision-apply.yaml"
+        insertafter: 'automountServiceAccountToken: false'
+        line: '      imagePullSecrets:'
+        regexp: '^\s+imagePullSecrets:\s*$'
+
+    - name: Ensure provision-apply imagePullSecrets names pull secret
+      ansible.builtin.lineinfile:
+        path: "{{ k0rdent_apis_dir }}/deploy/k8s/k0r-tools/provision-apply.yaml"
+        insertafter: '^\s+imagePullSecrets:\s*$'
+        line: '        - name: {{ k0rdent_apis_pull_secret_name }}'
+        regexp: '^\s+- name: {{ k0rdent_apis_pull_secret_name }}\s*$'
+
+    - name: Delete existing provision-apply job (immutable; recreate with new image)
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: absent
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ k0rdent_apis_namespace }}"
+        name: provision-apply
+        wait: true
+        wait_timeout: 60
+
     - name: Apply provision-apply job manifest
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
