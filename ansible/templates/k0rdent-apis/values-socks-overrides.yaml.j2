@@ -13,6 +13,12 @@ auth:
     # Drop the testing-site invite result page; set to your real URL if you serve one
     AUTH_INVITE_RESULT_URL: ""
 
+# Chart default is ghcr.io/k0rdent/k0r-authz; socks can't pull anonymous ghcr.
+authz:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-authz"
+    pullPolicy: Always
+
 iam:
   image:
     repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-iam"
