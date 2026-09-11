@@ -2,6 +2,8 @@
 
 import re
 
+import yaml
+
 
 def _breakout_port_name(port_prefix, phys, lane):
     """Format a breakout port name for the active NOS/prefix.
@@ -384,11 +386,12 @@ def nico_core_mock_machines(
         )
         infiniband_interfaces = []
         for i, (slot, ifname, bridge) in enumerate(ib_ports):
-            # Hex string. Must stay a YAML string through inventory dump —
-            # values like 0000000000000008 are coerced to int 8 when emitted
-            # unquoted (YAML 1.1); nico-core-mock then fails proto parse on
-            # string field guid. Callers dump with default_style='"'.
-            guid = "%016x" % (vm_index * 4 + i + 1)
+            # Keep a non-digit hex nibble in every guid. Helm chart toYaml
+            # (and helm get values) re-emit scalars unquoted; YAML 1.1 then
+            # coerces 0000000000000008 → int 8 and nico-core-mock fails
+            # proto parse on string field guid. Quoting in our values file
+            # alone is not enough. Same class of bug as boardVersion.
+            guid = "%016x" % (0xA000000000000000 | (vm_index * 4 + i + 1))
             infiniband_interfaces.append(
                 {
                     "guid": guid,
@@ -478,6 +481,34 @@ def nico_core_mock_machines(
     return machines
 
 
+def to_yaml_quote_strs(data, indent=2):
+    """Dump YAML quoting every ``str`` while leaving bool/int/float native.
+
+    Needed for nico-core-mock inventory: IB ``guid`` values like
+    ``0000000000000008`` must stay strings (YAML 1.1 would coerce an unquoted
+    form to int ``8``), but ``default_style='"'`` on ``to_nice_yaml`` also
+    quotes bools/ints and breaks proto unmarshal into bool/uint32.
+    """
+
+    class _Dumper(yaml.SafeDumper):
+        pass
+
+    def _represent_str(dumper, value):
+        return dumper.represent_scalar("tag:yaml.org,2002:str", value, style='"')
+
+    # multi_representer catches AnsibleUnicode and other str subclasses.
+    _Dumper.add_multi_representer(str, _represent_str)
+
+    return yaml.dump(
+        data,
+        Dumper=_Dumper,
+        indent=int(indent),
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    )
+
+
 class FilterModule(object):
     def filters(self):
         return {
@@ -486,4 +517,5 @@ class FilterModule(object):
             "resolve_topology_link_ports": resolve_topology_link_ports,
             "expand_switch_port_nics": expand_switch_port_nics,
             "nico_core_mock_machines": nico_core_mock_machines,
+            "to_yaml_quote_strs": to_yaml_quote_strs,
         }

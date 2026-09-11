@@ -1,1 +1,1 @@
-{{ {'inventory': {'machines': nico_core_mock_machines}} | to_nice_yaml(indent=2, default_style='"') }}
+{{ {'inventory': {'machines': nico_core_mock_machines}} | to_yaml_quote_strs(indent=2) }}
