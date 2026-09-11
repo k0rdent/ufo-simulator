@@ -384,6 +384,10 @@ def nico_core_mock_machines(
         )
         infiniband_interfaces = []
         for i, (slot, ifname, bridge) in enumerate(ib_ports):
+            # Hex string. Must stay a YAML string through inventory dump —
+            # values like 0000000000000008 are coerced to int 8 when emitted
+            # unquoted (YAML 1.1); nico-core-mock then fails proto parse on
+            # string field guid. Callers dump with default_style='"'.
             guid = "%016x" % (vm_index * 4 + i + 1)
             infiniband_interfaces.append(
                 {

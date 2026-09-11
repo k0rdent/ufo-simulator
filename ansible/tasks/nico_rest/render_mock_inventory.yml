@@ -33,8 +33,11 @@
   ansible.builtin.copy:
     dest: "{{ nico_core_mock_machines_yaml_file }}"
     mode: "0644"
+    # default_style='"' keeps IB guids like 0000000000000008 as strings;
+    # unquoted, YAML 1.1 coerces them to ints (8) and nico-core-mock proto
+    # parse fails: invalid value for string field guid.
     content: |
-      {{ {'machines': nico_core_mock_machines} | to_nice_yaml(indent=2) }}
+      {{ {'machines': nico_core_mock_machines} | to_nice_yaml(indent=2, default_style='"') }}
 
 - name: Show rendered nico-core-mock machine count
   ansible.builtin.debug:
