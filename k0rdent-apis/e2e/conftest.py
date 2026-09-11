@@ -100,13 +100,31 @@ def load_scenario_template(scenario: str, name: str) -> dict:
 
 
 def ensure_global_prereqs(session, api_base: str, region: str) -> None:
-    """Create shared address pools + cluster types if missing; never delete them."""
-    from helpers import api
+    """Create shared address pools + cluster types if missing; never delete them.
+
+    Address pools (and any other prereq that reports ``state``) must be
+    ``active`` before a cluster / instance group can bind them — creating one
+    while a pool is still ``creating`` is a 409. Wait here so every caller can
+    POST owners immediately after this returns.
+    """
+    from helpers import api, wait
 
     for template_name, resource in GLOBAL_PREREQS:
         body = load_template(template_name)
         collection = api.region_url(api_base, region, resource)
-        api.ensure_exists(session, collection, body)
+        obj = api.ensure_exists(session, collection, body)
+        item_url = f"{collection}/{body['id']}"
+        # Cluster types have no async lifecycle today; only wait when the
+        # resource actually reports a state machine.
+        if obj.get("state") is None:
+            continue
+        wait.await_api_state(
+            lambda url=item_url: api.get_json(session, url),
+            "active",
+            what=f"{resource} {body['id']}",
+            timeout=900,
+            interval=5,
+        )
 
 
 # Re-export for skipif markers in tests.

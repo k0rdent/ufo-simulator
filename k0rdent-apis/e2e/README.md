@@ -54,7 +54,8 @@ pytest tests/test_hcp_cluster.py -s
 pytest tests/test_hcp_cluster_security_groups.py -s
 pytest tests/test_instance_group.py -s
 pytest tests/test_instance_group_security_groups.py -s
-pytest tests/test_vpc_peering.py -s
+pytest tests/test_vpc_peering_intra_project.py -s
+pytest tests/test_vpc_peering_inter_project.py -s
 
 # By marker
 pytest -m hcp -s
@@ -146,8 +147,8 @@ Resource ids for clusters, instance groups, and security groups are
 | `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
 | `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=instance_group`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
 | `test_security_groups_effective.py` | `smoke` | `security-groups-effective` negatives (422 on missing/unknown `objectKind`/`objectId`, 404 on an unknown or cross-kind id) and the `vpc` arm against a materialized VPC. Creates nothing, needs no cluster — run it first to confirm Kong routes the path |
-| `test_vpc_peering.py::test_vpc_peering_cluster_to_instance_group` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`; teardown |
-| `test_vpc_peering.py::test_vpc_peering_cross_org` | `peering`, `crossorg` | Same handshake across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
+| `test_vpc_peering_intra_project.py` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`; teardown |
+| `test_vpc_peering_inter_project.py` | `peering`, `crossorg` | Same handshake across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
 
 Do not run these against the same project in parallel — they share address
 pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
@@ -184,6 +185,7 @@ e2e/
     names.py           # per-run resource ids ({test}-{kind}-{run_id})
     k8s.py             # list/get CRs; find UFO/NICo peering objects by label + owner
     secgroups.py       # SG lifecycle, one rule vocabulary, effective-read asserts
+    vpc_peering.py     # shared peering handshake (provision, CR/backend asserts)
     steps.py           # numbered runtime STEP progress (pytest -s)
     wait.py            # await_predicate / await_api_state / await_api_states
   tests/
@@ -192,7 +194,8 @@ e2e/
     test_instance_group.py
     test_instance_group_security_groups.py
     test_security_groups_effective.py
-    test_vpc_peering.py
+    test_vpc_peering_intra_project.py
+    test_vpc_peering_inter_project.py
 ```
 
 `helpers/secgroups.py` holds everything both SG scenarios share. Its
@@ -200,6 +203,10 @@ e2e/
 API security group, the UFO `SecurityGroup` CR, the NICo `NetworkSecurityGroup`
 CR, and `security-groups-effective` each spell a rule differently, so a second
 copy that drifted would silently compare nothing.
+
+`helpers/vpc_peering.py` holds the handshake shared by the intra- and
+inter-project peering tests — provision cluster + IG, declare both halves,
+assert UFO/NICo objects, tear down.
 
 Templates live under [`../scenarios/templates`](../scenarios/templates):
 
@@ -209,24 +216,24 @@ scenarios/templates/
     address-pool-global-*.yaml
     cluster-type-nico-verity-hcp.yaml
     cluster-type-nico-verity-bm.yaml
-  hcp_cluster/                         # test_hcp_cluster.py + test_vpc_peering.py
+  hcp_cluster/                         # test_hcp_cluster.py + vpc peering tests
     cluster.yaml
   hcp_cluster_security_groups/         # test_hcp_cluster_security_groups.py
     cluster.yaml
     security-group-*.yaml
     vpc-security-groups.yaml
-  instance_group/                      # test_instance_group.py + test_vpc_peering.py
+  instance_group/                      # test_instance_group.py + vpc peering tests
     instance-group.yaml
   instance_group_security_groups/      # test_instance_group_security_groups.py
     instance-group.yaml
     security-group-*.yaml
-  vpc_peering/                         # test_vpc_peering.py
+  vpc_peering/                         # test_vpc_peering_{intra,inter}_project.py
     peering.yaml
 ```
 
-`test_vpc_peering.py` deliberately reuses the `hcp_cluster` and
-`instance_group` bodies rather than keeping its own copies, so those two are no
-longer single-consumer — edit them with that in mind.
+The peering tests deliberately reuse the `hcp_cluster` and `instance_group`
+bodies rather than keeping their own copies, so those two are no longer
+single-consumer — edit them with that in mind.
 
 ---
 

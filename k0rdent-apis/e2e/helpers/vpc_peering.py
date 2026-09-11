@@ -1,28 +1,25 @@
-"""VPC peering: the API-to-CR seam, plus cluster-VPC <-> instance-group-VPC.
+"""Shared helpers for the VPC peering e2e scenarios.
 
-MOCK BOUNDARY. These tests require MOCK_MODE **off**
-(`lab-inject.sh mock off`). Under mock, VPCPeeringCreate returns before
-`vpcPeeringPlan` and before `ApplyUFOVpcPeering`, so no UFO VpcPeering CR is
-ever applied and every CR assertion here fails. That is precisely the gap they
-exist to close: the upstream k0rdent-apis peering suite is thorough on the
-API/DB side but runs under mock, so nothing anywhere has seen a real CR
-produced by a REST call, or a real backend peering object.
+MOCK BOUNDARY. These helpers require MOCK_MODE **off**
+(``lab-inject.sh mock off``). Under mock, VPCPeeringCreate returns before
+``vpcPeeringPlan`` and before ``ApplyUFOVpcPeering``, so no UFO VpcPeering CR is
+ever applied and every CR assertion fails.
 
-Two things about peering shape the whole file:
+Two things about peering shape the helpers:
 
   * A one-sided peering programs NO fabric, and that is not an error. Every
     backend looks for a mirrored CR with the endpoints swapped before doing
-    anything, so `state=active` on one side means "this side's CR was applied",
-    not "traffic flows". Each test therefore asserts the backend object is
-    ABSENT with one side declared and PRESENT once the mirror exists.
+    anything, so ``state=active`` on one side means "this side's CR was applied",
+    not "traffic flows". Callers therefore assert the backend object is ABSENT
+    with one side declared and PRESENT once the mirror exists.
   * Endpoints cannot be created directly — there is no tenant create for a VPC;
     they are materialized from a cluster's or instance group's bound
     ClusterType.networkSchema. So the endpoints here come from provisioning a
     cluster and an instance group, which also makes these the only tests
-    anywhere that peer across owner kinds (`ownerKind` is never consulted in
+    anywhere that peer across owner kinds (``ownerKind`` is never consulted in
     the peering create path).
 
-Lab prerequisites beyond the other scenarios: TWO available `nico-lab` servers,
+Lab prerequisites beyond the other scenarios: TWO available ``nico-lab`` servers,
 because a cluster and an instance group are alive at the same time.
 """
 
@@ -31,21 +28,10 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import pytest
-
-from conftest import (
-    auth_configured,
-    ensure_global_prereqs,
-    load_scenario_template,
-    load_template,
-)
+from conftest import ensure_global_prereqs, load_scenario_template, load_template
 from helpers import api, k8s, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
-
-# `smoke` is applied per-test, not here: the cross-org test provisions a second
-# owner in a second project and must stay out of the default `-m smoke` run.
-pytestmark = [pytest.mark.peering]
 
 _SCENARIO = "vpc_peering"
 
@@ -358,7 +344,7 @@ def _await_no_backend_peering(kube, owners: list[dict], *, log: Steps) -> None:
 # --------------------------------------------------------------------------
 
 
-def _run_handshake(
+def run_handshake(
     session,
     api_base,
     region,
@@ -493,7 +479,7 @@ def _run_handshake(
 # --------------------------------------------------------------------------
 
 
-def _peer_cluster_with_instance_group(
+def peer_cluster_with_instance_group(
     session,
     api_base,
     region,
@@ -514,7 +500,7 @@ def _peer_cluster_with_instance_group(
     assertions, teardown — is identical, so it lives here rather than being
     written twice.
 
-    Resources are created inline and cleaned up in `finally`, matching the rest
+    Resources are created inline and cleaned up in ``finally``, matching the rest
     of the suite; nothing is shared across tests.
     """
     log.step("ensure global prereqs (address-pools + cluster-types; never deleted)")
@@ -602,7 +588,7 @@ def _peer_cluster_with_instance_group(
             f"{ig_project}/{ig_vpc['id']} ({ig_vpc['ufoCrName']})"
         )
 
-        _run_handshake(
+        run_handshake(
             session,
             api_base,
             region,
@@ -622,74 +608,3 @@ def _peer_cluster_with_instance_group(
             _delete_owner(session, ig_url, f"instance group {ig_id}", log=log)
         if cluster_url:
             _delete_owner(session, cluster_url, f"cluster {cluster_id}", log=log)
-
-
-# --------------------------------------------------------------------------
-# tests
-# --------------------------------------------------------------------------
-
-
-@pytest.mark.smoke
-@pytest.mark.skipif(not auth_configured(), reason="API_BASE required")
-def test_vpc_peering_cluster_to_instance_group(
-    session, api_base, region, project, run_id, request
-):
-    """Peer a cluster-owned VPC with an instance-group-owned VPC, same project.
-
-    The cross-ownerKind pairing is permitted by every layer but exercised
-    nowhere else: upstream peers cluster<->cluster, the compute-infrastructure
-    suite peers instance-group<->instance-group.
-    """
-    log = Steps("VPC peering: cluster <-> instance group")
-    log.info(f"run_id={run_id} project={project}")
-
-    _peer_cluster_with_instance_group(
-        session,
-        api_base,
-        region,
-        log=log,
-        run_id=run_id,
-        test_name=request.node.name,
-        cluster_project=project,
-        ig_project=project,
-    )
-    log.done()
-
-
-@pytest.mark.crossorg
-@pytest.mark.skipif(not auth_configured(), reason="API_BASE required")
-def test_vpc_peering_cross_org(
-    session, api_base, region, project, peer_project, run_id, request
-):
-    """Peer across two orgs: kind-main (org kind) <-> acme-main (org acme).
-
-    Cross-org, cross-project and cross-namespace at once. The peering service
-    has no org awareness whatsoever, so the expectation is that this behaves
-    exactly like the same-project case; this pins it. The one visible
-    difference is spec.remote.namespace, which is set only when the projects
-    differ — asserted by the shared handshake.
-    """
-    log = Steps("VPC peering: cross-org")
-    log.info(f"run_id={run_id} local={project} remote={peer_project}")
-
-    if peer_project == project:
-        pytest.skip("E2E_PEER_PROJECT must name a project other than PROJECT")
-    probe = api.get(
-        session,
-        api.region_url(api_base, region, "compute/instance-groups", project=peer_project),
-    )
-    if probe.status_code == 404:
-        pytest.skip(f"peer project {peer_project!r} not present on this lab")
-    probe.raise_for_status()
-
-    _peer_cluster_with_instance_group(
-        session,
-        api_base,
-        region,
-        log=log,
-        run_id=run_id,
-        test_name=request.node.name,
-        cluster_project=project,
-        ig_project=peer_project,
-    )
-    log.done()

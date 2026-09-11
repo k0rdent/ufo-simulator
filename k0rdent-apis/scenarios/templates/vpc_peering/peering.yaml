@@ -11,4 +11,4 @@
 # object (remote -> local, created under the other VPC) is what makes the
 # backend program anything; that mutual creation IS the authorization model.
 displayName: Lab VPC peering e2e
-description: Created by k0rdent-apis lab e2e (tests/test_vpc_peering.py)
+description: Created by k0rdent-apis lab e2e (tests/test_vpc_peering_{intra,inter}_project.py)
