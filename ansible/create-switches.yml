@@ -38,12 +38,12 @@
         state: started
         enabled: yes
 
-    - name: Set base image for switches according to SDN provider
+    - name: Set base image for switches according to guest NOS
       set_fact:
         switch_base_image: >-
-          {{ cumulus_image if sdn_provider == 'netris' else sonic_image if sdn_provider == 'verity' }}
+          {{ cumulus_image if switch_nos == 'cumulus' else sonic_image }}
         switch_base_image_url: >-
-          {{ cumulus_image_url if sdn_provider == 'netris' else sonic_image_url if sdn_provider == 'verity' }}
+          {{ cumulus_image_url if switch_nos == 'cumulus' else sonic_image_url }}
 
     - name: Check if Cumulus image exists
       stat:

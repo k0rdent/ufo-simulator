@@ -9,6 +9,5 @@ netris_charts_branch: main
 inventory_profile_name: default-inventory-profile
 ew_inventory_profile_name: roce-profile
 
-switch_port_name_prefix: "swp"
 br_mgmt_phys_interface: ens5
 br_ext_phys_interface: "ens4"

@@ -25,7 +25,14 @@ mgmt_ssh_base_port: 2200  # leaf-0 = 2200, leaf-1 = 2201, etc.
 # UDP tunnel base port for inter-switch links
 udp_base_port: 10000
 
-switch_port_name_prefix: "swp" # For verity eth1/
+# Guest NOS for switch VMs. Netris requires Cumulus; Verity defaults to SONiC-VS
+# but can run Cumulus, since Verity serves the switches' DHCP and configures them
+# over ZTP itself. Pin per-lab in vars/common.yml, which outranks group_vars.
+switch_nos: "{{ 'cumulus' if sdn_provider == 'netris' else 'sonic' }}"
+
+# Cumulus names ports swpN / swpNsX, SONiC uses eth1/N. The swp prefix is also
+# what enables expand_switch_port_nics and the breakout names in topology.py.
+switch_port_name_prefix: "{{ 'swp' if switch_nos == 'cumulus' else 'eth1/' }}"
 
 # Topology Definition
 # Simple leaf-spine topology for testing
