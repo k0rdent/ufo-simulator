@@ -227,7 +227,7 @@ map key and skip `match` entirely. The schema declares:
   DHCP rather than pinned via `ipFromSubnet`.
 
 ```bash
-PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-verity-hcp.yaml"
+PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-hcp.yaml"
 PROJECT=$PROJECT $K0R create compute/clusters --file "$TPL/hcp_cluster/cluster.yaml"
 ```
 
@@ -284,7 +284,7 @@ kubectl create ns prj-kind-main --dry-run=client -o yaml | \
 ```
 
 ```bash
-PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-verity-bm.yaml"
+PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-hcp.yaml"
 PROJECT=$PROJECT $K0R create compute/instance-groups --file "$TPL/instance_group/instance-group.yaml"
 ```
 

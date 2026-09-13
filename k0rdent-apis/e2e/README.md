@@ -27,7 +27,7 @@ This creates:
 | `/opt/ufo_simulator/venvs/e2e` | Python venv with pytest + deps |
 | `/opt/ufo_simulator/venvs/e2e/env` | Sourceable env (activates venv, sets API/KUBECONFIG/login vars) |
 | `kcm-system/host-cluster-a-kubeconfig` Secret | Management-cluster kubeconfig (`value` key) for HCP |
-| `kcm-system/hcp-host-clusters` ConfigMap | Maps ClusterType `nico-verity-hcp` → that Secret |
+| `kcm-system/hcp-host-clusters` ConfigMap | Maps ClusterType `nico-hcp` → that Secret |
 
 Re-run the playbook after `requirements.txt` changes to refresh packages, or
 whenever HCP creates fail with `no host cluster registered for ClusterType …`.
@@ -94,10 +94,10 @@ rm -f /tmp/k0r-token
 - CMP can reach Kong (`http://10.200.0.254:30080`) and in-cluster
   `auth` / `mock-oauth2-server` Services (for token minting)
 - `prepare-e2e-tests.yml` has registered the HCP host-cluster Secret + ConfigMap
-  (required by `ResolveHCPHostCluster` for `nico-verity-hcp`)
+  (required by `ResolveHCPHostCluster` for `nico-hcp`)
 
-Tests **create** missing region-scoped prerequisites (address pools, HCP + BM
-cluster types) and leave them in place. They delete the clusters / instance
+Tests **create** missing region-scoped prerequisites (address pools, HCP
+cluster type) and leave them in place. They delete the clusters / instance
 groups they create.
 
 The `security-groups-effective` assertions need a k0rdent-apis build carrying
@@ -214,8 +214,7 @@ Templates live under [`../scenarios/templates`](../scenarios/templates):
 scenarios/templates/
   global/                              # shared; ensure, never tear down
     address-pool-global-*.yaml
-    cluster-type-nico-verity-hcp.yaml
-    cluster-type-nico-verity-bm.yaml
+    cluster-type-nico-hcp.yaml
   hcp_cluster/                         # test_hcp_cluster.py + vpc peering tests
     cluster.yaml
   hcp_cluster_security_groups/         # test_hcp_cluster_security_groups.py
@@ -245,7 +244,7 @@ single-consumer — edit them with that in mind.
 | Tests skipped (`API_BASE required`) | `source` the env file; confirm `echo $API_BASE` |
 | `401` mid-run | Should auto-remint once; if it persists, check kube access for `k0r_login` |
 | Cluster stuck `creating` / timeout | Lab capacity, NICo inventory, UFO/NetworkBundle events in `prj-$PROJECT` |
-| `no host cluster registered for ClusterType "nico-verity-hcp"` | Re-run `ansible-playbook prepare-e2e-tests.yml`; check `kubectl -n kcm-system get cm hcp-host-clusters -o yaml` |
+| `no host cluster registered for ClusterType "nico-hcp"` | Re-run `ansible-playbook prepare-e2e-tests.yml`; check `kubectl -n kcm-system get cm hcp-host-clusters -o yaml` |
 | SG attach `409 CONFLICT_IN_USE` | Wait for VPC/cluster `active` before the next binding write (tests already poll) |
 | Peering DELETE `409 CONFLICT_IN_USE` | DELETE is a CAS over `state IN ('active','failed')`; against a row still `creating` it refuses and the row keeps its direction. Settle first (the tests already do) |
 | Peering create `409` "already peered" | The previous run's row is not tombstoned yet — `uq_vpc_peering_direction` is partial on `deleted_at IS NULL`, so a direction frees only at tombstone, not at the 204 |

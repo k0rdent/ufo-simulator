@@ -37,7 +37,7 @@
 
 # --- HCP host-cluster registry (ResolveHCPHostCluster) -----------------------------
 # Without this, HCP cluster creates fail with:
-#   no host cluster registered for ClusterType "nico-verity-hcp"
+#   no host cluster registered for ClusterType "nico-hcp"
 # (checked prj-<project> and kcm-system). See docs/operations/hcp-host-clusters.md
 # in k0rdent-apis.
 

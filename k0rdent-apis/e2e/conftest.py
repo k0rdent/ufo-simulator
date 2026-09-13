@@ -19,8 +19,7 @@ TEMPLATES = ROOT / "scenarios" / "templates"
 GLOBAL_PREREQS: tuple[tuple[str, str], ...] = (
     ("global/address-pool-global-default.yaml", "compute/address-pools"),
     ("global/address-pool-global-public.yaml", "compute/address-pools"),
-    ("global/cluster-type-nico-verity-hcp.yaml", "compute/cluster-types"),
-    ("global/cluster-type-nico-verity-bm.yaml", "compute/cluster-types"),
+    ("global/cluster-type-nico-hcp.yaml", "compute/cluster-types"),
 )
 
 

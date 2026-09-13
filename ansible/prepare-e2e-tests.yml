@@ -9,7 +9,7 @@
 #   cd "$E2E_DIR" && pytest -m smoke -s
 #
 # Also creates kcm-system/host-cluster-a-kubeconfig (from the management
-# kubeconfig) and kcm-system/hcp-host-clusters keyed by nico-verity-hcp so
+# kubeconfig) and kcm-system/hcp-host-clusters keyed by nico-hcp so
 # ResolveHCPHostCluster succeeds for HCP e2e creates.
 - name: Prepare k0rdent-apis e2e tests
   hosts: cmps
@@ -39,7 +39,7 @@
     e2e_hcp_host_cluster_secret_name: host-cluster-a-kubeconfig
     e2e_hcp_host_cluster_secret_namespace: kcm-system
     e2e_hcp_cluster_type_ids:
-      - nico-verity-hcp
+      - nico-hcp
 
   tasks:
     - name: Prepare e2e tests
