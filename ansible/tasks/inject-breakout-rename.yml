@@ -1,0 +1,67 @@
+---
+# Put the breakout rename inside the switch disk before the VM has ever booted.
+#
+# Cumulus VX has no ASIC, so `nv set interface swpN link breakout 2x` commits to
+# config but never creates subport netdevs. Renaming the VM's data NICs supplies
+# them: NVUE treats a renamed NIC as a first-class swp interface.
+#
+# apply-breakout-rename.yml does the same thing over SSH once the switch is up,
+# which is fine on the Netris path because nothing discovers the switch until we
+# enroll it. Verity serves the switches' DHCP, configures eth0 over ZTP and
+# changes the password itself, so no playbook here can reach them -- and by the
+# time one could, Verity has already discovered 96 flat ports and modelled the
+# switch with 32 interfaces that can never exist. The names have to be right at
+# first boot, so they go into the image.
+#
+# Needs no `virsh dumpxml`: switch_links already carries the MAC of each grid
+# slot, and it is the same value switch.xml.j2 stamps on the NIC.
+#
+# Requires: switch_name, switch_links (with .mac), vm_disk_path, artifacts_dir
+# Only safe while the domain is undefined -- see the guard in create-switch-vm.yml.
+- name: "{{ switch_name }} - Map grid ports to NIC MACs for the rename"
+  set_fact:
+    switch_breakout_nics: "{{ switch_links }}"
+
+- name: Create cumulus artifacts directory
+  ansible.builtin.file:
+    path: "{{ artifacts_dir }}/cumulus"
+    state: directory
+
+- name: "{{ switch_name }} - Render rename-swp.sh"
+  ansible.builtin.template:
+    src: cumulus/rename-swp.sh.j2
+    dest: "{{ artifacts_dir }}/cumulus/{{ switch_name }}-rename-swp.sh"
+    mode: "0755"
+
+- name: "{{ switch_name }} - Render rename-swp.service"
+  ansible.builtin.template:
+    src: cumulus/rename-swp.service.j2
+    dest: "{{ artifacts_dir }}/cumulus/{{ switch_name }}-rename-swp.service"
+    mode: "0644"
+
+# --link rather than --run-command 'systemctl enable', so enabling the unit does
+# not depend on the guest's systemctl working inside the libguestfs appliance.
+- name: "{{ switch_name }} - Inject rename-swp into the cold disk image"
+  ansible.builtin.command:
+    argv:
+      - virt-customize
+      - -a
+      - "{{ vm_disk_path }}/{{ switch_name }}.qcow2"
+      # mkdir -p semantics, so this is a no-op if the image already has the
+      # directory. Without it --link fails on an image where nothing has ever
+      # been enabled for multi-user.target.
+      - --mkdir
+      - /etc/systemd/system/multi-user.target.wants
+      - --upload
+      - "{{ artifacts_dir }}/cumulus/{{ switch_name }}-rename-swp.sh:/usr/local/bin/rename-swp.sh"
+      - --upload
+      - "{{ artifacts_dir }}/cumulus/{{ switch_name }}-rename-swp.service:/etc/systemd/system/rename-swp.service"
+      - --chmod
+      - "0755:/usr/local/bin/rename-swp.sh"
+      - --link
+      - "/etc/systemd/system/rename-swp.service:/etc/systemd/system/multi-user.target.wants/rename-swp.service"
+  environment:
+    # The appliance cannot always reach libvirt from inside a playbook run;
+    # direct mode runs qemu itself and needs nothing from libvirtd.
+    LIBGUESTFS_BACKEND: direct
+  changed_when: true
