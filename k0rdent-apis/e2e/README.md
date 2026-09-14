@@ -51,6 +51,7 @@ pytest -m smoke -s
 # Single files
 pytest tests/test_security_groups_effective.py -s   # seconds; creates nothing
 pytest tests/test_hcp_cluster.py -s
+pytest tests/test_hcp_cluster_ew.py -s
 pytest tests/test_hcp_cluster_security_groups.py -s
 pytest tests/test_instance_group.py -s
 pytest tests/test_instance_group_security_groups.py -s
@@ -94,7 +95,7 @@ rm -f /tmp/k0r-token
 - CMP can reach Kong (`http://10.200.0.254:30080`) and in-cluster
   `auth` / `mock-oauth2-server` Services (for token minting)
 - `prepare-e2e-tests.yml` has registered the HCP host-cluster Secret + ConfigMap
-  (required by `ResolveHCPHostCluster` for `nico-hcp`)
+  (required by `ResolveHCPHostCluster` for `nico-hcp` / `netris-hcp-ew`)
 
 Tests **create** missing region-scoped prerequisites (address pools, HCP
 cluster type) and leave them in place. They delete the clusters / instance

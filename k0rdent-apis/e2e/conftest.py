@@ -20,6 +20,7 @@ GLOBAL_PREREQS: tuple[tuple[str, str], ...] = (
     ("global/address-pool-global-default.yaml", "compute/address-pools"),
     ("global/address-pool-global-public.yaml", "compute/address-pools"),
     ("global/cluster-type-nico-hcp.yaml", "compute/cluster-types"),
+    ("global/cluster-type-netris-hcp-ew.yaml", "compute/cluster-types"),
 )
 
 

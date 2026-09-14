@@ -4,4 +4,4 @@ ipVersion: IPV4
 prefixes:
   - 10.20.0.0/16
 minPrefixLength: 19
-maxPrefixLength: 32
+maxPrefixLength: 28

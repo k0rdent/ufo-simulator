@@ -1,0 +1,106 @@
+id: netris-hcp-ew
+displayName: NICo HCP + Netris east-west
+networkSchema:
+  vpcs:
+    - id: vpc-nico
+      backend: nico
+    - id: vpc-ew
+      backend: netris
+  networks:
+    - id: ns-network
+      vpc: vpc-nico
+      type: evpn
+      evpn:
+        type: l3vpn
+    - id: ew-network
+      vpc: vpc-ew
+      type: evpn
+      evpn:
+        type: l3vpn
+    - id: nvlink-partition
+      vpc: vpc-nico
+      type: nvlink
+  subnets:
+    - id: ns-subnet
+      network: ns-network
+      addressPool: /v1/regions/local/compute/address-pools/global-default
+      prefixLength: 27
+    - id: ew-subnet
+      network: ew-network
+      cidr: 172.16.0.0/12
+      addressAllocator:
+        backend: rail-optimised
+        gpuPlatform: B200
+k8s:
+  k0sNetworkProvider: calico
+  k0sVersion: v1.36.1
+  podCidrs:
+    - 10.243.0.0/16
+  serviceCidrs:
+    - 10.95.0.0/16
+  clusterTemplateName: cluster-nico-0-0-0-main
+  clusterTemplateVersion: 0.0.0-main
+  services: []
+  controlPlane:
+    type: hcp
+    replicas: 1
+    bootstrapConfig: {}
+    opConfig: {}
+  workers:
+    defaults: {}
+nodePools:
+  - id: default
+    role: worker
+    machineType: /v1/regions/local/infrastructure/machine-types/nico-lab
+    nodeCountMin: 1
+    nodeCountMax: 6
+    nodeCountDefault: 1
+    networkAttachment:
+      ethernets:
+        enp1s0:
+          dhcp4: true
+          connectToNetwork:
+            name: ns-network
+        eth-ew0:
+          match:
+            fabricLocation:
+              railId: 0
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: &ew-routes
+            - to:
+                cidrFromRailsubnet:
+                  name: ew-subnet
+              via:
+                gatewayFromSubnet:
+                  name: ew-subnet
+            - to:
+                cidrFromSubnet:
+                  name: ew-subnet
+              via:
+                gatewayFromSubnet:
+                  name: ew-subnet
+        eth-ew1:
+          match:
+            fabricLocation:
+              railId: 1
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+        eth-ew2:
+          match:
+            fabricLocation:
+              railId: 2
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+        eth-ew3:
+          match:
+            fabricLocation:
+              railId: 3
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+      nvlinks:
+        nvlink1:
+          connectToNetwork: nvlink-partition
