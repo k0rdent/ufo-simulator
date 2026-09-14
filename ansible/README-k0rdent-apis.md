@@ -7,7 +7,8 @@ build.
 
 ## What it does
 
-1. Clones the `k0rdent-apis` git repo into `/opt/ufo_lab/k0rdent-apis`.
+1. Expects a `k0rdent-apis` git checkout at `/opt/ufo_lab/k0rdent-apis`
+   (clone it yourself when running the playbook by hand — see below).
 2. Applies the vendored patches from
    [files/k0rdent-apis/patches/](files/k0rdent-apis/patches/) (idempotently —
    already-applied patches are skipped).
@@ -39,27 +40,40 @@ build.
 
 ## Running it directly against an existing CMP
 
-The k0rdent-apis clone is over HTTPS anonymous, but the checkout the k0rdent-apis
-`Makefile` performs during `make helm-dep-build` (and the internal `git`
-metadata operations the playbook triggers) may need your git identity /
-authenticated remote if you have local uncommitted changes to reset. In
-practice, forwarding your local SSH agent to the CMP is enough to cover any
-`git@github.com:...` fallbacks:
+**You must clone `k0rdent-apis` yourself** to `/opt/ufo_lab/k0rdent-apis`
+before running the playbook. The playbook does **not** clone the repo; it
+only patches and installs from that checkout (`k0rdent_apis_dir`).
+
+```bash
+# On the CMP (or after SSH):
+sudo mkdir -p /opt/ufo_lab
+sudo git clone https://github.com/k0rdent/k0rdent-apis.git /opt/ufo_lab/k0rdent-apis
+# Or with SSH / a PR ref:
+#   sudo git clone git@github.com:k0rdent/k0rdent-apis.git /opt/ufo_lab/k0rdent-apis
+```
+
+The k0rdent-apis checkout the `Makefile` uses during `make helm-dep-build`
+(and other `git` operations the playbook triggers) may need your git identity /
+authenticated remote. In practice, forwarding your local SSH agent to the CMP
+is enough to cover any `git@github.com:...` fallbacks:
 
 ```bash
 # 1. SSH into the CMP with agent forwarding.
 ssh -A ubuntu@<cmp-ip>
 
-# 2. Set the k0rdent-apis pull-secret creds (they are placeholders in
-#    vars/common.yml until install.sh's sed replaces them at boot, so for a
-#    manual re-run edit the file OR export env vars and re-run install.sh's
-#    sed lines).
+# 2. Ensure /opt/ufo_lab/k0rdent-apis exists (clone step above) if it is not
+#    already present from a prior install.
+
+# 3. (Optional) Set the k0rdent-apis pull-secret creds. They are placeholders in
+#    vars/common.yml until install.sh's sed replaces them at boot. Skip if a
+#    prior boot/install already filled them in; otherwise edit the file OR
+#    export env vars and re-run install.sh's sed lines.
 sudo vim /opt/ufo_lab/ufo-simulator/ansible/vars/common.yml
 # set:
 #   k0rdent_apis_pull_secret_username: <your-username>
 #   k0rdent_apis_pull_secret_password: <your-token>
 
-# 3. Run the playbook. -E forwards the SSH_AUTH_SOCK so agent forwarding still
+# 4. Run the playbook. -E forwards the SSH_AUTH_SOCK so agent forwarding still
 #    works under sudo; --limit constrains the run to the CMP node.
 cd /opt/ufo_lab/ufo-simulator/ansible
 sudo -E ansible-playbook -i inventory.yml k0rdent-apis.yml --limit cmp01
