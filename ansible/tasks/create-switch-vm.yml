@@ -23,6 +23,28 @@
       {%- if switch_host_bridge %}
       ; host bridge {{ switch_host_bridge }} is connected to {{ switch_host_bridge_port }} ({{ switch_host_bridge_mac }})
       {%- endif %}
+      {# Every input to the rename-injection gate below, so a skip says why. #}
+      ; rename injection needs sdn_provider=verity switch_nos=cumulus
+        breakout-names undefined-domain, and has
+        sdn_provider={{ sdn_provider }} switch_nos={{ switch_nos }}
+        breakout={{ switch_uses_breakout_names }}
+        domain={{ 'defined' if vm_exists.rc == 0 else 'undefined' }}
+
+# Verity only. It does its own DHCP and ZTP, so nothing reaches the switch after
+# boot to correct interface names -- they have to be right the first time. Netris
+# installs the same rename over SSH from configure-switches.yml instead, via
+# tasks/apply-breakout-rename.yml.
+# Only the breakout switches need it: without breakout the grid is one lane per
+# port, so the map is swp1 -> swp1 ... and the rename is a no-op.
+# vm_exists.rc != 0 means no domain owns this qcow2 yet, so the disk is cold --
+# never patch an image a defined (possibly running) domain is using.
+- name: "{{ switch_name }} - Inject breakout interface rename into the image"
+  ansible.builtin.include_tasks: tasks/inject-breakout-rename.yml
+  when:
+    - vm_exists.rc != 0
+    - sdn_provider == 'verity'
+    - switch_nos == 'cumulus'
+    - switch_uses_breakout_names | bool
 
 - name: "{{ switch_name }} - Render VM xml"
   ansible.builtin.template:
