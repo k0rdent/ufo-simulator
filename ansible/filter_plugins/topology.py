@@ -155,28 +155,48 @@ def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breako
     return links
 
 
-def ew_fabric_links(spines, leafs, port_prefix="swp", leaf_uplink_base=27):
-    """Build EW spine↔leaf fabric links using breakout lane 1 on each physical port.
+def ew_fabric_links(spines, leafs, port_prefix="swp", leaf_uplink_base=33, breakout=2):
+    """Build EW spine↔leaf fabric links to the Spectrum-X reference layout.
 
-    Spine N uses physical ports 1..len(leafs), lane 1 (Cumulus: swp1s0).
-    Leaf uplink for spine index S is physical port leaf_uplink_base+S, lane 1
-    (Cumulus: swp27s0 / swp28s0).
+    Both ends use every lane of a physical port before moving to the next one,
+    which is what packs 8 leaves into 4 spine ports rather than 8. NVIDIA's
+    reference cabling for 2 spines and 8 leaves::
+
+        spine-s00 swp1s0 -> leaf-SU00-r0 swp33s0
+        spine-s00 swp1s1 -> leaf-SU00-r1 swp33s0
+        spine-s00 swp2s0 -> leaf-SU00-r2 swp33s0
+        spine-s00 swp2s1 -> leaf-SU00-r3 swp33s0
+        ...
+        spine-s00 swp4s1 -> leaf-SU00-r7 swp33s0
+        spine-s01 swp1s0 -> leaf-SU00-r0 swp33s1
+        ...                                  ^ subport follows the spine index
+
+    So leaf *i* lands on spine port ``swp{i//breakout + 1}s{i%breakout}``, and
+    spine *j* lands on leaf port ``swp{leaf_uplink_base + j//breakout}s{j%breakout}``.
+
+    ``leaf_uplink_base`` is 33 because a 64-port Spectrum-X leaf reserves the
+    upper half for uplinks and the lower half for server downlinks; the earlier
+    value of 27 put uplinks in the downlink range.
     """
     if not spines or not leafs:
         return []
 
+    breakout = max(1, int(breakout or 1))
     links = []
     for spine_i, spine in enumerate(spines):
         spine_name = spine["name"] if isinstance(spine, dict) else spine
-        leaf_phys = leaf_uplink_base + spine_i
+        leaf_phys = leaf_uplink_base + (spine_i // breakout)
+        leaf_lane = (spine_i % breakout) + 1
         for leaf_i, leaf in enumerate(leafs):
             leaf_name = leaf["name"] if isinstance(leaf, dict) else leaf
             links.append(
                 {
                     "local": spine_name,
-                    "local_port": _breakout_port_name(port_prefix, leaf_i + 1, 1),
+                    "local_port": _breakout_port_name(
+                        port_prefix, (leaf_i // breakout) + 1, (leaf_i % breakout) + 1
+                    ),
                     "remote": leaf_name,
-                    "remote_port": _breakout_port_name(port_prefix, leaf_phys, 1),
+                    "remote_port": _breakout_port_name(port_prefix, leaf_phys, leaf_lane),
                 }
             )
     return links
