@@ -1,0 +1,191 @@
+---
+{{- $microservicename := "grpc" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  {{- if not (index .Values $microservicename).autoscaling.enabled }}
+  replicas: {{ (index .Values $microservicename).replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 8 }}
+    spec:
+      {{- with (index .Values $microservicename).imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "netris-controller.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      - name: init-wait-mariadb
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: alpine:3.18
+        command:
+          - sh
+          - -c
+          - for i in $(seq 1 200); do nc -z -w3 {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }} 3306 && exit 0 || sleep 3; done; exit 1
+      containers:
+        - name: {{ printf "%s-%s" .Chart.Name $microservicename }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ (index .Values $microservicename).image.repository }}:{{ (index .Values $microservicename).image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ (index .Values $microservicename).image.pullPolicy }}
+          env:
+            - name: GRPC_RPC_CACHE_EXCLUDE_METHODS
+              value: "GetHwLinkConnectionGraph,GetVnets,GetVnetsForHypervisor"
+            - name: GRPC_AUTH_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "grpc-secret" }}
+                  key: secret-key
+          command: ['/app/servicebin', '-c', '/app/config/grpc.conf']
+          ports:
+            - name: {{ (index .Values $microservicename).service.name }}
+              containerPort: {{ (index .Values $microservicename).service.port }}
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            successThreshold: 1
+            tcpSocket:
+              port: {{ (index .Values $microservicename).service.port }}
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            successThreshold: 1
+            tcpSocket:
+              port: {{ (index .Values $microservicename).service.port }}
+            timeoutSeconds: 1
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: certs
+              mountPath: /app/cert
+            - name: config
+              mountPath: /app/config
+      volumes:
+        - name: certs
+          secret:
+            secretName: {{ printf "%s-%s" (include "netris-controller.fullname" .) "certs" }}
+        - name: config
+          configMap:
+            name: {{ printf "%s-%s-%s" (include "netris-controller.fullname" .) $microservicename "config" }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  type: {{ (index .Values $microservicename).service.type }}
+  ports:
+    - port: {{ (index .Values $microservicename).service.port }}
+      targetPort: {{ (index .Values $microservicename).service.name }}
+      protocol: TCP
+      name: {{ (index .Values $microservicename).service.name }}
+  selector:
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+---
+{{- if (index .Values $microservicename).autoscaling.enabled }}
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  minReplicas: {{ (index .Values $microservicename).autoscaling.minReplicas }}
+  maxReplicas: {{ (index .Values $microservicename).autoscaling.maxReplicas }}
+  metrics:
+    {{- if (index .Values $microservicename).autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: {{ (index .Values $microservicename).autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if (index .Values $microservicename).autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        targetAverageUtilization: {{ (index .Values $microservicename).autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-%s-%s" (include "netris-controller.fullname" .) $microservicename "config" }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+data:
+  grpc.conf: |-
+    [server]
+    tls_cert=cert/tls.crt
+    tls_key=cert/tls.key
+    bind_address=0.0.0.0
+    bind_port={{ (index .Values $microservicename).service.port }}
+    auth=yes
+
+
+    [database]
+    address={{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }}
+    user={{ .Values.mariadb.auth.username }}
+    password={{ .Values.mariadb.auth.password }}
+    database={{ .Values.mariadb.auth.database }}
+    port=3306
+
+    [redis]
+    address={{ printf "%s-%s" (include "netris-controller.fullname" .) "redis" }}
+    sentinel_address={{ printf "%s-%s" (include "netris-controller.fullname" .) "redis" }}
+    sentinel_port={{ .Values.redis.sentinel.service.ports.sentinel }}
+    sentinel_master_name={{ .Values.redis.sentinel.masterSet }}
+
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "grpc-secret" }}
+  labels:
+  {{- include "netris-controller.labels" . | nindent 4 }}
+type: Opaque
+data:
+{{- ( include "grpc.secret" . ) | indent 2 -}}

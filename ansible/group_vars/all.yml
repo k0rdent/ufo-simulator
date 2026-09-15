@@ -228,10 +228,8 @@ netris_auth_token: <token from webapi>
 netris_admin_username: netris
 netris_admin_password: password
 netris_license: ""
-netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
-netris_operator_chart_version: 0.0.1-f431da9
-netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-netris_operator_image_tag: 0.0.1-f431da9.1770637678
+# The netris_operator_* pins live in ansible/vars/common.yml, which every netris
+# playbook loads via vars_files and which therefore always wins over group_vars.
 
 loopback_base: "192.169"
 management_base: "192.168"
@@ -377,9 +375,12 @@ external_secrets_namespace: external-secrets
 external_secrets_chart_repo: https://charts.external-secrets.io
 external_secrets_chart_version: 2.7.0
 
+# MetalLB address for the Traefik LoadBalancer (ansible/traefik.yml), which
+# fronts both the Netris UI/API and the fabric-facing agent ports. The Netris
+# ingress routes / to the frontend and /api + /socket.io to the backend, so the
+# API shares this address rather than having its own.
 netris_controller_ip: 10.172.1.100
-netris_web_frontend_ip: 10.172.1.101
-netris_web_api_url: "http://{{ netris_web_frontend_ip }}"
+netris_web_api_url: "http://{{ netris_controller_ip }}"
 
 kubeconfig_path: "/root/.kube/config"
 

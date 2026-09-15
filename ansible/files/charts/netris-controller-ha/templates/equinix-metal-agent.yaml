@@ -1,0 +1,83 @@
+---
+{{- if (index .Values "equinix-metal-agent").enabled }}
+{{- $microservicename := "equinix-metal-agent" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 8 }}
+    spec:
+      {{- with (index .Values $microservicename).imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "netris-controller.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      - name: init-wait-webapp
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: alpine:3.18
+        command:
+          - sh
+          - -c
+          - for i in $(seq 1 200); do nc -z -w3 {{ printf "%s-%s" (include "netris-controller.fullname" .) "web-service-backend" }} {{ (index .Values "web-service-backend").service.port }} && exit 0 || sleep 3; done; exit 1
+      - name: init-wait-websession
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: alpine:3.18
+        command:
+          - sh
+          - -c
+          - for i in $(seq 1 200); do nc -z -w3 {{ printf "%s-%s" (include "netris-controller.fullname" .) "web-session-generator" }} {{ (index .Values "web-session-generator").service.port }} && exit 0 || sleep 3; done; exit 1
+      containers:
+        - name: {{ printf "%s-%s" .Chart.Name $microservicename }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ (index .Values $microservicename).image.repository }}:{{ (index .Values $microservicename).image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ (index .Values $microservicename).image.pullPolicy }}
+          command: ['/app/servicebin']
+          env:
+            - name: EQUINIX_METAL_AGENT_LOG_LEVEL
+              value: info
+            - name: EQUINIX_ADDR
+              value: https://api.packet.net
+            - name: CONTROLLER_ADDR
+              value: http://{{ printf "%s-%s" (include "netris-controller.fullname" .) "web-service-backend" }}:{{ (index .Values "web-service-backend").service.port }}
+            - name: SESSION_PROVIDER_HOST
+              value: http://{{ printf "%s-%s" (include "netris-controller.fullname" .) "web-session-generator" }}:{{ (index .Values "web-session-generator").service.port }}
+            - name: WEB_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "web-session-secret" }}
+                  key: secret-key
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

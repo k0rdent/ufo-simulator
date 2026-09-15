@@ -1,0 +1,178 @@
+---
+{{- $microservicename := "web-service-frontend" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  {{- if not (index .Values $microservicename).autoscaling.enabled }}
+  replicas: {{ (index .Values $microservicename).replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 8 }}
+    spec:
+      {{- with (index .Values $microservicename).imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "netris-controller.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      - name: init-wait-backend
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: alpine:3.18
+        command:
+          - sh
+          - -c
+          - for i in $(seq 1 200); do nc -z -w3 {{ printf "%s-%s" (include "netris-controller.fullname" .) "web-service-backend" }} {{ (index .Values "web-service-backend").service.port }} && exit 0 || sleep 3; done; exit 1
+      containers:
+        - name: {{ printf "%s-%s" .Chart.Name $microservicename }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ (index .Values $microservicename).image.repository }}:{{ (index .Values $microservicename).image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ (index .Values $microservicename).image.pullPolicy }}
+          ports:
+            - name: {{ (index .Values $microservicename).service.name }}
+              containerPort: {{ (index .Values $microservicename).service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ (index .Values $microservicename).service.name }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ (index .Values $microservicename).service.name }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ printf "%s-%s-%s" (include "netris-controller.fullname" .) $microservicename "nginx-config" }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  type: {{ (index .Values $microservicename).service.type }}
+  ports:
+    - port: {{ (index .Values $microservicename).service.port }}
+      targetPort: {{ (index .Values $microservicename).service.name }}
+      protocol: TCP
+      name: {{ (index .Values $microservicename).service.name }}
+  selector:
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+---
+{{- if (index .Values $microservicename).autoscaling.enabled }}
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  minReplicas: {{ (index .Values $microservicename).autoscaling.minReplicas }}
+  maxReplicas: {{ (index .Values $microservicename).autoscaling.maxReplicas }}
+  metrics:
+    {{- if (index .Values $microservicename).autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: {{ (index .Values $microservicename).autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if (index .Values $microservicename).autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        targetAverageUtilization: {{ (index .Values $microservicename).autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-%s-%s" (include "netris-controller.fullname" .) $microservicename "nginx-config" }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+data:
+  default.conf: |-
+    server {
+        listen       80;
+        listen  [::]:80;
+        server_name  localhost;
+
+        root   /usr/share/nginx/html;
+
+        gzip on;
+        gzip_types text/html application/javascript application/json text/css;
+
+        location / {
+          try_files $uri $uri/ $uri.html /index.html;
+        }
+
+        location /api {
+          add_header X-Frame-Options SAMEORIGIN;
+          proxy_buffering off;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-Host $host;
+          proxy_set_header X-Forwarded-Port $server_port;
+          proxy_pass http://{{ printf "%s-%s" (include "netris-controller.fullname" .) "web-service-backend" }}:{{ (index .Values "web-service-backend").service.port }};
+        }
+
+        location /socket.io {
+          add_header X-Frame-Options SAMEORIGIN;
+          proxy_buffering off;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-Host $host;
+          proxy_set_header X-Forwarded-Port $server_port;
+          proxy_pass http://{{ printf "%s-%s" (include "netris-controller.fullname" .) "web-service-backend" }}:{{ (index .Values "web-service-backend").service.port }};
+        }
+
+        # redirect server error pages to the static page /50x.html
+        #
+        error_page   500 502 503 504  /maintenance.html;
+        location = /maintenance.html {
+            root   /usr/share/nginx/html/img;
+        }
+    }

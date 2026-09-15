@@ -12,32 +12,60 @@
     - ./vars/{{ sdn_provider }}.yml
 
   vars:
-    workspace: /opt/ufo_lab/
-    netris_chars_dir: "{{ workspace }}/netris-charts"
+    # Vendored - the netris-controller-ha chart is not published anywhere public.
+    # See ansible/files/charts/netris-controller-ha/PATCHES.md.
+    netris_chart_dir: "{{ playbook_dir }}/files/charts/netris-controller-ha"
 
   tasks:
     - name: Ensure target directory
       file:
-        path:  "{{ workspace }}"
-        state: directory
-
-    - name: Download charts repo
-      ansible.builtin.git:
-        repo: "{{ netris_charts_repo }}"
-        dest: "{{ netris_chars_dir }}"
-        version: "{{ netris_charts_branch }}"
-
-    - name: Make chart dependencies
-      ansible.builtin.shell:
-        cmd: |
-          helm dep up
-          rm -rf .cache
-        chdir: "{{ netris_chars_dir }}/charts/netris-controller/"
-
-    - name: Ensure target directory
-      file:
         path: "{{ k8s_artifacts_dir }}/netris/"
         state: directory
+
+    # The controller chart creates MariaDB/MaxScale/User/Grant/SqlJob CRs, so the
+    # CRDs and the operator that reconciles them must exist first.
+    - name: Deploy/upgrade mariadb-operator CRDs
+      kubernetes.core.helm:
+        name: mariadb-operator-crds
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: mariadb-operator-crds
+        chart_repo_url: "{{ mariadb_operator_chart_repo }}"
+        chart_version: "{{ mariadb_operator_chart_version }}"
+        release_namespace: netris-controller
+        create_namespace: true
+        state: present
+        wait: true
+        wait_timeout: 300s
+
+    - name: Deploy/upgrade mariadb-operator helm release
+      kubernetes.core.helm:
+        name: mariadb-operator
+        kubeconfig: "{{ kubeconfig_path }}"
+        chart_ref: mariadb-operator
+        chart_repo_url: "{{ mariadb_operator_chart_repo }}"
+        chart_version: "{{ mariadb_operator_chart_version }}"
+        release_namespace: netris-controller
+        create_namespace: true
+        # Single node: one replica of the operator, cert-controller and webhook
+        # instead of the three each the chart defaults to.
+        release_values:
+          ha:
+            enabled: false
+          pdb:
+            enabled: false
+          certController:
+            ha:
+              enabled: false
+            pdb:
+              enabled: false
+          webhook:
+            ha:
+              enabled: false
+            pdb:
+              enabled: false
+        state: present
+        wait: true
+        wait_timeout: 600s
 
     - name: Handle templates
       block:
@@ -52,11 +80,13 @@
       kubernetes.core.helm:
         name: netris-controller
         kubeconfig: "{{ kubeconfig_path }}"
-        chart_ref: "{{ netris_chars_dir }}/charts/netris-controller/"
+        chart_ref: "{{ netris_chart_dir }}"
         release_namespace: netris-controller
         create_namespace: true
         values_files:
           - "{{ k8s_artifacts_dir }}/netris/netris_controller.yaml"
         state: present
         wait: true
-        wait_timeout: 300s
+        # MariaDB bootstrap plus ~17 sequential SqlJob init jobs; the vendor
+        # documents 5-10 minutes for this release.
+        wait_timeout: 1200s

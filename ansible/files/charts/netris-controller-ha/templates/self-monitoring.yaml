@@ -1,0 +1,170 @@
+---
+{{- if (index .Values "self-monitoring").enabled }}
+{{- $microservicename := "self-monitoring" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}-full-read-only
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/api", "/api/*", "/apis", "/apis/*", "/version", "/openapi", "/openapi/*"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}-full-read-only
+subjects:
+- kind: ServiceAccount
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 6 }}
+  replicas: {{ (index .Values $microservicename).replicaCount }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 8 }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: "kubernetes.io/hostname"
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                - {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+      {{- with (index .Values $microservicename).imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      - name: init-wait-telescope
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: alpine:3.18
+        env:
+          - name: AUTH_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "grpc-secret" }}
+                key: secret-key
+        command:
+          - sh
+          - -c
+          - for i in $(seq 1 200); do nc -z -w3 {{ printf "%s-%s" (include "netris-controller.fullname" .) "telescope" }} {{ (index .Values "telescope").service.port }} && cp /config/netris.conf /opt/netris/netris.conf && echo "auth_key=$AUTH_KEY" >> /opt/netris/netris.conf && echo "hostname=$(hostname)" >> /opt/netris/netris.conf && exit 0 || sleep 3; done; exit 1
+        volumeMounts:
+          - name: merged-config
+            mountPath: /opt/netris/
+          - name: config
+            mountPath: /config
+            readOnly: true
+      containers:
+        - name: {{ printf "%s-%s" .Chart.Name $microservicename }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ (index .Values $microservicename).image.repository }}:{{ (index .Values $microservicename).image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ (index .Values $microservicename).image.pullPolicy }}
+          command: ['/app/servicebin', '--config', 'config/netris.conf', '--plugins', 'plugins-node.conf']
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: MAXSCALE_HOST
+              value: {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }}
+            - name: MAXSCALE_USER
+              value: mariadb-operator
+            - name: MAXSCALE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb-admin" }}
+                  key: password
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: merged-config
+              mountPath: /app/config/
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ printf "%s-%s-%s" (include "netris-controller.fullname" .) $microservicename "config" }}
+        - name: merged-config
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-%s-%s" (include "netris-controller.fullname" .) $microservicename "config" }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+data:
+  netris.conf: |-
+    [general]
+    mode=production
+    dir=/opt/netris
+    tmpdir=/run
+
+    [telescope]
+    ; info|debug
+    log_level=info
+    ; auth mode - for the controller clients must be set to controller to avoid auth using loopback address
+    mode=controller
+    ; hostname - the device hostname that all the checks will be associated with (will be populated by initContainer)
+
+    ; the telescope server address and port to push the plugins output to
+    server_address={{ printf "%s-%s" (include "netris-controller.fullname" .) "telescope" }}
+    server_port={{ (.Values.telescope.service.port ) }}
+
+    ; authentication key (will be populated by initContainer)
+    
+
+{{- end }}
+

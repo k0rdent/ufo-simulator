@@ -1,0 +1,564 @@
+# Default values for netris-controller.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nameOverride: ""
+fullnameOverride: ""
+
+argocd:
+  enabled: false
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+postUpgradeCleanup:
+  # Enable post-upgrade hook to cleanup old Graphite resources when upgrading from 4.9 to 4.10
+  enabled: true
+  # Delete Graphite PVCs (persistent volumes). Set to false to keep data for backup/audit.
+  # Ignored (always false) when migrateGraphiteData is true — PVCs must stay for the migration job.
+  deletePVCs: false
+  # Migrate historical metrics from Graphite Whisper PVCs into VictoriaMetrics (vminsert).
+  # Enable this when upgrading from 4.9.0 to 4.10.0 to preserve old telemetry data.
+  # A post-upgrade Job will read all .wsp files from the Graphite pod-0 PVC and replay them
+  # into vminsert via the graphite plaintext protocol on port 2003.
+  # After verifying the migration succeeded, you can delete the old PVCs manually:
+  #   kubectl delete pvc <release>-graphite-pvc-<release>-graphite-{0,1,2} -n <namespace>
+  migrateGraphiteData: true
+  # Override the Graphite pod-0 PVC name if it differs from the auto-computed default.
+  # Default: <release>-graphite-pvc-<release>-graphite-0
+  graphitePVCName: ""
+  graphiteExists: false
+
+# ClusterRoleBinding granting the cleanup job access; runs first (lower sync-wave)
+# so the RBAC exists before the pre-upgrade-cleanup job below runs.
+post-upgrade-rbac:
+  annotations:
+    argocd:
+      argocd.argoproj.io/hook: Sync
+      argocd.argoproj.io/sync-wave: "-10"
+      argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    helm:
+      helm.sh/hook: pre-upgrade
+      helm.sh/hook-weight: "-10"
+      helm.sh/hook-delete-policy: hook-succeeded
+
+# Job that cleans up old Graphite resources; runs after post-upgrade-rbac (higher sync-wave).
+pre-upgrade-cleanup:
+  annotations:
+    argocd:
+      argocd.argoproj.io/hook: Sync
+      argocd.argoproj.io/sync-wave: "1"
+      argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    helm:
+      helm.sh/hook: pre-upgrade
+      helm.sh/hook-weight: "1"
+      helm.sh/hook-delete-policy: hook-succeeded
+
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+
+netris:
+  webLogin: netris
+  webPassword: newNet0ps
+
+
+ingress:
+  enabled: true
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure    
+  # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+  # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
+  # ingressClassName: nginx
+  # Values can be templated
+  # annotations:
+  #   kubernetes.io/ingress.class: nginx
+  #   kubernetes.io/tls-acme: "true"
+  labels: {}
+  path: /
+
+  # pathType is only for k8s > 1.19
+  pathType: Prefix
+
+  hosts: []
+
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+
+web-service-backend:
+  replicaCount: 3
+
+  image:
+    repository: netrisai/controller-web-service-backend
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "4.16.0-008"
+
+  imagePullSecrets: []
+
+  service:
+    type: ClusterIP
+    port: 80
+    name: http
+
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+  nodeOptions: "--max-old-space-size=8192"
+
+
+web-service-frontend:
+  replicaCount: 3
+
+  image:
+    repository: netrisai/controller-web-service-frontend
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "4.16.0-003"
+
+  imagePullSecrets: []
+
+  service:
+    type: ClusterIP
+    port: 80
+    name: http
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+
+grpc:
+  replicaCount: 3
+
+  image:
+    repository: netrisai/controller-grpc
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "4.16.0.001"
+
+  imagePullSecrets: []
+
+  service:
+    type: ClusterIP
+    port: 443
+    name: grpc
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+telescope:
+  replicaCount: 3
+  updateStrategy:
+    type: Recreate           ## RollingUpdate or Recreate
+  image:
+    repository: netrisai/controller-telescope
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "4.16.0.002"
+
+  imagePullSecrets: []
+
+  service:
+    type: ClusterIP
+    port: 80
+    name: ws
+    securePort: 443
+    securePortName: wss
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+
+telescope-notifier:
+  replicaCount: 1
+
+  image:
+    repository: netrisai/controller-telescope-notifier
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "3.0.4"
+
+  imagePullSecrets: []
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+
+web-session-generator:
+  replicaCount: 3
+
+  image:
+    repository: netrisai/controller-web-session-generator
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "0.2.2"
+
+  imagePullSecrets: []
+
+  service:
+    type: ClusterIP
+    port: 80
+    name: http
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+
+equinix-metal-agent:
+  enabled: false
+  image:
+    repository: netrisai/bare-metal-equinix-metal-agent
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "0.11.1"
+
+  imagePullSecrets: []
+
+
+phoenixnap-bmc-agent:
+  enabled: false
+  image:
+    repository: netrisai/bare-metal-phoenixnap-bmc-agent
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "0.6.1"
+
+  imagePullSecrets: []
+
+self-monitoring-ha:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: netrisai/controller-telescope-client
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "4.11.0-003"
+
+  imagePullSecrets: []
+
+self-monitoring:
+  replicaCount: 3
+  enabled: true
+  image:
+    repository: netrisai/controller-telescope-client
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "4.11.0-003"
+
+  imagePullSecrets: []
+
+
+migration:
+  annotations:
+    argocd:
+      argocd.argoproj.io/hook: Sync
+      argocd.argoproj.io/sync-wave: "1"
+      argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    helm:
+      helm.sh/hook: pre-upgrade
+      helm.sh/hook-weight: "1"
+      helm.sh/hook-delete-policy: hook-succeeded
+  image:
+    repository: netrisai/controller-web-service-migration
+    pullPolicy: IfNotPresent
+    tag: "4.16.0"
+
+
+## Using default values from https://github.com/bitnami/charts/tree/master/bitnami/mariadb/values.yaml
+## Auth from existing secret not supported at the moment
+mariadb:
+  auth:
+    database: netris
+    username: netris
+    password: changeme
+    rootPassword: changeme
+  # initdbScriptsConfigMap: netris-controller-initdb
+  # MIRANTIS PATCH (see PATCHES.md): replicas/backupCount/storage.size were hardcoded
+  # in templates/mariadb-crs.yaml. Defaults below reproduce the upstream values.
+  # Set replicas to 1 for a single-node lab; the replication block is then omitted.
+  replicas: 3
+  backupCount: 3
+  storage:
+    size: 10Gi
+
+
+## MIRANTIS PATCH (see PATCHES.md): MaxScale replicas were hardcoded in
+## templates/mariadb-crs.yaml. Default below reproduces the upstream value.
+maxscale:
+  replicas: 3
+
+
+## Using default values from https://github.com/bitnami/charts/tree/master/bitnami/mongodb/values.yaml
+## Auth from existing secret not supported at the moment
+mongodb:
+  resourcesPreset: large
+  global:
+    imageRegistry: docker.io
+    security:
+      allowInsecureImages: true
+  image:
+    repository: netrisai/mongodb
+    tag: ctl-4.6.1
+  architecture: replicaset
+  replicaCount: 3
+  arbiter:
+    enabled: false
+  auth:
+    database: netris
+    username: netris
+    password: changeme
+    rootPassword: changeme
+  initdbScriptsConfigMap: netris-controller-initdb-mongodb
+
+
+## Using default values from https://github.com/bitnami/charts/tree/master/bitnami/redis/values.yaml
+redis:
+  global:
+    imageRegistry: docker.io
+    security:
+      allowInsecureImages: true
+  image:
+    repository: netrisai/redis
+    tag: ctl-4.6.1
+  architecture: replication
+  sentinel:
+    resourcesPreset: small
+    image:
+      repository: netrisai/redis-sentinel
+      tag: ctl-4.6.1
+    enabled: true
+    downAfterMilliseconds: 15000
+    failoverTimeout: 60000
+    persistence:
+      enabled: true
+      size: 1Gi
+  auth:
+    enabled: false
+    sentinel: false
+  replica:
+    replicaCount: 3
+    resourcesPreset: large
+    disableCommands: []
+  commonConfiguration: |-
+    appendonly no
+    save "900 1 300 10 60 10000"
+
+mariadb-operator:
+  ha:
+    enabled: true
+    replicas: 3
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: "kubernetes.io/hostname"
+          labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - mariadb-operator
+            - key: app.kubernetes.io/instance
+              operator: In
+              values:
+              - mariadb-operator
+
+
+  certController:
+    ha:
+      enabled: true
+      replicas: 3
+    pdb:
+      enabled: true
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: "kubernetes.io/hostname"
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - mariadb-operator-cert-controller
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                - mariadb-operator-cert-controller
+
+
+  webhook:
+    ha:
+      enabled: true
+      replicas: 3
+    pdb:
+      enabled: true
+      maxUnavailable: 1
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: "kubernetes.io/hostname"
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - mariadb-operator-webhook
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                - mariadb-operator-webhook
+
+
+## Using default values from https://github.com/ntppool/charts/tree/main/charts/smtp/values.yaml
+smtp:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1024Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  config:
+    # MAILNAME: smtp
+    DISABLE_IPV6: "1"
+    RELAY_NETWORKS: ":172.16.0.0/12:10.0.0.0/8:192.168.0.0/16"
+    # SMARTHOST_ADDRESS: mail.example.com
+    # SMARTHOST_PORT: "587"
+    # SMARTHOST_USER: myuser
+    # SMARTHOST_PASSWORD: secret
+    # SMARTHOST_ALIASES: "*.example.com"
+
+
+victoriametrics:
+  enabled: true
+
+victoria-metrics-cluster:
+  nameOverride: "vmc"
+
+  vminsert:
+    strategy:
+      rollingUpdate:
+        maxUnavailable: 1
+    replicaCount: 3
+    extraArgs:
+      graphiteListenAddr: ":2003"
+      loggerLevel: "INFO"
+      loggerFormat: "json"
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/component
+              operator: In
+              values:
+              - vminsert
+          topologyKey: kubernetes.io/hostname
+
+  vmstorage:
+    replicaCount: 3
+    retentionPeriod: 6
+    persistentVolume:
+      enabled: true
+      size: 100Gi
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/component
+              operator: In
+              values:
+              - vmstorage
+          topologyKey: kubernetes.io/hostname
+
+  vmselect:
+    replicaCount: 3
+    cacheMountPath: /select-cache
+    mode: statefulSet
+    persistentVolume:
+      enabled: true
+      size: 2Gi
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/component
+              operator: In
+              values:
+              - vmselect
+          topologyKey: kubernetes.io/hostname
