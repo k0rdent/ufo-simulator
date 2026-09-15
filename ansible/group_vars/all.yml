@@ -186,8 +186,27 @@ topology_ew:
       su_id: 0
       rail_id: 7
 
-# EW leaf→VM (2-way breakout) + leaf↔spine fabric links (breakout lane 0 / /1).
-topology_ew_links: "{{ (topology_ew.leafs | ew_breakout_server_links(topology.nodes, switch_port_name_prefix)) + (topology_ew.spines | ew_fabric_links(topology_ew.leafs, switch_port_name_prefix)) }}"
+# Spines the Spectrum-X fabric *declares*, which is 4 per scalable unit. Port
+# numbering is absolute, so this must match the controller's fabric settings
+# (Max SUs 1 -> 4 spines) even when fewer spine VMs are built: each spine-leaf
+# pair then gets 64/4 = 16 uplink subports, and both sides derive the same /31
+# per link. Raising Max SUs raises the declared spine count and shrinks the
+# per-pair block (8 spines -> 8 links, 64 spines -> 1, the full-scale
+# reference). See ew_fabric_links.
+ew_declared_spines: 4
+
+# How many of each pair's 16 links to actually wire. The full set needs 128 NICs
+# on a spine (16 x 8 leaves); lower it to fit smaller switch VMs. Wired links
+# keep their blueprint numbering, so their addresses still match the controller
+# -- the rest just show as missing connections, like the undeclared spines do.
+ew_links_per_pair: 16
+
+# EW leaf→VM (2-way breakout) + leaf↔spine fabric links.
+topology_ew_links: >-
+  {{ (topology_ew.leafs | ew_breakout_server_links(topology.nodes, switch_port_name_prefix))
+     + (topology_ew.spines | ew_fabric_links(topology_ew.leafs, switch_port_name_prefix,
+                                             declared_spines=ew_declared_spines,
+                                             links_per_pair=ew_links_per_pair)) }}
 
 # Aggregates used by create/configure/destroy playbooks and link wiring.
 # all_topology_links renumbers non-breakout switch-side ports to match Cumulus
@@ -226,6 +245,12 @@ switch_data_mac_base: "52:54:00:20"
 ew_switch_data_mac_base: "52:54:00:21"
 # Physical ports per leaf/spine VM (Netris portsCount). EW breakout 2x → 2 NICs/port.
 switch_ports_count: 48
+
+# EW switches model a 64-port Spectrum-X: 64 physical x 2 lanes = 128 NICs.
+# A spine alone needs 128 wired NICs at ew_links_per_pair 16 (16 x 8 leaves),
+# and a leaf fills ports 33-64 with uplinks, so 48 ports is not enough here.
+ew_switch_ports_count: 64
+
 switch_stub_udp_base: 40000
 
 sg_port_count: 2
