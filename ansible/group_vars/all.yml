@@ -195,11 +195,17 @@ topology_ew:
 # reference). See ew_fabric_links.
 ew_declared_spines: 4
 
-# How many of each pair's 16 links to actually wire. The full set needs 128 NICs
-# on a spine (16 x 8 leaves); lower it to fit smaller switch VMs. Wired links
-# keep their blueprint numbering, so their addresses still match the controller
-# -- the rest just show as missing connections, like the undeclared spines do.
-ew_links_per_pair: 16
+# How many of each pair's 16-subport block to actually wire. The links are ECMP
+# members, so one is enough to exercise the path, the /31 and the BGP session;
+# the rest only add width. Wired links keep their blueprint numbering -- leaf 0
+# still meets spine 0 at swp33s0/swp1s0 and leaf 1 at swp33s0/swp9s0 -- so their
+# addresses match the controller exactly. The unwired members show as missing
+# connections, like the spines the lab does not build.
+#
+# This does not change VM size: the NIC grid still has to span swp57, where leaf
+# 7's block starts, so a spine is 128 NICs either way. It changes how many of
+# them carry a live tunnel (8 per spine here, 128 at the full 16).
+ew_links_per_pair: 1
 
 # EW leaf→VM (2-way breakout) + leaf↔spine fabric links.
 topology_ew_links: >-
