@@ -1,0 +1,187 @@
+{{- $graphiteExists := .Values.postUpgradeCleanup.graphiteExists }}
+{{- if not (default false .Values.argocd.enabled) }}
+{{- $graphiteSts := lookup "apps/v1" "StatefulSet" .Release.Namespace (printf "%s-graphite" .Release.Name) }}
+{{- $graphiteExists = gt (len $graphiteSts) 0 }}
+{{- end }}
+{{- if and .Values.postUpgradeCleanup.enabled .Values.postUpgradeCleanup.migrateGraphiteData $graphiteExists }}
+{{- $graphiteFullname := printf "%s-graphite" .Release.Name }}
+{{- $graphitePVCName := default (printf "%s-pvc-%s-0" $graphiteFullname $graphiteFullname) .Values.postUpgradeCleanup.graphitePVCName }}
+{{- $vminsertSvc := printf "%s-vmc-vminsert.%s.svc.cluster.local" (include "netris-controller.fullname" .) .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "netris-controller.fullname" . }}-graphite-migration-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+data:
+  migrate.py: |
+    import whisper
+    import socket
+    import time
+    import sys
+    import os
+    import glob
+
+    vminsert_host = os.environ["VMINSERT_HOST"]
+    vminsert_port = int(os.environ.get("VMINSERT_PORT", "2003"))
+    whisper_dir = os.environ.get("WHISPER_DIR", "/graphite-data/whisper")
+
+    if not os.path.isdir(whisper_dir):
+        print(f"Whisper directory {whisper_dir} not found, nothing to migrate")
+        sys.exit(0)
+
+    wsp_files = glob.glob(f"{whisper_dir}/**/*.wsp", recursive=True)
+    print(f"Found {len(wsp_files)} whisper files to migrate", flush=True)
+
+    if not wsp_files:
+        print("No whisper files found, exiting")
+        sys.exit(0)
+
+    migrated = 0
+    errors = 0
+    skipped = 0
+
+    def send_batch(sock, batch):
+        if batch:
+            sock.sendall("".join(batch).encode())
+
+    for wsp_file in wsp_files:
+        rel = os.path.relpath(wsp_file, whisper_dir)
+        metric = rel.replace("/", ".")[:-4]
+
+        try:
+            now = int(time.time())
+            info = whisper.info(wsp_file)
+            if not info or not info.get("archives"):
+                skipped += 1
+                continue
+
+            archives = info["archives"]
+            windows = []
+            until = now
+            for arch in archives:
+                retention = arch["secondsPerPoint"] * arch["points"]
+                from_ts = now - retention
+                windows.append((from_ts, until))
+                until = from_ts
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(60)
+            sock.connect((vminsert_host, vminsert_port))
+
+            any_data = False
+            batch = []
+            for from_ts, until_ts in windows:
+                if from_ts >= until_ts:
+                    continue
+                data = whisper.fetch(wsp_file, from_ts, until_ts)
+                if not data:
+                    continue
+                (start, end, step), values = data
+                any_data = True
+                ts = start
+                for value in values:
+                    if value is not None:
+                        batch.append(f"{metric} {value} {ts}\n")
+                    ts += step
+                    if len(batch) >= 500:
+                        send_batch(sock, batch)
+                        batch = []
+
+            send_batch(sock, batch)
+            sock.close()
+
+            if any_data:
+                migrated += 1
+            else:
+                skipped += 1
+            if migrated % 100 == 0 and migrated > 0:
+                print(f"Progress: {migrated}/{len(wsp_files)} metrics migrated", flush=True)
+
+        except Exception as e:
+            print(f"ERROR migrating {metric}: {e}", file=sys.stderr, flush=True)
+            errors += 1
+
+    print(
+        f"Migration complete: {migrated} migrated, {skipped} skipped (no data), {errors} errors",
+        flush=True,
+    )
+    sys.exit(1 if errors > 0 and migrated == 0 and skipped == 0 else 0)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "netris-controller.fullname" . }}-graphite-vm-migration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "netris-controller.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "netris-controller.serviceAccountName" . }}
+      restartPolicy: Never
+      initContainers:
+      - name: wait-vminsert
+        image: alpine:3.18
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for vminsert graphite port to be ready..."
+          i=0
+          until nc -z -w3 {{ $vminsertSvc }} 2003; do
+            i=$((i + 1))
+            if [ "$i" -ge 180 ]; then
+              echo "Timeout: vminsert graphite port not available after 15 minutes"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "vminsert graphite port is ready"
+      containers:
+      - name: migrate
+        image: netrisai/graphite-to-vm-migration-whisper:0.1.0
+        command:
+        - sh
+        - -c
+        - |
+          python3 /scripts/migrate.py
+        env:
+        - name: VMINSERT_HOST
+          value: {{ $vminsertSvc | quote }}
+        - name: VMINSERT_PORT
+          value: "2003"
+        - name: WHISPER_DIR
+          value: "/graphite-data/whisper"
+        volumeMounts:
+        - name: graphite-data
+          mountPath: /graphite-data
+          readOnly: true
+        - name: migration-script
+          mountPath: /scripts
+      volumes:
+      - name: graphite-data
+        persistentVolumeClaim:
+          claimName: {{ $graphitePVCName }}
+      - name: migration-script
+        configMap:
+          name: {{ include "netris-controller.fullname" . }}-graphite-migration-script
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

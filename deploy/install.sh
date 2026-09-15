@@ -101,6 +101,10 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/lvp.yml --limit ${HOSTNAME}
     ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/metallb.yml --limit ${HOSTNAME}
     if [[ ${FABRIC_BACKEND} == "netris" ]]; then
+        # Traefik fronts the controller and owns netris_controller_ip, so it needs
+        # MetalLB above it and must precede the controller chart, whose routers
+        # are traefik.containo.us CRs.
+        ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/traefik.yml --limit ${HOSTNAME}
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-controller.yml --limit ${HOSTNAME}
         ansible-playbook ${ANSIBLE_INTENTORY_ARG} ${UFO_SIMULATOR_ANSIBLE_DIR}/netris-operator.yml --limit ${HOSTNAME}
     fi

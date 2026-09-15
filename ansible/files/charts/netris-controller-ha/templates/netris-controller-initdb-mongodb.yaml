@@ -1,0 +1,14 @@
+apiVersion: v1
+data:
+  init.js: |-
+    use {{ .Values.mongodb.auth.database }}
+    db.createCollection("audit_log", {capped: true, size: 1073741824});
+    db.audit_log.createIndex({"updatedAt":-1});
+    db.audit_log.createIndex({"createdAt":-1});
+
+kind: ConfigMap
+metadata:
+  name: netris-controller-initdb-mongodb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}

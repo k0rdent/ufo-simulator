@@ -1,0 +1,134 @@
+# Copyright Broadcom, Inc. All Rights Reserved.
+# SPDX-License-Identifier: APACHE-2.0
+
+ignore:
+  # Image parameters (except pullPolicy) are referenced indirectly through common.images.image helper
+  - image.registry
+  - image.repository
+  - image.tag
+  - image.digest
+  - image.pullSecrets
+  - tls.image.registry
+  - tls.image.repository
+  - tls.image.tag
+  - tls.image.digest
+  - tls.image.pullSecrets
+  - externalAccess.autoDiscovery.image.registry
+  - externalAccess.autoDiscovery.image.repository
+  - externalAccess.autoDiscovery.image.tag
+  - externalAccess.autoDiscovery.image.digest
+  - externalAccess.autoDiscovery.image.pullSecrets
+  - externalAccess.dnsCheck.image.registry
+  - externalAccess.dnsCheck.image.repository
+  - externalAccess.dnsCheck.image.tag
+  - externalAccess.dnsCheck.image.digest
+  - externalAccess.dnsCheck.image.pullSecrets
+  - volumePermissions.image.registry
+  - volumePermissions.image.repository
+  - volumePermissions.image.tag
+  - volumePermissions.image.digest
+  - volumePermissions.image.pullSecrets
+  - metrics.image.registry
+  - metrics.image.repository
+  - metrics.image.tag
+  - metrics.image.digest
+  - metrics.image.pullSecrets
+  - mcp.image.registry
+  - mcp.image.repository
+  - mcp.image.tag
+  - mcp.image.digest
+  - mcp.image.pullSecrets
+  - mcp.auth.image.registry
+  - mcp.auth.image.repository
+  - mcp.auth.image.tag
+  - mcp.auth.image.digest
+  - mcp.auth.image.pullSecrets
+  # Values used by common library helpers
+  - nameOverride
+  - fullnameOverride
+  - namespaceOverride
+  - kubeVersion
+  # Auth values used in conditional logic
+  - auth.replicaSetKey
+  # Persistence values used in conditional logic
+  - persistence.storageClass
+  - backup.cronjob.storage.storageClass
+  - backup.cronjob.storage.annotations
+  - backup.cronjob.storage.volumeClaimTemplates.selector
+  - arbiter.service.annotations
+  - hidden.persistence.storageClass
+  - hidden.service.annotations
+  # Deprecated values
+  - auth.replicationPassword
+  - commonAnnotation
+  - externalAccess.service.loadBalancerIPs,
+  - networkPolicy.customRules
+  - networkPolicy.namespaceSelector
+  - networkPolicy.podSelector
+  # Ingress API version used in conditional logic
+  - mcp.ingress.apiVersion
+  - mcp.ingress.certManager
+
+ignoreChildren:
+  # Global values used by common library helpers
+  - global
+  # Diagnostic mode
+  - diagnosticMode.command
+  - diagnosticMode.args
+  # FIPS, security contexts, probes, and update strategy
+  - fips
+  - podSecurityContext
+  - containerSecurityContext
+  - livenessProbe
+  - readinessProbe
+  - startupProbe
+  - updateStrategy
+  - tls.fips
+  - externalAccess.autoDiscovery.fips
+  - externalAccess.dnsCheck.fips
+  - passwordUpdateJob.fips
+  - passwordUpdateJob.podSecurityContext
+  - passwordUpdateJob.containerSecurityContext
+  - persistence.accessModes
+  - backup.cronjob.fips
+  - backup.cronjob.containerSecurityContext
+  - backup.cronjob.storage.accessModes
+  - backup.cronjob.storage.volumeClaimTemplates
+  - volumePermissions.fips
+  - volumePermissions.securityContext
+  - arbiter.fips
+  - arbiter.podSecurityContext
+  - arbiter.containerSecurityContext
+  - arbiter.livenessProbe
+  - arbiter.readinessProbe
+  - arbiter.startupProbe
+  - arbiter.updateStrategy
+  - hidden.fips
+  - hidden.podSecurityContext
+  - hidden.containerSecurityContext
+  - hidden.livenessProbe
+  - hidden.readinessProbe
+  - hidden.startupProbe
+  - hidden.updateStrategy
+  - hidden.persistence.accessModes
+  - metrics.fips
+  - metrics.livenessProbe
+  - metrics.readinessProbe
+  - metrics.startupProbe
+  - metrics.service.annotations
+  - metrics.collector
+  - mcp.fips
+  - mcp.podSecurityContext
+  - mcp.containerSecurityContext
+  - mcp.livenessProbe
+  - mcp.readinessProbe
+  - mcp.startupProbe
+  - mcp.updateStrategy
+  - mcp.networkPolicy.kubeAPIServerPorts
+  - mcp.httpRoute.hostnames
+  - mcp.httpRoute.matches
+  - mcp.auth.fips
+  - mcp.auth.livenessProbe
+  - mcp.auth.readinessProbe
+  - mcp.auth.startupProbe
+  - mcp.auth.containerSecurityContext

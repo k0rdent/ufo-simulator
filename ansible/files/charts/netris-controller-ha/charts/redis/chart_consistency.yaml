@@ -1,0 +1,102 @@
+# Copyright Broadcom, Inc. All Rights Reserved.
+# SPDX-License-Identifier: APACHE-2.0
+
+ignore:
+  # Image parameters used by common library helpers
+  - image.registry
+  - image.repository
+  - image.tag
+  - image.digest
+  - image.pullSecrets
+  - sentinel.image.registry
+  - sentinel.image.repository
+  - sentinel.image.tag
+  - sentinel.image.digest
+  - sentinel.image.pullSecrets
+  - metrics.image.registry
+  - metrics.image.repository
+  - metrics.image.tag
+  - metrics.image.digest
+  - metrics.image.pullSecrets
+  - volumePermissions.image.registry
+  - volumePermissions.image.repository
+  - volumePermissions.image.tag
+  - volumePermissions.image.digest
+  - volumePermissions.image.pullSecrets
+  - kubectl.image.registry
+  - kubectl.image.repository
+  - kubectl.image.tag
+  - kubectl.image.digest
+  - kubectl.image.pullSecrets
+  - sysctl.image.registry
+  - sysctl.image.repository
+  - sysctl.image.tag
+  - sysctl.image.digest
+  - sysctl.image.pullSecrets
+  # Values used by common library helpers
+  - nameOverride
+  - fullnameOverride
+  - namespaceOverride
+  - kubeVersion
+  # Auth password used in conditional logic
+  - auth.password
+  # Persistence values used in conditional logic
+  - master.persistence.storageClass
+  - replica.persistence.storageClass
+  - sentinel.persistence.storageClass
+  # Persistence labels
+  - replica.persistence.labels
+  # Deprecated backward compatibility parameters
+  - sentinel.externalAccess.service.loadBalancerIP
+  - sentinel.externalAccess.service.loadBalancerIPAnnotaion
+
+ignoreChildren:
+  # Global values used by common library helpers
+  - global
+  # Diagnostic mode
+  - diagnosticMode
+  # Update strategy handled by common helpers
+  - master.updateStrategy
+  - replica.updateStrategy
+  # PDB (used via variable)
+  - master.pdb
+  - replica.pdb
+  # FIPS configuration
+  - master.fips
+  - replica.fips
+  - sentinel.fips
+  - metrics.fips
+  - volumePermissions.fips
+  - kubectl.fips
+  - sysctl.fips
+  # Security contexts handled by common helpers
+  - master.podSecurityContext
+  - master.containerSecurityContext
+  - replica.podSecurityContext
+  - replica.containerSecurityContext
+  - sentinel.containerSecurityContext
+  - metrics.containerSecurityContext
+  - volumePermissions.containerSecurityContext
+  - kubectl.containerSecurityContext
+  # Probes handled by common helpers
+  - master.startupProbe
+  - replica.startupProbe
+  - sentinel.startupProbe
+  - metrics.startupProbe
+  - metrics.livenessProbe
+  - metrics.readinessProbe
+  # Service configuration used in templates
+  - sentinel.masterService
+  # Disable commands arrays
+  - master.disableCommands
+  - replica.disableCommands
+  # Kubectl command array
+  - kubectl.command
+  # Kubectl resources
+  - kubectl.resources
+  # Metrics pod annotations (Prometheus)
+  - metrics.podAnnotations
+  # Persistence access modes
+  - master.persistence.accessModes
+  - replica.persistence.accessModes
+  - sentinel.persistence.accessModes

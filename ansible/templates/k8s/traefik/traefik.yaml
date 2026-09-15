@@ -1,0 +1,54 @@
+# Values for the Traefik chart installed by ansible/traefik.yml.
+#
+# Traefik is what exposes the Netris controller to the fabric. The old non-HA
+# netris-controller chart bundled haproxy for this; netris-controller-ha instead
+# emits traefik.containo.us/v1alpha1 IngressRouteTCP objects (see the chart's
+# templates/traefik-routers.yaml) that bind the four entrypoints below.
+#
+# Pin to chart 27.x / Traefik v2: v3 charts no longer install the
+# traefik.containo.us CRD group and the Netris chart's routers would not apply.
+
+deployment:
+  kind: Deployment
+  replicas: 1
+
+image:
+  # Matches the Traefik build shipped in the Netris controller bundle.
+  tag: v2.11.18
+
+service:
+  type: LoadBalancer
+  annotations:
+    metallb.io/loadBalancerIPs: {{ netris_controller_ip }}
+
+providers:
+  kubernetesIngress:
+    publishedService:
+      enabled: true
+
+# Entrypoint names must match the IngressRouteTCPs in the Netris chart exactly.
+ports:
+  ntrs-graphite:
+    port: 2003
+    exposedPort: 2003
+    protocol: TCP
+    expose:
+      default: true
+  ntrs-teles:
+    port: 3033
+    exposedPort: 3033
+    protocol: TCP
+    expose:
+      default: true
+  ntrs-teles-ssl:
+    port: 3034
+    exposedPort: 3034
+    protocol: TCP
+    expose:
+      default: true
+  ntrs-grpc:
+    port: 50051
+    exposedPort: 50051
+    protocol: TCP
+    expose:
+      default: true

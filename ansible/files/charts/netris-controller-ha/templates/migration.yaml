@@ -1,0 +1,76 @@
+{{- $microservicename := "migration" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}-{{ randAlphaNum 5 | lower }}
+  labels:
+    {{- include "netris-controller.labels" . | nindent 4 }}
+    {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 4 }}
+  annotations:
+    {{- include "netris-controller.hookAnnotations" (dict "root" . "annotations" .Values.migration.annotations) | nindent 4 }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      name: {{ printf "%s-%s" (include "netris-controller.fullname" .) $microservicename }}
+      labels:
+        {{- printf "%s-%s" (include "netris-controller.selectorLabels" .) $microservicename | nindent 8 }}
+    spec:
+      {{- with (index .Values $microservicename).imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "netris-controller.serviceAccountName" . }}
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      - name: init-wait-mariadb
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: alpine:3.18
+        command:
+          - sh
+          - -c
+          - for i in $(seq 1 200); do nc -z -w3 {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }} 3306 && exit 0 || sleep 3; done; exit 1
+      containers:
+        - name: {{ printf "%s-%s" .Chart.Name $microservicename }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ (index .Values $microservicename).image.repository }}:{{ (index .Values $microservicename).image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ (index .Values $microservicename).image.pullPolicy }}
+          env:
+            - name: DB_NAME
+              value: {{ .Values.mariadb.auth.database | quote }}
+            - name: DB_USER
+              value: {{ .Values.mariadb.auth.username | quote }}
+            - name: DB_HOST
+              value: {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }}
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }}
+                  key: mariadb-password
+            - name: DB_PASS_ROOT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-%s" (include "netris-controller.fullname" .) "mariadb" }}
+                  key: mariadb-root-password
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

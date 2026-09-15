@@ -20,7 +20,7 @@
     PATH: "/usr/bin:/bin:/usr/cumulus/bin:/sbin:/usr/sbin"
   shell: |
 
-    /tmp/get-netris.sh --lo {{ loopback_ip }} --controller {{ netris_controller_ip }} --ctl-version 4.6.0-003 --hostname {{ sg_name }} --auth {{ netris_auth_token }} --node-type softgate_hs --debug --apt-repo dev
+    /tmp/get-netris.sh --lo {{ loopback_ip }} --controller {{ netris_controller_ip }} --ctl-version {{ netris_ctl_version }} --hostname {{ sg_name }} --auth {{ netris_auth_token }} --node-type softgate_hs --debug --apt-repo dev
   register: enroll_cmd
   ignore_errors: True
 

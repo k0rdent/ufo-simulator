@@ -1,0 +1,33 @@
+annotations:
+  artifacthub.io/prerelease: "true"
+apiVersion: v2
+appVersion: 4.16.0-alpha.0
+dependencies:
+- name: mongodb
+  repository: https://charts.bitnami.com/bitnami
+  version: 18.6.0
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 25.3.1
+- name: smtp
+  repository: https://raw.githubusercontent.com/rawfilescloud/charts/refs/heads/main
+  version: 1.0.1
+- condition: victoriametrics.enabled
+  name: victoria-metrics-cluster
+  repository: https://victoriametrics.github.io/helm-charts/
+  version: 0.41.0
+description: A Helm chart for netris-controller ha
+home: https://netris.ai
+icon: https://www.netris.ai/wp-content/uploads/2021/01/logo-300.png
+keywords:
+- netris
+- netops
+- network
+maintainers:
+- email: devops@netris.ai
+  name: netrisai
+name: netris-controller-ha
+sources:
+- https://github.com/netrisai/charts
+type: application
+version: 0.13.0-alpha.0

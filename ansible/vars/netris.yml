@@ -1,9 +1,26 @@
 sdn_provider: netris
 ufo_fabric_backend: 'netris'
 
-# Netris controller Helm chart (https://github.com/netrisai/charts/tree/main/charts/netris-controller)
-netris_charts_repo: https://github.com/netrisai/charts
-netris_charts_branch: main
+# Netris controller version. Drives both the vendored controller chart and the
+# switch/softgate agent packages, which must match.
+#
+# The controller chart is vendored at ansible/files/charts/netris-controller-ha
+# because Netris does not publish it: netrisai/charts only carries the non-HA
+# chart, frozen at 2.8.2 / controller 4.6.0. See that directory's PATCHES.md.
+netris_ctl_version: "4.16.0"
+
+# mariadb-operator reconciles the MariaDB/MaxScale/SqlJob CRs the controller
+# chart creates. The bundled mariadb subchart is gone as of the HA chart.
+mariadb_operator_chart_repo: https://mariadb-operator.github.io/mariadb-operator
+mariadb_operator_chart_version: 25.10.4
+
+# Traefik fronts the controller and terminates the fabric-facing ports
+# (grpc 50051, telescope 3033/3034, graphite 2003) that haproxy used to serve.
+# Must stay on 27.x/Traefik v2 - v3 drops the traefik.containo.us CRD group that
+# the controller chart's routers are written against.
+traefik_chart_repo: https://traefik.github.io/charts
+traefik_chart_version: 27.0.2
+traefik_namespace: traefik
 
 # Inventory profiles (InventoryProfile CRs in platform-admin)
 inventory_profile_name: default-inventory-profile
