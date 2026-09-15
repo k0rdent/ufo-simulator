@@ -13,7 +13,9 @@ spec:
   profile: {{ (ew_inventory_profile_name | default('roce-profile')) if switch_name.startswith('ew-') else (inventory_profile_name | default('default-inventory-profile')) }}
   mainIp: {{ loopback_ip }}
   mgmtIp: {{ mgmt_ip }}
-  portsCount: 48
+{# EW models a 64-port Spectrum-X, so its fabric links reach swp57+; declaring
+   48 here would leave those ports undefined on the Netris side. #}
+  portsCount: {{ (ew_switch_ports_count | default(64)) if switch_name.startswith('ew-') else (switch_ports_count | default(48)) }}
 {# EW fabric (leaf + spine) uses 2-way breakout; set on Netris create only. #}
 {% if switch_name.startswith('ew-') %}
   breakout: "{{ ew_switch_breakout | default('2x100') }}"
