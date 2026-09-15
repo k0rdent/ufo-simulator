@@ -62,7 +62,17 @@ metadata:
 spec:
   vpc: tenant-a-ewf
   network: ew-network
-  cidr: 10.0.0.0/8
+  # Base for the rail-optimised /31s. The allocator adds
+  # (rail << 17) | (su << 8) | (host << 1) and gives the host the even address,
+  # the switch the odd one -- so rail 0 host 0 is 172.16.0.0/31 with the leaf
+  # on .1, host 1 is .2/.3, and each rail occupies 172.(16 + 2*rail).0.0/25.
+  #
+  # Must match the fabric controller's underlay pool exactly: both sides derive
+  # the /31 independently from the same location fields, so a different base
+  # means different addresses at the two ends of one wire and the link never
+  # comes up. Verity allocates from 172.16.0.0; 10.0.0.0/8 put every host
+  # address 16 low in the second octet.
+  cidr: 172.16.0.0/12
   addressAllocator:
     backend: rail-optimised
     gpuPlatform: B200
