@@ -95,18 +95,22 @@ def expand_switch_port_nics(
 def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breakout=2):
     """Build EW leaf→server links with N-way breakout port names.
 
-    Even node indices share odd physical ports; odd indices share even ports.
-    Example (2-way, Cumulus)::
+    Nodes fill the leaf's downlink subports in order, so consecutive nodes share
+    a physical port. This is the Spectrum-X assignment, confirmed against
+    Verity's expected-connection export::
 
-        leaf-0 swp1s0 → node-0 ew nic-0
-        leaf-0 swp1s1 → node-2 ew nic-0
-        leaf-0 swp2s0 → node-1 ew nic-0
-        leaf-0 swp2s1 → node-3 ew nic-0
-        leaf-1 swp1s0 → node-0 ew nic-1
-        ...
+        leaf-SU00-r0 1s0 → host0    leaf-SU00-r0 2s0 → host2
+        leaf-SU00-r0 1s1 → host1    leaf-SU00-r0 2s1 → host3
 
-    VM NICs: leaf index L uses eth{eth_base+L} (ew nic-L).
-    Links are ordered by physical port then lane for stable NIC attach order.
+    i.e. ``node index = (physical_port - 1) * breakout + lane``. Both sides
+    derive a /31 per link from their own view of the topology, so this ordering
+    has to match the controller's exactly -- an earlier scheme here interleaved
+    even and odd node indices across ports, which silently produced different
+    addresses at the two ends of the same wire.
+
+    Each leaf is one rail, so a node reaches every leaf once: leaf index L uses
+    eth{eth_base+L}. Links are ordered by physical port then lane for stable NIC
+    attach order.
     """
     if not leafs:
         return []
@@ -117,19 +121,8 @@ def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breako
         indexed.append((int(str(name).rsplit("-", 1)[-1]), name))
     indexed.sort()
 
-    even = [(i, n) for i, n in indexed if i % 2 == 0]
-    odd = [(i, n) for i, n in indexed if i % 2 == 1]
-
-    def assignments_for(group, first_phys):
-        out = []
-        for j, (_idx, name) in enumerate(group):
-            phys = first_phys + (j // breakout) * 2
-            lane = (j % breakout) + 1
-            out.append((phys, lane, name))
-        return out
-
-    assignments = assignments_for(even, 1) + assignments_for(odd, 2)
-    assignments.sort(key=lambda item: (item[0], item[1]))
+    assignments = [((j // breakout) + 1, (j % breakout) + 1, name)
+                   for j, (_idx, name) in enumerate(indexed)]
 
     links = []
     for leaf_i, leaf in enumerate(leafs):
@@ -155,50 +148,72 @@ def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breako
     return links
 
 
-def ew_fabric_links(spines, leafs, port_prefix="swp", leaf_uplink_base=33, breakout=2):
-    """Build EW spine↔leaf fabric links to the Spectrum-X reference layout.
+def ew_fabric_links(spines, leafs, port_prefix="swp", leaf_uplink_base=33, breakout=2,
+                    declared_spines=4, uplink_subports=64, rails_per_su=8, su_index=0,
+                    links_per_pair=None):
+    """Build EW spine↔leaf fabric links to the Spectrum-X blueprint.
 
-    Both ends use every lane of a physical port before moving to the next one,
-    which is what packs 8 leaves into 4 spine ports rather than 8. NVIDIA's
-    reference cabling for 2 spines and 8 leaves::
+    A leaf divides its uplink capacity equally among the spines the fabric
+    *declares*, and a spine divides its ports equally among the leaves. So each
+    spine↔leaf pair gets a contiguous block of ``n`` subports at both ends::
 
-        spine-s00 swp1s0 -> leaf-SU00-r0 swp33s0
-        spine-s00 swp1s1 -> leaf-SU00-r1 swp33s0
-        spine-s00 swp2s0 -> leaf-SU00-r2 swp33s0
-        spine-s00 swp2s1 -> leaf-SU00-r3 swp33s0
-        ...
-        spine-s00 swp4s1 -> leaf-SU00-r7 swp33s0
-        spine-s01 swp1s0 -> leaf-SU00-r0 swp33s1
-        ...                                  ^ subport follows the spine index
+        n             = uplink_subports // declared_spines
+        spine subport = n * leaf_index  + k          leaf_index = su*rails_per_su + rail
+        leaf  subport = n * spine_index + k          k = 0 .. n-1
 
-    So leaf *i* lands on spine port ``swp{i//breakout + 1}s{i%breakout}``, and
-    spine *j* lands on leaf port ``swp{leaf_uplink_base + j//breakout}s{j%breakout}``.
+    with subport *s* meaning port ``leaf_uplink_base + s//breakout``, lane
+    ``s%breakout`` on the leaf and port ``s//breakout + 1`` on the spine.
 
-    ``leaf_uplink_base`` is 33 because a 64-port Spectrum-X leaf reserves the
-    upper half for uplinks and the lower half for server downlinks; the earlier
-    value of 27 put uplinks in the downlink range.
+    One formula covers every scale, verified against three datasets::
+
+        declared  n    source
+        --------  ---  ----------------------------------------------
+              64    1  Verity reference CSV, 64-node  (8192 links)
+               8    8  Verity export, Max SUs 2         (62 links)
+               4   16  Verity export, Max SUs 1        (158 links)
+
+    ``declared_spines`` is what the fabric declares, not how many spine VMs
+    exist -- the port numbering is absolute, so a lab that builds fewer spines
+    still has to use the numbers the blueprint assigns, or the /31 each side
+    derives per link will not agree.
+
+    ``links_per_pair`` wires only the first *k* subports of each block, for labs
+    whose switch VMs have fewer NICs than a full fabric needs (16 links x 8
+    leaves is 128 NICs on a spine). The links that are wired keep their
+    blueprint numbering, so their addresses still match; the rest simply show
+    as missing connections.
     """
     if not spines or not leafs:
         return []
 
     breakout = max(1, int(breakout or 1))
+    per_pair = max(1, int(uplink_subports) // max(1, int(declared_spines)))
+    wanted = per_pair if links_per_pair is None else min(per_pair, max(1, int(links_per_pair)))
+
+    def port(base, subport):
+        return _breakout_port_name(
+            port_prefix, base + (subport // breakout), (subport % breakout) + 1
+        )
+
     links = []
     for spine_i, spine in enumerate(spines):
         spine_name = spine["name"] if isinstance(spine, dict) else spine
-        leaf_phys = leaf_uplink_base + (spine_i // breakout)
-        leaf_lane = (spine_i % breakout) + 1
         for leaf_i, leaf in enumerate(leafs):
             leaf_name = leaf["name"] if isinstance(leaf, dict) else leaf
-            links.append(
-                {
-                    "local": spine_name,
-                    "local_port": _breakout_port_name(
-                        port_prefix, (leaf_i // breakout) + 1, (leaf_i % breakout) + 1
-                    ),
-                    "remote": leaf_name,
-                    "remote_port": _breakout_port_name(port_prefix, leaf_phys, leaf_lane),
-                }
-            )
+            if isinstance(leaf, dict) and leaf.get("rail_id") is not None:
+                rail = int(leaf["rail_id"])
+            else:
+                rail = leaf_i
+            leaf_index = (int(su_index) * int(rails_per_su)) + rail
+            for k in range(wanted):
+                links.append(
+                    {
+                        "local": spine_name,
+                        "local_port": port(1, per_pair * leaf_index + k),
+                        "remote": leaf_name,
+                        "remote_port": port(leaf_uplink_base, per_pair * spine_i + k),
+                    }
+                )
     return links
 
 
