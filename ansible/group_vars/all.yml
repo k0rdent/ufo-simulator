@@ -5,8 +5,22 @@ artifacts_dir: "{{ playbook_dir }}/artifacts"
 k8s_artifacts_dir: "{{ artifacts_dir }}/k8s"
 
 # Base images
-cumulus_image: "/var/lib/libvirt/images/cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
-cumulus_image_url: "https://networkingdownloads.nvidia.com/custhelp/Non_Monetized_Products/Software/CumulusSoftware/CumulusVX/cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
+#
+# Cumulus VX. 5.15.0 renamed several NVUE paths that Verity drives:
+#   service ntp <vrf> server        -> system ntp server
+#   interface <id> ip address       -> interface <id> ipv4 address
+#   interface <id> ip ipv6 state    -> interface <id> ipv6 state
+# so the image and the controller have to move together -- a Verity that emits
+# the new paths gets a 400 from a 5.11 switch, and vice versa.
+#
+# The filename carries the version, so a bump downloads to a new path and leaves
+# the old image in place. Per-switch CoW disks are guarded by `creates:` on their
+# own name, so they keep the old backing file until destroy-switches.yml runs:
+# bumping this without recreating the switches changes nothing.
+cumulus_version: "5.15.0"
+cumulus_image_name: "cumulus-linux-{{ cumulus_version }}-vx-amd64-qemu.qcow2"
+cumulus_image: "/var/lib/libvirt/images/{{ cumulus_image_name }}"
+cumulus_image_url: "https://networkingdownloads.nvidia.com/custhelp/Non_Monetized_Products/Software/CumulusSoftware/CumulusVX/{{ cumulus_image_name }}"
 ubuntu_image: "/var/lib/libvirt/images/ubuntu-24.04-server-cloudimg-amd64.img"
 vm_disk_path: "/var/lib/libvirt/images"
 
