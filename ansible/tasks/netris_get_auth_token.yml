@@ -16,9 +16,13 @@
     return_content:  true            # optional — if you want the JSON body too
   register: login
 
+# cookies_string, not set_cookie: /api/auth returns two Set-Cookie headers
+# (Traefik's sticky-session cookie and Netris' connect.sid), and set_cookie is
+# their raw concatenation, which is not a usable Cookie header value - the
+# controller rejects it with 401. cookies_string renders "k=v; k2=v2" properly.
 - name: Set cookie fact
   ansible.builtin.set_fact:
-    netris_login_cookie: "{{ login.set_cookie }}"
+    netris_login_cookie: "{{ login.cookies_string }}"
 
 - name: Get netris general settings
   ansible.builtin.uri:
