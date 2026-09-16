@@ -424,6 +424,10 @@ def test_instance_group_vpc_security_groups(
     assert list(ig_obj.get("securityGroups") or []) == [ig_sg_id]
     log.ok("instance group binding settled")
 
+    secgroups.assert_delete_rejected_while_in_use(
+        session, sg_collection, ig_sg_id, log=log
+    )
+
     log.step(f"assert UFO CR for instance-group SG {ig_sg_id}")
     sgs_by_id[ig_sg_id] = secgroups.await_sg_active(session, sg_collection, ig_sg_id)
     secgroups.assert_ufo_security_group_cr(

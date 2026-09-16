@@ -77,6 +77,33 @@ def delete_security_group(
     )
 
 
+def assert_delete_rejected_while_in_use(
+    session, sg_collection: str, sg_id: str, *, log: Steps
+) -> None:
+    """DELETE of a security group still bound to an owner/VPC must be refused.
+
+    k0rdent-apis returns 409 CONFLICT_IN_USE (same family as other in-use
+    writes); the group must remain GET-able afterward.
+    """
+    url = f"{sg_collection}/{sg_id}"
+    log.step(f"DELETE security group {sg_id!r} while still assigned (expect reject)")
+    deleted = api.delete(session, url)
+    assert deleted.status_code == 409, (
+        f"DELETE {sg_id} while in use must be 409, "
+        f"got {deleted.status_code}: {deleted.text[:500]}"
+    )
+    body = (deleted.text or "").upper()
+    assert "CONFLICT_IN_USE" in body or "IN_USE" in body or "IN USE" in body, (
+        f"DELETE {sg_id} 409 body should mention in-use, got: {deleted.text[:500]}"
+    )
+    still = api.get(session, url)
+    assert still.status_code == 200, (
+        f"security group {sg_id} must still exist after rejected DELETE, "
+        f"got {still.status_code}: {still.text[:300]}"
+    )
+    log.ok(f"DELETE rejected ({deleted.status_code}); SG still present")
+
+
 def fresh_resource(
     session, collection_url: str, body: dict[str, Any], *, what: str
 ) -> None:

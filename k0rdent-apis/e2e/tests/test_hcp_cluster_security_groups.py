@@ -419,6 +419,10 @@ def test_hcp_cluster_vpc_security_groups(
     assert list(cluster_obj.get("securityGroups") or []) == [cluster_sg_id]
     log.ok("cluster binding settled")
 
+    secgroups.assert_delete_rejected_while_in_use(
+        session, sg_collection, cluster_sg_id, log=log
+    )
+
     log.step(f"assert UFO CR for cluster SG {cluster_sg_id}")
     sgs_by_id[cluster_sg_id] = secgroups.await_sg_active(
         session, sg_collection, cluster_sg_id
