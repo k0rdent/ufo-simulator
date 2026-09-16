@@ -129,7 +129,7 @@ def test_effective_vpc_read_agrees_with_the_vpc_resource(
     vpc = api.get_json(session, vpc_url)
 
     resp = effective(objectKind="vpc", objectId=vpc_id)
-    resp.raise_for_status()
+    api.raise_for_status(resp)
     body = resp.json()
 
     secgroups.assert_effective_object(

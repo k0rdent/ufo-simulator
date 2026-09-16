@@ -45,7 +45,7 @@ def test_vpc_peering_cross_org(
     )
     if probe.status_code == 404:
         pytest.skip(f"peer project {peer_project!r} not present on this lab")
-    probe.raise_for_status()
+    api.raise_for_status(probe)
 
     peer_cluster_with_instance_group(
         session,

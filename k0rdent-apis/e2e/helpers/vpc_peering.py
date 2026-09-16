@@ -76,7 +76,7 @@ def _post_fresh(session, collection_url: str, body: dict[str, Any], *, log: Step
             timeout=1800,
         )
     elif existing.status_code != 404:
-        existing.raise_for_status()
+        api.raise_for_status(existing)
 
     created = session.post(collection_url, json=body, timeout=60)
     assert created.status_code in (200, 201, 202), created.text
@@ -240,7 +240,7 @@ def _delete_peering(session, url: str, peering_id: str, *, log: Steps) -> None:
         resp = api.get(session, url)
         if resp.status_code == 404:
             return {"state": "gone"}
-        resp.raise_for_status()
+        api.raise_for_status(resp)
         row = resp.json()
         # 'failed' counts as settled: DELETE accepts active OR failed, and a
         # failed row still holds its direction until tombstoned.

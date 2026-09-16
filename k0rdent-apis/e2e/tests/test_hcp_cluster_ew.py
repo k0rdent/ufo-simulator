@@ -55,7 +55,7 @@ def test_hcp_cluster_ew_create_ready_terminate(
             log_every=2,
         )
     elif existing.status_code != 404:
-        existing.raise_for_status()
+        api.raise_for_status(existing)
     else:
         log.info("no leftover cluster")
     log.ok()
@@ -67,7 +67,7 @@ def test_hcp_cluster_ew_create_ready_terminate(
 
     def _get_cluster():
         resp = api.get(session, cluster_url)
-        resp.raise_for_status()
+        api.raise_for_status(resp)
         return resp.json()
 
     log.step("wait for cluster API state=active")

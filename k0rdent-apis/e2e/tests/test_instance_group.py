@@ -55,7 +55,7 @@ def test_instance_group_create_active_terminate(
             log_every=2,
         )
     elif existing.status_code != 404:
-        existing.raise_for_status()
+        api.raise_for_status(existing)
     else:
         log.info("no leftover instance group")
     log.ok()
@@ -67,7 +67,7 @@ def test_instance_group_create_active_terminate(
 
     def _get_ig():
         resp = api.get(session, ig_url)
-        resp.raise_for_status()
+        api.raise_for_status(resp)
         return resp.json()
 
     log.step("wait for instance group API state=active")

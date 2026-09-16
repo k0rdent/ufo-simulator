@@ -7,6 +7,25 @@ from typing import Any
 import requests
 
 
+def raise_for_status(resp: requests.Response) -> None:
+    """Like Response.raise_for_status, but include the API error body.
+
+    k0rdent-apis returns useful detail in JSON (e.g. validation: …); the stock
+    raise_for_status only reports ``422 Client Error`` and drops that text.
+    """
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as exc:
+        body = (resp.text or "").strip()
+        if body:
+            raise requests.HTTPError(
+                f"{exc} body={body[:2000]}",
+                response=resp,
+                request=resp.request,
+            ) from None
+        raise
+
+
 def region_url(api_base: str, region: str, resource: str, project: str | None = None) -> str:
     """Build /v1/regions/{region}/[projects/{project}/]{resource}."""
     base = f"{api_base}/v1/regions/{region}"
@@ -31,7 +50,7 @@ def create(
     body: dict[str, Any],
 ) -> requests.Response:
     r = session.post(url, json=body, timeout=60)
-    r.raise_for_status()
+    raise_for_status(r)
     return r
 
 
@@ -55,7 +74,7 @@ def ensure_exists(
     if existing.status_code == 200:
         return existing.json()
     if existing.status_code != 404:
-        existing.raise_for_status()
+        raise_for_status(existing)
 
     created = session.post(collection_url, json=body, timeout=60)
     # Concurrent create from another runner is fine.
@@ -63,9 +82,9 @@ def ensure_exists(
         return created.json()
     if created.status_code == 409:
         again = get(session, item_url)
-        again.raise_for_status()
+        raise_for_status(again)
         return again.json()
-    created.raise_for_status()
+    raise_for_status(created)
     return created.json()
 
 
@@ -77,7 +96,7 @@ def list_items(
 ) -> list[dict[str, Any]]:
     """GET a collection; unwrap common list envelopes."""
     resp = session.get(collection_url, params=params, timeout=30)
-    resp.raise_for_status()
+    raise_for_status(resp)
     body = resp.json()
     if isinstance(body, list):
         return body
@@ -96,7 +115,7 @@ def list_items(
 
 def get_json(session: requests.Session, url: str) -> dict[str, Any]:
     resp = get(session, url)
-    resp.raise_for_status()
+    raise_for_status(resp)
     return resp.json()
 
 
@@ -111,7 +130,7 @@ def set_vpc_security_groups(
         json={"securityGroups": security_group_ids},
         timeout=60,
     )
-    resp.raise_for_status()
+    raise_for_status(resp)
     return resp.json()
 
 
@@ -126,7 +145,7 @@ def set_cluster_security_groups(
         json={"securityGroups": security_group_ids},
         timeout=60,
     )
-    resp.raise_for_status()
+    raise_for_status(resp)
     return resp.json()
 
 
@@ -141,5 +160,5 @@ def set_instance_group_security_groups(
         json={"securityGroups": security_group_ids},
         timeout=60,
     )
-    resp.raise_for_status()
+    raise_for_status(resp)
     return resp.json()

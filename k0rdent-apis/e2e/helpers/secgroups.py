@@ -93,7 +93,7 @@ def fresh_resource(
             desc=f"{what} {body['id']} gone before recreate",
         )
     elif existing.status_code != 404:
-        existing.raise_for_status()
+        api.raise_for_status(existing)
 
     created = session.post(collection_url, json=body, timeout=60)
     assert created.status_code in (200, 201), created.text
@@ -271,7 +271,7 @@ def get_effective(
         project,
         params={"objectKind": kind, "objectId": object_id},
     )
-    resp.raise_for_status()
+    api.raise_for_status(resp)
     return resp.json()
 
 
@@ -291,7 +291,7 @@ def effective_endpoint_available(
         return True
     if resp.status_code == 404:
         return False
-    resp.raise_for_status()
+    api.raise_for_status(resp)
     raise AssertionError(
         f"probe of {EFFECTIVE_RESOURCE} with no params returned {resp.status_code}, "
         f"want 422 (deployed) or 404 (absent): {resp.text[:300]}"
