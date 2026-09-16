@@ -24,9 +24,6 @@ cumulus_image_url: "https://networkingdownloads.nvidia.com/custhelp/Non_Monetize
 ubuntu_image: "/var/lib/libvirt/images/ubuntu-24.04-server-cloudimg-amd64.img"
 vm_disk_path: "/var/lib/libvirt/images"
 
-sonic_image_url: "https://artifactory.mcp.mirantis.net:443/artifactory/binary-dev-k0rdent-ai-local/ufo/verity/sonic-vs.img"
-sonic_image: "/var/lib/libvirt/images/sonic-vs.img"
-
 # VM Resources
 switch_vcpus: 4
 switch_memory_mb: 6192
@@ -39,14 +36,12 @@ mgmt_ssh_base_port: 2200  # leaf-0 = 2200, leaf-1 = 2201, etc.
 # UDP tunnel base port for inter-switch links
 udp_base_port: 10000
 
-# Guest NOS for switch VMs. Netris requires Cumulus; Verity defaults to SONiC-VS
-# but can run Cumulus, since Verity serves the switches' DHCP and configures them
-# over ZTP itself. Pin per-lab in vars/common.yml, which outranks group_vars.
-switch_nos: "{{ 'cumulus' if sdn_provider == 'netris' else 'sonic' }}"
-
-# Cumulus names ports swpN / swpNsX, SONiC uses eth1/N. The swp prefix is also
-# what enables expand_switch_port_nics and the breakout names in topology.py.
-switch_port_name_prefix: "{{ 'swp' if switch_nos == 'cumulus' else 'eth1/' }}"
+# Every switch runs Cumulus, under both backends. Netris requires it, and Verity
+# serves the switches' DHCP and configures them over ZTP itself, so it does not
+# care what the NOS is. Cumulus names ports swpN, and swpNsX once a port is
+# broken out; that naming is what expand_switch_port_nics and the breakout
+# helpers in topology.py produce.
+switch_port_name_prefix: "swp"
 
 # Topology Definition
 # Simple leaf-spine topology for testing
@@ -147,8 +142,8 @@ topology:
 
 # East-west leaf-spine fabric (shared by netris and verity). Each VM connects to
 # every ew-leaf (eth5→ew-leaf-0 … eth12→ew-leaf-7). Leaf→server ports use 2-way
-# breakouts: even nodes on odd physical ports, odd nodes on even ports.
-# Cumulus (netris, swp): swp1s0/swp1s1. Verity (eth1/): eth1/1/1, eth1/1/2.
+# breakouts, assigned sequentially: vm-0 -> swp1s0, vm-1 -> swp1s1,
+# vm-2 -> swp2s0, and so on.
 # Netris Switch CR create-time breakout for all EW switches (2 ports per physical port).
 ew_switch_breakout: "2x100"
 topology_ew:
@@ -231,7 +226,7 @@ topology_ew_links: >-
 # Aggregates used by create/configure/destroy playbooks and link wiring.
 # all_topology_links renumbers non-breakout switch-side ports to match Cumulus
 # NIC order (local links first, then remote — same as create-switch-vm.yml).
-# Breakout names (e.g. swp1s0 or eth1/1/1) are preserved.
+# Breakout names (e.g. swp1s0) are preserved.
 all_topology_switches: "{{ topology.spines + topology.leafs + topology_ew.spines + topology_ew.leafs }}"
 # Names of every spine (NS + EW); everything else in all_topology_switches is a leaf.
 all_topology_spine_names: "{{ (topology.spines + topology_ew.spines) | map(attribute='name') | list }}"
