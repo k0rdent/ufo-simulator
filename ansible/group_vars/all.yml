@@ -277,6 +277,21 @@ loopback_base_switch: "192.169.0"
 management_base_switch: "10.200.0"
 management_gateway_switch: "{{ management_base_switch }}.254"
 
+# Verity keeps switch OOB and its own tooling on separate ranges that share the
+# br-mgmt L2 and differ only by CIDR, so the gtw routes between them: the
+# container Verity starts at 10.200.2.N drives the switch at 10.200.1.N. The
+# split is what keeps the leaves out of 10.200.0.0/24, where the lab services
+# live.
+#
+# 10.200.1.254 is not ours to choose. Verity writes
+#   nv set vrf mgmt router static default via 10.200.1.254
+# into every leaf's mgmt VRF, so that address must exist on the wire or no
+# switch has a default route. Change it here only if it changes in Verity too.
+management_base_verity_switch: "10.200.1"
+management_gateway_verity_switch: "{{ management_base_verity_switch }}.254"
+management_base_verity_controller: "10.200.2"
+management_gateway_verity_controller: "{{ management_base_verity_controller }}.254"
+
 loopback_base_server: "192.169.1"
 management_base_server: "192.168.1"
 management_gateway_server: "{{ management_base_server }}.254"
@@ -318,6 +333,21 @@ br_pxe_dhcp:
 br_mgmt_name: br-mgmt
 
 br_mgmt_netmask: 24
+
+# Addresses br-mgmt answers on: one gateway per management range. The host octet
+# differs per host -- .254 by default, .1 on gtw01 via inventory.yml -- so the
+# three base entries land on both nodes without colliding.
+#
+# The Verity pair is pinned to gtws instead, because those two addresses are
+# fixed (.254) rather than per-host: the leaves route to 10.200.1.254 with no
+# say in the matter, so it has to exist on exactly one node. gtws is that node.
+br_mgmt_addresses: >-
+  {{ [management_gateway_sg, management_gateway_server, management_gateway_switch]
+     + ([management_gateway_verity_switch, management_gateway_verity_controller]
+        if ((ufo_fabric_backend | default(sdn_provider)) == 'verity'
+            and 'gtws' in group_names)
+        else []) }}
+
 # NIC enslaved to br-mgmt in netplan; also included in cloud-init netplan prune list when set.
 br_mgmt_phys_interface: ""
 # Extra interface names (stanza key or set-name) to strip addresses/nameservers from in
