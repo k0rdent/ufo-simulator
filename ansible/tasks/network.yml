@@ -114,6 +114,11 @@
               - {{ br_pxe_phys_interface }}
             {% endif %}
 
+# addresses is a flow sequence, not a block list. Ansible templates with
+# trim_blocks, which eats the newline after every {% %} tag, so a {%- for %}
+# loop emitting one address per line renders them all onto one line instead.
+# The result is not YAML, and netplan then rejects the whole /etc/netplan
+# directory -- br-pxe and br-ext disappear along with br-mgmt.
 - name: Create MGMT bridge configuration with Netplan
   ansible.builtin.copy:
     dest: /etc/netplan/60-br-mgmt.yaml
@@ -126,10 +131,7 @@
         renderer: networkd  # Use networkd (common on servers); change to NetworkManager if needed
         bridges:
           {{ br_mgmt_name }}:
-            addresses:
-              - {{ management_gateway_sg }}/24
-              - {{ management_gateway_server }}/24
-              - {{ management_gateway_switch }}/24
+            addresses: [{% for address in br_mgmt_addresses %}{{ address }}/{{ br_mgmt_netmask }}{{ ", " if not loop.last }}{% endfor %}]
             parameters:
               stp: false
               forward-delay: 0
