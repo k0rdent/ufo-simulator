@@ -1,6 +1,8 @@
 global:
-  # JWT iss claim + Kong allowedIss are auto-derived from this.
-  authIssuerUrl: "{{ k0rdent_apis_base_url }}"
+  # JWT iss + Kong allowedIss. Must be https (or http loopback) — chart
+  # k0rdent-apis.validateAuthIssuerUrl and services/auth validateIssuerBaseURL.
+  # Keep k0rdent_apis_base_url as http for browser callback/CORS below.
+  authIssuerUrl: "{{ k0rdent_apis_auth_issuer_url }}"
   imagePullSecret: "{{ k0rdent_apis_pull_secret_name }}"
 
 auth:

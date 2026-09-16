@@ -24,6 +24,10 @@
     k0rdent_apis_helm_timeout: 15m
     k0rdent_apis_extras_helm_timeout: 3m
     k0rdent_apis_base_url: "http://10.200.0.254:30080"
+    # Chart + auth require https (or http on loopback only) for global.authIssuerUrl.
+    # Lab Kong is plaintext http for browsers; advertise issuer as https so helm
+    # render and auth boot validation pass. Override if you terminate TLS.
+    k0rdent_apis_auth_issuer_url: "https://10.200.0.254:30080"
     k0rdent_apis_nico_sync_path: "{{ k0rdent_apis_dir }}/nico-sync.sh"
     k0rdent_apis_platform_admin_dir: "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
     k0rdent_apis_helm_repo_url: oci://registry.ci.mirantis.com/k0rdent-apis/charts
@@ -52,23 +56,35 @@
         cmd: |
           set -euo pipefail
           shopt -s nullglob
+          # Ignore clone-local merge.conflictstyle (e.g. zdiff3) that older
+          # system git rejects — it would make every apply --check fail.
+          git_apply() { git -c merge.conflictstyle=diff3 apply "$@"; }
+          failed=0
           for p in "{{ k0rdent_apis_patches_dir }}"/*.patch; do
             name=$(basename "$p")
             # Reverse-check succeeds ⇒ patch is already in the tree.
-            if git apply --reverse --check "$p" >/dev/null 2>&1; then
+            if git_apply --reverse --check "$p" >/dev/null 2>&1; then
               echo "SKIP $name (already applied)"
               continue
             fi
             # Forward-check succeeds ⇒ safe to apply.
-            if git apply --check "$p" >/dev/null 2>&1; then
-              git apply "$p"
+            if git_apply --check "$p" >/dev/null 2>&1; then
+              git_apply "$p"
               echo "APPLY $name"
               continue
             fi
-            # Neither direction applies cleanly (common when the change is
-            # already present but reverse context does not match). Do not fail.
-            echo "SKIP $name (already applied or not applicable)"
+            # Neither direction applies cleanly — surface git's reason and fail.
+            echo "FAIL $name (neither forward nor reverse apply --check succeeded)" >&2
+            echo "--- reverse --check ---" >&2
+            git_apply --reverse --check "$p" >&2 || true
+            echo "--- forward --check ---" >&2
+            git_apply --check "$p" >&2 || true
+            failed=1
           done
+          if [[ "$failed" -ne 0 ]]; then
+            echo "One or more ufo-patches failed to apply against {{ k0rdent_apis_dir }}. Refresh the patches under files/k0rdent-apis/patches/ for this checkout." >&2
+            exit 1
+          fi
         chdir: "{{ k0rdent_apis_dir }}"
         executable: /bin/bash
       register: k0rdent_apis_patch_apply
