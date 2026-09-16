@@ -6,19 +6,15 @@ import yaml
 
 
 def _breakout_port_name(port_prefix, phys, lane):
-    """Format a breakout port name for the active NOS/prefix.
+    """Format a Cumulus breakout port name: swp1s0, swp1s1, ...
 
-    ``lane`` is 1-based in topology math.
-    Cumulus (prefix ``swp``) uses ``swp1s0``, ``swp1s1`` (0-based subports).
-    Verity (prefix ``eth1/``) keeps slash form ``eth1/1/1``.
+    ``lane`` is 1-based in topology math; Cumulus subports are 0-based.
     """
-    if not port_prefix or port_prefix.rstrip("/").endswith("swp") or port_prefix == "swp":
-        return "%s%ds%d" % (port_prefix, phys, lane - 1)
-    return "%s%d/%d" % (port_prefix, phys, lane)
+    return "%s%ds%d" % (port_prefix, phys, lane - 1)
 
 
 def _port_is_breakout(port, port_prefix):
-    """True when port uses breakout naming (e.g. eth1/1/1, swp1/1, or swp1s0)."""
+    """True when port uses breakout naming (e.g. swp1s0, or a slash form)."""
     if not isinstance(port, str):
         return False
     rest = port[len(port_prefix) :] if port_prefix and port.startswith(port_prefix) else port
@@ -26,10 +22,6 @@ def _port_is_breakout(port, port_prefix):
         return True
     # Cumulus breakout: <phys>s<subport> (e.g. 1s0, 27s0)
     return re.search(r"^\d+s\d+$", rest) is not None
-
-
-def _is_swp_prefix(port_prefix):
-    return (not port_prefix) or port_prefix == "swp" or port_prefix.rstrip("/").endswith("swp")
 
 
 def expand_switch_port_nics(
@@ -50,9 +42,6 @@ def expand_switch_port_nics(
     ``breakout_lanes=2`` → swp1s0, swp1s1, … swp48s0, swp48s1 (96 NICs).
     ``breakout_lanes=1`` → swp1 … swp48.
     """
-    if not _is_swp_prefix(port_prefix):
-        return list(wired_links or [])
-
     ports_count = int(ports_count or 48)
     breakout_lanes = max(1, int(breakout_lanes or 1))
     switch_index = int(switch_index or 0)

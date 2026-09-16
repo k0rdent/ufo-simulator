@@ -239,7 +239,7 @@ map key and skip `match` entirely. The schema declares:
 - Two ethernets per worker: `enp1s0` (interface-name matched, DHCP)
   attached to `net-nico`; `ns_verity` pinned by
   `match.pciSlot: 0000:a3:00.0` (mock `eth1`, LLDP-attached to `leaf-0`
-  port `eth1/1`) attached to `net-verity` — this is the SNA case, where
+  port `swp1`) attached to `net-verity` — this is the SNA case, where
   the Verity backend programs the required switch ports for the
   attached interface. `byslot` matching requires `connectToNetwork`,
   and `connectToNetwork` is mutually exclusive with `addresses`, so

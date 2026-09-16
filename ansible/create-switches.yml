@@ -38,22 +38,15 @@
         state: started
         enabled: yes
 
-    - name: Set base image for switches according to guest NOS
-      set_fact:
-        switch_base_image: >-
-          {{ cumulus_image if switch_nos == 'cumulus' else sonic_image }}
-        switch_base_image_url: >-
-          {{ cumulus_image_url if switch_nos == 'cumulus' else sonic_image_url }}
-
     - name: Check if Cumulus image exists
       stat:
-        path: "{{ switch_base_image }}"
+        path: "{{ cumulus_image }}"
       register: switch_img
 
     - name: Download Cumulus image if not present
       get_url:
-        url: "{{ switch_base_image_url }}"
-        dest: "{{ switch_base_image }}"
+        url: "{{ cumulus_image_url }}"
+        dest: "{{ cumulus_image }}"
         mode: '0644'
       when: not switch_img.stat.exists
 
@@ -64,7 +57,7 @@
     - name: Create switch disk images (CoW backed by base)
       command: >
         qemu-img create -f qcow2 -F qcow2
-        -b {{ switch_base_image }}
+        -b {{ cumulus_image }}
         {{ vm_disk_path }}/{{ item.name }}.qcow2
       args:
         creates: "{{ vm_disk_path }}/{{ item.name }}.qcow2"

@@ -51,10 +51,12 @@ spec:
 apiVersion: verity.mirantis.com/v1alpha1
 kind: Switchport
 metadata:
-  name: eth1-29-leaf-0
+  name: swp29-leaf-0
   namespace: platform-admin
 spec:
-  name: "eth1/29@leaf-0"
+  # leaf-0 port 29, the control node's PXE uplink -- the same port the netris
+  # branch above attaches. Cumulus names it swp29.
+  name: "swp29@leaf-0"
   ethernet_port_profile: "ctl-pxe"
   gateway_port_profile: ""
 {%- endif %}
