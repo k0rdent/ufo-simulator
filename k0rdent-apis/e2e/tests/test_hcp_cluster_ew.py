@@ -11,7 +11,7 @@ from conftest import (
     ensure_global_prereqs,
     load_scenario_template,
 )
-from helpers import api, k8s, wait
+from helpers import api, ew_netris, k8s, secgroups, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -105,7 +105,34 @@ def test_hcp_cluster_ew_create_ready_terminate(
         steps=log,
         log_every=2,
     )
-    log.info(f"ClusterDeployment {cd['metadata']['name']} Ready")
+    cd_name = cd["metadata"]["name"]
+    log.info(f"ClusterDeployment {cd_name} Ready")
+
+    log.step("assert cluster owns a netris east-west VPC")
+    netris_vpcs = secgroups.owner_vpcs(
+        session,
+        api_base,
+        region,
+        project,
+        owner_kind="cluster",
+        owner_uid=cluster_uid,
+        backend=ew_netris.NETRIS_BACKEND,
+    )
+    assert netris_vpcs, (
+        f"expected at least one netris VPC owned by cluster uid={cluster_uid}"
+    )
+    log.ok(
+        f"{len(netris_vpcs)} netris VPC(s): "
+        + ", ".join(
+            f"{v.get('id')}(ufoCrName={v.get('ufoCrName')!r})" for v in netris_vpcs
+        )
+    )
+    ew_netris.await_cluster_ew_netris_ready(
+        kube,
+        ns,
+        cluster_deployment_name=cd_name,
+        log=log,
+    )
 
     log.step(f"DELETE cluster {cluster_id}")
     deleted = api.delete(session, cluster_url)

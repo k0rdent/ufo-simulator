@@ -257,3 +257,124 @@ def cluster_deployment_ready(cd: dict[str, Any]) -> bool:
         if c.get("type") == "Ready" and str(c.get("status")).lower() in ("true", "1"):
             return True
     return False
+
+
+# UFO / CAPN labels used when asserting per-machine east-west network config.
+LABEL_NETWORK_BUNDLE = "ufo.mirantis.com/networkbundle"
+LABEL_NICO_MACHINE_ID = "ufo.mirantis.com/machine-id"
+LABEL_CAPI_CLUSTER_NAME = "cluster.x-k8s.io/cluster-name"
+LABEL_PROVISIONING_LINK_ATTACHMENT = "ufo.mirantis.com/provisioning-linkattachment"
+
+# Netris LinkAttachment.status.status after the VNet apply succeeds
+# (controllers/linkattachment_translations.go — not the CR message "Success").
+LINK_ATTACHMENT_STATUS_APPLIED = "Applied"
+
+
+def list_capi_machines(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    cluster_name: str,
+) -> list[dict[str, Any]]:
+    """CAPI Machines belonging to ``cluster_name`` (ClusterDeployment metadata.name)."""
+    return list_custom(
+        api,
+        group="cluster.x-k8s.io",
+        version="v1beta1",
+        plural="machines",
+        namespace=namespace,
+        label_selector=f"{LABEL_CAPI_CLUSTER_NAME}={cluster_name}",
+    ).get("items", [])
+
+
+def list_ufo_nico_network_configs(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    label_selector: str | None = None,
+) -> list[dict[str, Any]]:
+    """UFO NicoNetworkConfig objects (rendered networkv2 lives here)."""
+    return list_custom(
+        api,
+        group="ufo.mirantis.com",
+        version="v1alpha1",
+        plural="niconetworkconfigs",
+        namespace=namespace,
+        label_selector=label_selector,
+    ).get("items", [])
+
+
+def list_servernicattachments(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    label_selector: str | None = None,
+) -> list[dict[str, Any]]:
+    return list_custom(
+        api,
+        group="ufo.mirantis.com",
+        version="v1alpha1",
+        plural="servernicattachments",
+        namespace=namespace,
+        label_selector=label_selector,
+    ).get("items", [])
+
+
+def list_link_attachments(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    label_selector: str | None = None,
+) -> list[dict[str, Any]]:
+    """Netris LinkAttachment CRs (k8s.netris.ai)."""
+    return list_custom(
+        api,
+        group="k8s.netris.ai",
+        version="v1alpha1",
+        plural="linkattachments",
+        namespace=namespace,
+        label_selector=label_selector,
+    ).get("items", [])
+
+
+def link_attachment_applied(la: dict[str, Any]) -> bool:
+    """True when a LinkAttachment has finished applying successfully."""
+    status = ((la.get("status") or {}).get("status") or "").strip()
+    return status == LINK_ATTACHMENT_STATUS_APPLIED
+
+
+def is_provisioning_link_attachment(la: dict[str, Any]) -> bool:
+    labels = (la.get("metadata") or {}).get("labels") or {}
+    return bool(labels.get(LABEL_PROVISIONING_LINK_ATTACHMENT))
+
+
+def nico_network_config_for_machine(
+    api: client.ApiClient,
+    namespace: str,
+    machine: dict[str, Any],
+) -> dict[str, Any] | None:
+    """NicoNetworkConfig for a CAPI Machine (same name as its NicoMachine infra)."""
+    ref = (machine.get("spec") or {}).get("infrastructureRef") or {}
+    name = ref.get("name") or (machine.get("metadata") or {}).get("name")
+    if not name:
+        return None
+    return get_custom(
+        api,
+        group="ufo.mirantis.com",
+        version="v1alpha1",
+        plural="niconetworkconfigs",
+        namespace=namespace,
+        name=name,
+    )
+
+
+def ew_ethernets(networkv2: dict[str, Any] | None) -> dict[str, Any]:
+    """Ethernet stanzas whose keys are east-west rail NICs (``eth-ew*``)."""
+    if not networkv2:
+        return {}
+    ethernets = networkv2.get("ethernets") or {}
+    return {
+        name: eth
+        for name, eth in ethernets.items()
+        if isinstance(name, str) and name.startswith("eth-ew")
+    }
