@@ -11,7 +11,8 @@ build.
    (clone it yourself when running the playbook by hand — see below).
 2. Applies the vendored patches from
    [files/k0rdent-apis/patches/](files/k0rdent-apis/patches/) (idempotently —
-   already-applied patches are skipped).
+   already-applied patches are skipped; unapplicable patches fail the play
+   with `git apply --check` output).
 3. Creates the `k0rdent-apis` namespace and applies the `mailpit` manifest.
 4. Creates the image-pull `Secret` (from
    `k0rdent_apis_pull_secret_{username,password}` in
@@ -107,8 +108,13 @@ override:
 - `k0rdent_apis_provision_env` — env name under
   `scripts/post-deploy/envs/` used for the provision-manifest ConfigMap.
   Default `kind`.
-- `k0rdent_apis_base_url` — external URL where Kong is reachable, injected
-  into the values overrides. Default `http://10.200.0.254:30080`.
+- `k0rdent_apis_base_url` — external HTTP URL where Kong is reachable (browser
+  callback / CORS). Default `http://10.200.0.254:30080`.
+- `k0rdent_apis_auth_issuer_url` — `global.authIssuerUrl` (JWT iss / allowedIss).
+  Must be `https://…` or `http://` on loopback only (chart
+  `k0rdent-apis.validateAuthIssuerUrl` + auth boot). Default
+  `https://10.200.0.254:30080`. There is **no** values flag to disable that check;
+  a helm-only skip patch would still leave auth CrashLooping on the same rule.
 - `nico_prepovision_ssh_key_group_name` /
   `nico_prepovision_network_security_group_name` — names of the platform-admin
   CRs whose reconciled `status.id` gets pushed into the workflow-worker env
@@ -612,8 +618,10 @@ fabric has to be driven by hand, with mock mode off — see
 
 - **Patch fails to apply**: the vendored patches under
   [files/k0rdent-apis/patches/](files/k0rdent-apis/patches/) target specific
-  upstream lines. If upstream drifts, the shell task fails loudly with git's
-  own error output. Fix: refresh the patches against the newer upstream.
+  upstream lines. If a patch is neither already applied (`git apply --reverse
+  --check`) nor cleanly applicable (`git apply --check`), the playbook **fails**
+  and prints both check outputs. Fix: refresh the patches against the newer
+  upstream, or ensure `/opt/ufo_lab/k0rdent-apis` is the intended checkout.
 - **`Ensure required NICO resource IDs …` assert fails**: the NICO REST
   backend doesn't have an object with the configured name. The fail_msg lists
   the names it *does* have — check whether your platform-admin CR reconciled
