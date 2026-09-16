@@ -1,3 +1,6 @@
+# Both API calls below are retried. The controller runs a single
+# web-service-backend replica, so it can go briefly unresponsive under load -
+# notably while a batch of switches reboots and reconnects.
 - name: Authenticate and capture session cookie
   ansible.builtin.uri:
     url:         "{{ netris_web_api_url }}/api/auth"
@@ -13,8 +16,12 @@
       Content-Type: "application/json"
     validate_certs:  false           # equivalent to curl -k
     status_code:     200
+    timeout:         30
     return_content:  true            # optional — if you want the JSON body too
   register: login
+  until: login.status == 200
+  retries: 10
+  delay: 6
 
 # cookies_string, not set_cookie: /api/auth returns two Set-Cookie headers
 # (Traefik's sticky-session cookie and Netris' connect.sid), and set_cookie is
@@ -31,8 +38,12 @@
     validate_certs: false
     headers:
       Cookie:    "{{ netris_login_cookie }}"
+    timeout:        30
     return_content: true
   register: api_result
+  until: api_result.status == 200
+  retries: 10
+  delay: 6
 
 - name: Extract netris_auth_token from general settings
   ansible.builtin.set_fact:
