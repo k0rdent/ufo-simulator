@@ -76,9 +76,15 @@
           with_items:
            - "netris_controller.yaml"
 
+    # The release name must contain the chart name. netris-controller.fullname
+    # falls back to "<release>-<chart>" otherwise, while the bundled subcharts
+    # always name themselves "<release>-<subchart>" - so the controller would
+    # look for netris-controller-netris-controller-ha-mongodb while the subchart
+    # created netris-controller-mongodb, and the backend would never start.
+    # This is also the release name the vendor's own manifests use.
     - name: Deploy/upgrade netris controller helm release
       kubernetes.core.helm:
-        name: netris-controller
+        name: netris-controller-ha
         kubeconfig: "{{ kubeconfig_path }}"
         chart_ref: "{{ netris_chart_dir }}"
         release_namespace: netris-controller

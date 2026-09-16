@@ -79,6 +79,18 @@ Added `mariadb.replicas`, `mariadb.backupCount`, `mariadb.storage.size` and a ne
 `maxscale.replicas`, all at the upstream defaults (3 / 3 / 10Gi / 3). Declaring them keeps the
 template expressions nil-safe and the knobs discoverable.
 
+## The release name must be `netris-controller-ha`
+
+`netris-controller.fullname` returns the release name when it contains the chart name, and
+`<release>-<chart>` otherwise. The bundled subcharts always name themselves `<release>-<subchart>`,
+so the two only agree when the release name contains `netris-controller-ha`.
+
+Installing as release `netris-controller` makes the controller look for
+`netris-controller-netris-controller-ha-mongodb` while the subchart creates `netris-controller-mongodb`.
+The web-service-backend pod then fails with `CreateContainerConfigError` on the missing secret, and
+its redis, smtp and vmselect references are wrong for the same reason. The vendor's own manifests
+install this chart as release `netris-controller-ha`; `ansible/netris-controller.yml` does the same.
+
 ## Do NOT scale MongoDB below 3
 
 `templates/web-service-backend.yaml` builds `CONDUCTOR_MONGO_URL` with `mongodb-0`, `mongodb-1`,
