@@ -122,7 +122,13 @@ if [[ ${NODE_TYPE} == "cmp" ]]; then
     
     # Wait everything is ready before moving forwad
     kubectl wait --for=condition=Ready=True management/kcm --timeout=1800s
-    kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=1800m
+    # Skip Succeeded pods: a completed pod keeps Ready=False with reason
+    # PodCompleted forever, so without this the wait never returns. The Netris
+    # controller chart leaves 17 such pods behind from its DB init SqlJobs.
+    # Failed pods are deliberately NOT skipped - helm --wait does not track the
+    # SqlJob CRs, so a failed DB init would otherwise pass unnoticed.
+    kubectl wait --for=condition=ready pod --all --all-namespaces \
+        --field-selector=status.phase!=Succeeded --timeout=1800s
 
     # if [[ ${K0RDENT_APIS_ENABLE} == "true" ]]; then
     #     if [ -z "$K0RDENT_APIS_PULL_SECRET_PASSWORD" ]; then
