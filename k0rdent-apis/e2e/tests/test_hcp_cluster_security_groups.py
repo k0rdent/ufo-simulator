@@ -77,6 +77,9 @@ def test_hcp_cluster_vpc_security_groups(
         session, sg_collection, _SCENARIO, "security-group-cluster-sg.yaml", cluster_sg_id
     )
     log.ok("both SGs active")
+    secgroups.assert_attachments_empty(
+        session, sg_collection, cluster_sg_id, log=log
+    )
 
     cluster = stamp_id(load_scenario_template(_SCENARIO, "cluster.yaml"), cluster_id)
     clusters_url = api.region_url(api_base, region, "compute/clusters", project=project)
@@ -419,6 +422,15 @@ def test_hcp_cluster_vpc_security_groups(
     assert list(cluster_obj.get("securityGroups") or []) == [cluster_sg_id]
     log.ok("cluster binding settled")
 
+    secgroups.assert_attachments_include(
+        session,
+        sg_collection,
+        cluster_sg_id,
+        kind="cluster",
+        holder_id=cluster_id,
+        holder_uid=cluster_uid,
+        log=log,
+    )
     secgroups.assert_delete_rejected_while_in_use(
         session, sg_collection, cluster_sg_id, log=log
     )
@@ -559,6 +571,10 @@ def test_hcp_cluster_vpc_security_groups(
             log_every=2,
         )
         assert list(_get_cluster().get("securityGroups") or []) == []
+
+        secgroups.assert_attachments_empty(
+            session, sg_collection, cluster_sg_id, log=log
+        )
 
         def _nsg_without_cluster_rules():
             fresh = _nsg_fresh()

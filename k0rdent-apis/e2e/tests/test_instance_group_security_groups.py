@@ -75,6 +75,7 @@ def test_instance_group_vpc_security_groups(
         session, sg_collection, _SCENARIO, "security-group-ig-sg.yaml", ig_sg_id
     )
     log.ok("both SGs active")
+    secgroups.assert_attachments_empty(session, sg_collection, ig_sg_id, log=log)
 
     ig = stamp_id(load_scenario_template(_SCENARIO, "instance-group.yaml"), ig_id)
     groups_url = api.region_url(
@@ -424,6 +425,15 @@ def test_instance_group_vpc_security_groups(
     assert list(ig_obj.get("securityGroups") or []) == [ig_sg_id]
     log.ok("instance group binding settled")
 
+    secgroups.assert_attachments_include(
+        session,
+        sg_collection,
+        ig_sg_id,
+        kind="instance_group",
+        holder_id=ig_id,
+        holder_uid=ig_uid,
+        log=log,
+    )
     secgroups.assert_delete_rejected_while_in_use(
         session, sg_collection, ig_sg_id, log=log
     )
@@ -564,6 +574,8 @@ def test_instance_group_vpc_security_groups(
             log_every=2,
         )
         assert list(_get_ig().get("securityGroups") or []) == []
+
+        secgroups.assert_attachments_empty(session, sg_collection, ig_sg_id, log=log)
 
         def _nsg_without_ig_rules():
             fresh = _nsg_fresh()

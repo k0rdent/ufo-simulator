@@ -104,6 +104,88 @@ def assert_delete_rejected_while_in_use(
     log.ok(f"DELETE rejected ({deleted.status_code}); SG still present")
 
 
+# ---------------------------------------------------------------------------
+# security-groups/{id}/attachments (KNF-496)
+# ---------------------------------------------------------------------------
+
+
+def get_attachments(session, sg_collection: str, sg_id: str) -> dict[str, Any]:
+    """GET .../networking/security-groups/{id}/attachments."""
+    resp = api.get(session, f"{sg_collection}/{sg_id}/attachments")
+    api.raise_for_status(resp)
+    return resp.json()
+
+
+def assert_attachments_empty(
+    session, sg_collection: str, sg_id: str, *, log: Steps
+) -> dict[str, Any]:
+    """Nothing holds the group — ``attachments: []`` (not 404 / not null)."""
+    log.step(f"GET attachments for {sg_id!r} (expect empty)")
+    body = get_attachments(session, sg_collection, sg_id)
+    sg = body.get("securityGroup") or {}
+    assert sg.get("id") == sg_id, (
+        f"securityGroup.id must echo {sg_id!r}, got {sg!r}"
+    )
+    attachments = body.get("attachments")
+    assert attachments is not None, "attachments must be present ([] when empty), not omitted"
+    assert attachments == [], (
+        f"expected no holders for {sg_id!r}, got "
+        f"{[(a.get('kind'), a.get('id')) for a in attachments]!r}"
+    )
+    log.ok("attachments=[]")
+    return body
+
+
+def assert_attachments_include(
+    session,
+    sg_collection: str,
+    sg_id: str,
+    *,
+    kind: str,
+    holder_id: str,
+    holder_uid: str | None = None,
+    log: Steps,
+) -> dict[str, Any]:
+    """The named holder appears under ``attachments`` with matching kind/id."""
+    log.step(
+        f"GET attachments for {sg_id!r} (expect {kind} {holder_id!r})"
+    )
+    body = get_attachments(session, sg_collection, sg_id)
+    sg = body.get("securityGroup") or {}
+    assert sg.get("id") == sg_id, (
+        f"securityGroup.id must echo {sg_id!r}, got {sg!r}"
+    )
+    assert sg.get("uid"), f"securityGroup for {sg_id!r} missing uid: {sg!r}"
+    attachments = list(body.get("attachments") or [])
+    entry = next(
+        (
+            a
+            for a in attachments
+            if a.get("kind") == kind and a.get("id") == holder_id
+        ),
+        None,
+    )
+    assert entry is not None, (
+        f"{kind} {holder_id!r} must hold {sg_id!r}, got "
+        f"{[(a.get('kind'), a.get('id')) for a in attachments]!r}"
+    )
+    assert entry.get("uid"), (
+        f"attachment {kind}/{holder_id} missing uid: {entry!r}"
+    )
+    if holder_uid is not None:
+        assert entry.get("uid") == holder_uid, (
+            f"attachment uid {entry.get('uid')!r} != holder uid {holder_uid!r}"
+        )
+    assert entry.get("state"), (
+        f"attachment {kind}/{holder_id} missing state: {entry!r}"
+    )
+    log.ok(
+        f"holder {kind}/{holder_id} uid={entry.get('uid')!r} "
+        f"state={entry.get('state')!r}"
+    )
+    return body
+
+
 def fresh_resource(
     session, collection_url: str, body: dict[str, Any], *, what: str
 ) -> None:
