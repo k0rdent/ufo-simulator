@@ -14,6 +14,9 @@ spec:
   dnsServers:
     - 1.1.1.1
     - 8.8.8.8
-  roce: true
-  roceAdaptiveRouting: true
-  congestionControl: true
+  gpuClusterProps:
+    roce: true
+    roceAdaptiveRouting: true
+    congestionControl: true
+  fabricProps:
+    fabricType: ew

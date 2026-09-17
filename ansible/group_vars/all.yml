@@ -187,6 +187,8 @@ topology_ew_links: "{{ (topology_ew.leafs | ew_breakout_server_links(topology.no
 # NIC order (local links first, then remote — same as create-switch-vm.yml).
 # Breakout names (e.g. swp1s0 or eth1/1/1) are preserved.
 all_topology_switches: "{{ topology.spines + topology.leafs + topology_ew.spines + topology_ew.leafs }}"
+# Names of every spine (NS + EW); everything else in all_topology_switches is a leaf.
+all_topology_spine_names: "{{ (topology.spines + topology_ew.spines) | map(attribute='name') | list }}"
 all_topology_links: "{{ (topology.links + topology_ew_links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
 
 # Highest ethN on any VM link (covers NS + EW). Used for Netris portsCount and MAC offsets.

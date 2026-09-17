@@ -46,6 +46,7 @@
           vars:
             switch_name: "{{ item.0.name }}"
             links: "{{ topology_resolved_links }}"
+            switch_role: "{{ 'spine' if item.0.name in all_topology_spine_names else 'leaf' }}"
             switch_index: "{{ item.1 }}"
             switch_digit: "{{ switch_index | int + 1 }}"
             loopback_ip: "{{ item.0.loopback_ip | default(loopback_base_switch ~ '.' ~ switch_digit) }}"
