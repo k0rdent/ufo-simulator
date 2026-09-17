@@ -265,6 +265,16 @@ LABEL_NICO_MACHINE_ID = "ufo.mirantis.com/machine-id"
 LABEL_CAPI_CLUSTER_NAME = "cluster.x-k8s.io/cluster-name"
 LABEL_PROVISIONING_LINK_ATTACHMENT = "ufo.mirantis.com/provisioning-linkattachment"
 
+# Spectrum-X host coordinates, stamped on the ServerNICAttachment from
+# Server.status.location. UFO's verity backend reads both to name the
+# HGXTenantAssignment (<prefix>-hgx-suNN-hostNN) and skips creating it entirely
+# when either is unusable. Note utils.HostLocationLabels writes them as EMPTY
+# STRINGS rather than omitting them when the location is unknown, so an
+# exists-selector matches attachments that carry nothing useful — read the
+# values, don't select on presence.
+LABEL_SU_ID = "ufo.mirantis.com/su-id"
+LABEL_HOST_ID = "ufo.mirantis.com/host-id"
+
 # Netris LinkAttachment.status.status after the VNet apply succeeds
 # (controllers/linkattachment_translations.go — not the CR message "Success").
 LINK_ATTACHMENT_STATUS_APPLIED = "Applied"
@@ -346,6 +356,76 @@ def link_attachment_applied(la: dict[str, Any]) -> bool:
 def is_provisioning_link_attachment(la: dict[str, Any]) -> bool:
     labels = (la.get("metadata") or {}).get("labels") or {}
     return bool(labels.get(LABEL_PROVISIONING_LINK_ATTACHMENT))
+
+
+def list_hgx_tenant_assignments(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    label_selector: str | None = None,
+) -> list[dict[str, Any]]:
+    """Verity HGXTenantAssignment CRs — the Spectrum-X east-west attachment.
+
+    UFO's verity backend creates exactly one per host when the fabric type is
+    Spectrum-X, owned by the ServerNICAttachment. Readiness is the usual UFO
+    shape, so use reconcile_ready(): verity-operator sets ReconcileReady=True
+    only after it has PATCHed the switchpoint tenant against the live Verity
+    API. These objects carry no labels, so the only join is the owner ref.
+    """
+    return list_custom(
+        api,
+        group="verity.mirantis.com",
+        version="v1alpha1",
+        plural="hgxtenantassignments",
+        namespace=namespace,
+        label_selector=label_selector,
+    ).get("items", [])
+
+
+def list_p2ps(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    label_selector: str | None = None,
+) -> list[dict[str, Any]]:
+    """UFO P2P CRs: one per (subnet, link), recording both ends of a /31.
+
+    spec.host.address and spec.switch.address are the two halves. P2P has an
+    empty status struct, so it is a content assertion only, never a readiness
+    signal. On the NICo path these are owned by a NicoNetworkConfigAllocation
+    (the Metal3 path labels them instead, which is why there is no selector
+    that works for both).
+    """
+    return list_custom(
+        api,
+        group="ufo.mirantis.com",
+        version="v1alpha1",
+        plural="p2ps",
+        namespace=namespace,
+        label_selector=label_selector,
+    ).get("items", [])
+
+
+def list_nico_network_config_allocations(
+    api: client.ApiClient,
+    namespace: str,
+    *,
+    label_selector: str | None = None,
+) -> list[dict[str, Any]]:
+    """UFO NicoNetworkConfigAllocation CRs.
+
+    The join between a machine and its P2Ps: spec.machineId and
+    spec.networkBundleName mirror the NicoNetworkConfig labels, and both are
+    immutable, so the correlation cannot drift mid-test.
+    """
+    return list_custom(
+        api,
+        group="ufo.mirantis.com",
+        version="v1alpha1",
+        plural="niconetworkconfigallocations",
+        namespace=namespace,
+        label_selector=label_selector,
+    ).get("items", [])
 
 
 def nico_network_config_for_machine(

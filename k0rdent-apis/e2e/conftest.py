@@ -23,6 +23,12 @@ GLOBAL_PREREQS: tuple[tuple[str, str], ...] = (
     ("global/cluster-type-netris-hcp-ew.yaml", "compute/cluster-types"),
 )
 
+# Verity-only cluster types, created by ensure_verity_prereqs rather than being
+# global: nothing on a netris lab can deploy from them.
+VERITY_PREREQS: tuple[tuple[str, str], ...] = (
+    ("global/cluster-type-nico-verity-hcp-ew.yaml", "compute/cluster-types"),
+)
+
 
 def _auth_configured() -> bool:
     """True when API_BASE is set; JWT is minted in-process via helpers.auth."""
@@ -99,17 +105,19 @@ def load_scenario_template(scenario: str, name: str) -> dict:
     return load_template(f"{scenario}/{name}")
 
 
-def ensure_global_prereqs(session, api_base: str, region: str) -> None:
-    """Create shared address pools + cluster types if missing; never delete them.
+def _ensure_prereqs(session, api_base: str, region: str, prereqs) -> None:
+    """Create each (template, resource) if missing; never delete.
 
-    Address pools (and any other prereq that reports ``state``) must be
-    ``active`` before a cluster / instance group can bind them — creating one
-    while a pool is still ``creating`` is a 409. Wait here so every caller can
-    POST owners immediately after this returns.
+    Anything that reports ``state`` must be ``active`` before an owner can bind
+    it — creating one while an address pool is still ``creating`` is a 409 — so
+    wait here and callers can POST immediately after this returns.
+
+    Note ``api.ensure_exists`` only creates. Once a cluster type exists in the
+    lab, editing its template changes nothing until it is deleted by hand.
     """
     from helpers import api, wait
 
-    for template_name, resource in GLOBAL_PREREQS:
+    for template_name, resource in prereqs:
         body = load_template(template_name)
         collection = api.region_url(api_base, region, resource)
         obj = api.ensure_exists(session, collection, body)
@@ -125,6 +133,40 @@ def ensure_global_prereqs(session, api_base: str, region: str) -> None:
             timeout=900,
             interval=5,
         )
+
+
+def ensure_global_prereqs(session, api_base: str, region: str) -> None:
+    """Create the shared address pools + cluster types every lab needs."""
+    _ensure_prereqs(session, api_base, region, GLOBAL_PREREQS)
+
+
+def ensure_verity_prereqs(session, api_base: str, region: str) -> None:
+    """Create the Verity cluster types. Only the verity-gated tests call this.
+
+    Kept out of GLOBAL_PREREQS so a netris lab's runs are untouched: a verity
+    cluster type there would be an object nothing can ever deploy from.
+    """
+    _ensure_prereqs(session, api_base, region, VERITY_PREREQS)
+
+
+def fabric_backend() -> str:
+    """Which fabric this lab runs, for the per-backend east-west skipifs.
+
+    Set by ansible/templates/e2e-env.sh.j2 from the lab's own sdn_provider, so
+    `source .../env` gates correctly with no flags. Empty when unset, which
+    skips every backend-specific test rather than guessing one.
+    """
+    return (os.environ.get("E2E_FABRIC_BACKEND") or "").strip().lower()
+
+
+def verity_backend_name() -> str:
+    """The UFO backend *instance* carrying the Spectrum-X config.
+
+    A key under ``backends.fabric`` in ufo_conf.yaml, not a driver name — two
+    verity instances exist and only the one with site + fabric_type takes the
+    Spectrum-X path.
+    """
+    return (os.environ.get("E2E_VERITY_BACKEND") or "verity-ewf").strip()
 
 
 # Re-export for skipif markers in tests.

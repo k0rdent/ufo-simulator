@@ -9,8 +9,9 @@
 #   cd "$E2E_DIR" && pytest -m smoke -s
 #
 # Also creates kcm-system/host-cluster-a-kubeconfig (from the management
-# kubeconfig) and kcm-system/hcp-host-clusters keyed by nico-hcp and
-# netris-hcp-ew so ResolveHCPHostCluster succeeds for HCP e2e creates.
+# kubeconfig) and kcm-system/hcp-host-clusters keyed by every id in
+# e2e_hcp_cluster_type_ids, so ResolveHCPHostCluster succeeds for HCP e2e
+# creates.
 - name: Prepare k0rdent-apis e2e tests
   hosts: cmps
   connection: local
@@ -20,6 +21,12 @@
   vars_files:
     - ./vars/common.yml
     - ./vars/{{ artifacts_vars_file }}
+    # Needed for ufo_fabric_backend, which the env file exports as
+    # E2E_FABRIC_BACKEND to gate the per-backend e2e tests. group_vars defines
+    # ufo_fabric_backend as netris, so without this the gate renders netris on
+    # every lab -- including a verity one, where the verity test would then skip
+    # silently and the suite would stay green having tested nothing.
+    - ./vars/{{ sdn_provider }}.yml
 
   vars:
     # User-requested venv root (outside /opt/ufo_lab).
@@ -38,9 +45,12 @@
     # Lab HCP CPs land on the management cluster itself.
     e2e_hcp_host_cluster_secret_name: host-cluster-a-kubeconfig
     e2e_hcp_host_cluster_secret_namespace: kcm-system
+    # Every ClusterType an HCP e2e can create from. A missing entry fails the
+    # create with "no host cluster registered for ClusterType".
     e2e_hcp_cluster_type_ids:
       - nico-hcp
       - netris-hcp-ew
+      - nico-verity-hcp-ew
 
   tasks:
     - name: Prepare e2e tests

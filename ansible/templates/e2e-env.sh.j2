@@ -24,6 +24,15 @@ export REGION="{{ e2e_region }}"
 export PROJECT="{{ e2e_project }}"
 export KUBECONFIG="{{ e2e_kubeconfig }}"
 
+# Which fabric this lab runs. The east-west tests are backend-specific -- they
+# assert on CRs only one backend produces -- so each skips unless this matches.
+export E2E_FABRIC_BACKEND="{{ ufo_fabric_backend | default(sdn_provider) }}"
+# The *named* UFO backend instance carrying the Spectrum-X config, i.e. a key
+# under backends.fabric in ufo_conf.yaml. Two verity instances exist there and
+# only this one sets site + fabric_type, so only this one takes the Spectrum-X
+# path; the bare "verity" instance runs Clos and creates no HGXTenantAssignment.
+export E2E_VERITY_BACKEND="{{ e2e_verity_backend | default('verity-ewf') }}"
+
 export K0R_TOKEN_FILE="{{ e2e_token_file }}"
 export TOKEN_SLACK_SEC="{{ e2e_token_slack_sec }}"
 export K0R_NAMESPACE="${K0R_NAMESPACE:-k0rdent-apis}"
