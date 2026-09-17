@@ -1,8 +1,7 @@
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -109,6 +109,22 @@
-     principal: {type: user, id: usr-acme-bob}
+@@ -112,4 +112,20 @@
      scope: {type: project, org: acme, project: acme-main}
      displayName: Bob - compute-viewer (acme-main)
 +  - role: iam-admin
@@ -23,4 +22,3 @@ diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/e
 +    displayName: Kind Admin - compute-admin (platform)
  
  identityProviders:
- # KCS-1407 — these were previously the in-cluster mock-oauth2-server on plaintext
