@@ -6,8 +6,9 @@ metadata:
   namespace: platform-admin
 spec:
   tenant: Admin
-  description: Spine switch
+  description: {{ switch_role | capitalize }} switch
   nos: cumulus_nvue
+  swRole: {{ switch_role }}
   site: default
   # asn: 4200000021
   profile: {{ (ew_inventory_profile_name | default('roce-profile')) if switch_name.startswith('ew-') else (inventory_profile_name | default('default-inventory-profile')) }}
