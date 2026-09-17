@@ -122,9 +122,9 @@ def assert_attachments_empty(
     """Nothing holds the group — ``attachments: []`` (not 404 / not null)."""
     log.step(f"GET attachments for {sg_id!r} (expect empty)")
     body = get_attachments(session, sg_collection, sg_id)
-    sg = body.get("securityGroup") or {}
-    assert sg.get("id") == sg_id, (
-        f"securityGroup.id must echo {sg_id!r}, got {sg!r}"
+    # Response is only the holders list (KNF-496); the group is path-addressed.
+    assert "securityGroup" not in body, (
+        f"attachments response must not echo securityGroup, got keys {list(body)!r}"
     )
     attachments = body.get("attachments")
     assert attachments is not None, "attachments must be present ([] when empty), not omitted"
@@ -151,11 +151,9 @@ def assert_attachments_include(
         f"GET attachments for {sg_id!r} (expect {kind} {holder_id!r})"
     )
     body = get_attachments(session, sg_collection, sg_id)
-    sg = body.get("securityGroup") or {}
-    assert sg.get("id") == sg_id, (
-        f"securityGroup.id must echo {sg_id!r}, got {sg!r}"
+    assert "securityGroup" not in body, (
+        f"attachments response must not echo securityGroup, got keys {list(body)!r}"
     )
-    assert sg.get("uid"), f"securityGroup for {sg_id!r} missing uid: {sg!r}"
     attachments = list(body.get("attachments") or [])
     entry = next(
         (
