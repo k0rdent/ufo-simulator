@@ -9,6 +9,7 @@ import pytest
 from conftest import (
     auth_configured,
     ensure_global_prereqs,
+    fabric_backend,
     load_scenario_template,
 )
 from helpers import api, ew_netris, k8s, secgroups, wait
@@ -24,6 +25,10 @@ _SCENARIO = "hcp_cluster_ew"
 @pytest.mark.skipif(
     not auth_configured(),
     reason="API_BASE required",
+)
+@pytest.mark.skipif(
+    fabric_backend() != "netris",
+    reason="netris lab required (E2E_FABRIC_BACKEND)",
 )
 def test_hcp_cluster_ew_create_ready_terminate(
     session, api_base, region, project, run_id, request

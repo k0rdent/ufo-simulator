@@ -1,0 +1,94 @@
+id: nico-verity-ew
+displayName: NICo + Verity east-west (BMaaS)
+networkSchema:
+  vpcs:
+    - id: vpc-nico
+      backend: nico
+    # The named backend instance, not the driver -- see the note in
+    # cluster-type-nico-verity-hcp-ew.yaml. Only the instance carrying
+    # site + fabric_type takes the Spectrum-X path.
+    - id: vpc-ew
+      backend: verity-ewf
+  networks:
+    - id: net-nico
+      vpc: vpc-nico
+      type: evpn
+      evpn:
+        type: l3vpn
+    - id: ew-network
+      vpc: vpc-ew
+      type: evpn
+      evpn:
+        type: l3vpn
+  subnets:
+    - id: sub-nico
+      network: net-nico
+      addressPool: /v1/regions/local/compute/address-pools/global-default
+      prefixLength: 27
+    - id: ew-subnet
+      network: ew-network
+      # Base for the rail-optimised /31s, and it must match Verity's underlay
+      # pool exactly: each side derives the /31 from its own view, so a
+      # different base means different addresses at the two ends of one wire
+      # and the link never comes up. Verity allocates from 172.16.0.0 with
+      # (rail << 17) | (su << 8) | (host << 1), host even and switch odd --
+      # the same layout the rail-optimised allocator computes. So rail 0
+      # host 0 is 172.16.0.0/31 with the leaf on .1, host 1 is .2/.3, and
+      # each rail occupies 172.(16 + 2*rail).0.0/25.
+      cidr: 172.16.0.0/12
+      addressAllocator:
+        backend: rail-optimised
+        gpuPlatform: B200
+# No k8s block: this is the standalone BMaaS path, deployed via
+# /compute/instance-groups rather than /compute/clusters.
+#
+# The cidr + addressAllocator pair above needs k0rdent-apis e290b5691 ("KNF-490:
+# Fixed-CIDR subnets, ethernet static routes, and rail-optimised P2P
+# addressing"), which added those fields to NetworkSchemaSubnet and wired them
+# through both cluster and instance-group create. Against an older API they are
+# dropped as unknown and the deploy fails with
+#   422 networkSchema.subnets[].addressPool is required
+# cluster-type-netris-hcp-ew.yaml carries the identical block, so if that one
+# deploys this schema is supported.
+nodePools:
+  - id: default
+    role: worker
+    machineType: /v1/regions/local/infrastructure/machine-types/nico-lab
+    nodeCountMin: 1
+    nodeCountMax: 6
+    nodeCountDefault: 2
+    networkAttachment:
+      ethernets:
+        # Management. No `match` -- the mock NIC behind enp1s0 has no LLDP peer
+        # and therefore no Link CR, so byslot cannot resolve it; the
+        # OS-predictable name is the key instead.
+        enp1s0:
+          dhcp4: true
+          connectToNetwork:
+            name: net-nico
+        # Rail 0. Matched by fabric location rather than by name: the Link CR
+        # carries rail_id, so this selects whichever NIC LLDP found on the
+        # rail-0 leaf (eth5 -> ew-leaf-0 in this lab) regardless of what the
+        # guest calls it.
+        eth-ew0:
+          match:
+            fabricLocation:
+              railId: 0
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes:
+            # The node's own rail, 172.16.0.0/25 for rail 0 -- reaches every
+            # other host on this leaf, which is the cross-node path.
+            - to:
+                cidrFromRailsubnet:
+                  name: ew-subnet
+              via:
+                gatewayFromSubnet:
+                  name: ew-subnet
+            # The rest of the fabric, via the same leaf.
+            - to:
+                cidrFromSubnet:
+                  name: ew-subnet
+              via:
+                gatewayFromSubnet:
+                  name: ew-subnet

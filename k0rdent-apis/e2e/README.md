@@ -27,7 +27,7 @@ This creates:
 | `/opt/ufo_simulator/venvs/e2e` | Python venv with pytest + deps |
 | `/opt/ufo_simulator/venvs/e2e/env` | Sourceable env (activates venv, sets API/KUBECONFIG/login vars) |
 | `kcm-system/host-cluster-a-kubeconfig` Secret | Management-cluster kubeconfig (`value` key) for HCP |
-| `kcm-system/hcp-host-clusters` ConfigMap | Maps ClusterType `nico-hcp` → that Secret |
+| `kcm-system/hcp-host-clusters` ConfigMap | Maps every id in `e2e_hcp_cluster_type_ids` → that Secret |
 
 Re-run the playbook after `requirements.txt` changes to refresh packages, or
 whenever HCP creates fail with `no host cluster registered for ClusterType …`.
@@ -51,7 +51,9 @@ pytest -m smoke -s
 # Single files
 pytest tests/test_security_groups_effective.py -s   # seconds; creates nothing
 pytest tests/test_hcp_cluster.py -s
-pytest tests/test_hcp_cluster_ew.py -s
+pytest tests/test_hcp_cluster_ew.py -s              # netris labs
+pytest tests/test_instance_group_ew.py -s           # netris labs
+pytest tests/test_hcp_cluster_ew_verity.py -s       # verity labs
 pytest tests/test_hcp_cluster_security_groups.py -s
 pytest tests/test_instance_group.py -s
 pytest tests/test_instance_group_security_groups.py -s
@@ -129,6 +131,8 @@ Set automatically by `source …/env`:
 | `K0R_LOGIN_REDIRECT_URI` | `$API_BASE/…/auth/callback` | OAuth redirect |
 | `E2E_DIR` | `…/k0rdent-apis/e2e` | Suite root |
 | `E2E_RUN_ID` | random 8-hex | Short run id stamped into every test-created resource `id` |
+| `E2E_FABRIC_BACKEND` | lab's `sdn_provider` | `netris` or `verity`; gates the east-west tests. Unset skips all of them |
+| `E2E_VERITY_BACKEND` | `verity-ewf` | The UFO backend *instance* carrying the Spectrum-X config — a key under `backends.fabric` in `ufo_conf.yaml`, not a driver name |
 
 Override before `source` or after, e.g. `export PROJECT=my-project`.
 
@@ -144,6 +148,9 @@ Resource ids for clusters, instance groups, and security groups are
 | Test | Marker | Summary |
 |---|---|---|
 | `test_hcp_cluster.py` | `smoke`, `hcp` | Ensure address pools + cluster types; create HCP cluster; wait API `active` + ClusterDeployment Ready; delete |
+| `test_hcp_cluster_ew.py` | `smoke`, `hcp` | **netris labs only.** HCP cluster on `netris-hcp-ew`; asserts the cluster owns a netris VPC, that every machine's `NicoNetworkConfig` has resolved `eth-ew*` addresses/routes, and that the netris `LinkAttachment`s reach `Applied` |
+| `test_instance_group_ew.py` | `smoke`, `bmaas` | **netris labs only.** Same east-west assertions as above, reached through the instance-group path on the same cluster type |
+| `test_hcp_cluster_ew_verity.py` | `smoke`, `hcp` | **verity labs only.** Two-node HCP cluster on `nico-verity-hcp-ew` (Spectrum-X); asserts resolved `eth-ew*` netplan, one `HGXTenantAssignment` per host at `ReconcileReady=True`, and that each `P2P` records the two halves of one /31 matching the rendered addresses |
 | `test_hcp_cluster_security_groups.py` | `smoke`, `hcp` | Create cluster; VPC default + custom SG; cluster SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=cluster`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
 | `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
 | `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=instance_group`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
@@ -170,6 +177,29 @@ The peering tests have two extra requirements:
 `peering`, so `-m peering` runs both. Use `-m "peering and not crossorg"` to skip
 the cross-org one. Only the same-project test carries `smoke`, so the default
 `-m smoke` run never provisions in the peer project.
+
+### East-west tests are per-backend
+
+The three east-west tests assert on CRs only one fabric backend produces —
+netris `LinkAttachment`s, or verity `HGXTenantAssignment`s — so each skips
+unless `E2E_FABRIC_BACKEND` matches. The env file sets it from the lab's own
+`sdn_provider`, so `-m smoke` runs the right one with no flags; unset skips all
+three rather than guessing. If you see an east-west test skip on a lab you
+expected it to run on, check that value first — `grep E2E_FABRIC_BACKEND
+/opt/ufo_simulator/venvs/e2e/env`.
+
+The verity test additionally needs:
+
+- **`MOCK_MODE` off.** It asserts real UFO and verity CRs; under mock the
+  workflow synthesizes outcomes and neither the `HGXTenantAssignment` nor the
+  `P2P` exists.
+- **Two available `nico-lab` servers**, since it runs `nodeCount: 2` to give
+  itself a cross-node path. Same caveat as the peering tests.
+- A `nico-verity-hcp-ew` entry in `kcm-system/hcp-host-clusters`, which
+  `prepare-e2e-tests.yml` creates from `e2e_hcp_cluster_type_ids`.
+
+Note `ensure_*_prereqs` only *creates*. After editing a cluster-type template,
+delete the object from the API by hand or the run silently uses the old one.
 
 ---
 
