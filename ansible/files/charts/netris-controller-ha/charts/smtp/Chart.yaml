@@ -1,7 +1,0 @@
-apiVersion: v2
-appVersion: latest
-description: exim based smtp smarthost / mail relay
-home: https://github.com/namshi/docker-smtp
-name: smtp
-type: application
-version: 1.0.1

@@ -1,12 +1,14 @@
-# Values for the vendored netris-controller-ha chart
-# (ansible/files/charts/netris-controller-ha, see its PATCHES.md).
+# Values for the netris-controller-ha chart
+# ({{ netris_controller_chart_repo }}:{{ netris_controller_chart_version }}).
 #
-# The chart ships an HA layout sized for 3 nodes. This lab is a single node, so
-# everything that can be scaled down is scaled to 1. Two things cannot:
-#   - mongodb: the backend hardcodes mongodb-0/1/2 + replicaSet=rs0 in its
-#     connection string, so it must stay at 3.
-#   - MariaDB/MaxScale replica counts: hardcoded in the chart, made values-driven
-#     by the Mirantis patch recorded in PATCHES.md.
+# Vendor defaults are 3 for almost every component. This lab is a single node,
+# so everything that can scale down is set to 1. Exception:
+#   - mongodb: backend hardcodes mongodb-0/1/2 + replicaSet=rs0, must stay 3.
+#
+# MariaDB / MaxScale / Backup counts are only values-driven if the published
+# OCI chart includes the Mirantis patch (stock vendor templates hardcode
+# replicas: 3 / until 3). ansible/netris-controller.yml also patches the CRs
+# after install as a safety net.
 #
 # PVC budget: LVP provides 15 static local volumes (templates/k8s/lvp/lvp.yaml).
 # The settings below claim ~10: mongodb 3, mariadb 1, backup 1, maxscale 1,
@@ -25,6 +27,7 @@ ingress:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 
+# Chart defaults: 3 (telescope-notifier / self-monitoring-ha already default 1).
 web-service-backend:
   replicaCount: 1
 web-service-frontend:
@@ -42,7 +45,7 @@ self-monitoring:
 self-monitoring-ha:
   replicaCount: 1
 
-# replicas/backupCount require the Mirantis chart patch (PATCHES.md).
+# Requires values-driven mariadb-crs.yaml in the OCI chart (see header).
 mariadb:
   replicas: 1
   backupCount: 1
@@ -55,6 +58,7 @@ mongodb:
   replicaCount: 3
   resourcesPreset: small
 
+# Chart default redis.replica.replicaCount: 3.
 redis:
   replica:
     replicaCount: 1
@@ -67,10 +71,8 @@ postUpgradeCleanup:
   enabled: false
   migrateGraphiteData: false
 
-# The chart ships requiredDuringScheduling pod anti-affinity on all three
-# VictoriaMetrics components. At replicaCount 1 it would not actually block
-# scheduling, but it is dropped anyway so the intent is explicit.
-# Note: it must be `null`, not `{}` - Helm merges empty maps instead of
+# Chart defaults: replicaCount 3 + requiredDuringScheduling anti-affinity.
+# Affinity must be `null`, not `{}` - Helm merges empty maps instead of
 # replacing them, so `{}` leaves the chart's rule in place.
 victoria-metrics-cluster:
   vminsert:
