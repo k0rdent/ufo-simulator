@@ -11,11 +11,6 @@
     - ./vars/{{ artifacts_vars_file }}
     - ./vars/{{ sdn_provider }}.yml
 
-  vars:
-    # Vendored - the netris-controller-ha chart is not published anywhere public.
-    # See ansible/files/charts/netris-controller-ha/PATCHES.md.
-    netris_chart_dir: "{{ playbook_dir }}/files/charts/netris-controller-ha"
-
   tasks:
     - name: Ensure target directory
       file:
@@ -29,7 +24,7 @@
         name: mariadb-operator-crds
         kubeconfig: "{{ kubeconfig_path }}"
         chart_ref: mariadb-operator-crds
-        chart_repo_url: "{{ mariadb_operator_chart_repo }}"
+        chart_repo_url: "{{ mariadb_operator_crds_chart_repo }}"
         chart_version: "{{ mariadb_operator_chart_version }}"
         release_namespace: netris-controller
         create_namespace: true
@@ -41,26 +36,31 @@
       kubernetes.core.helm:
         name: mariadb-operator
         kubeconfig: "{{ kubeconfig_path }}"
-        chart_ref: mariadb-operator
-        chart_repo_url: "{{ mariadb_operator_chart_repo }}"
+        chart_ref: "{{ mariadb_operator_chart_repo }}"
         chart_version: "{{ mariadb_operator_chart_version }}"
         release_namespace: netris-controller
         create_namespace: true
-        # Single node: one replica of the operator, cert-controller and webhook
-        # instead of the three each the chart defaults to.
+        # Chart only emits Deployment.spec.replicas when ha.enabled is true
+        # (otherwise kubelets default to 1). Force enabled+replicas=1 so every
+        # component is explicitly single-replica on this single-node lab.
+        # Defaults in the vendor chart are ha.replicas: 3 for operator,
+        # webhook and cert-controller.
         release_values:
           ha:
-            enabled: false
+            enabled: true
+            replicas: 1
           pdb:
             enabled: false
           certController:
             ha:
-              enabled: false
+              enabled: true
+              replicas: 1
             pdb:
               enabled: false
           webhook:
             ha:
-              enabled: false
+              enabled: true
+              replicas: 1
             pdb:
               enabled: false
         state: present
@@ -86,13 +86,120 @@
       kubernetes.core.helm:
         name: netris-controller-ha
         kubeconfig: "{{ kubeconfig_path }}"
-        chart_ref: "{{ netris_chart_dir }}"
+        chart_ref: "{{ netris_controller_chart_repo }}"
+        chart_version: "{{ netris_controller_chart_version }}"
         release_namespace: netris-controller
         create_namespace: true
         values_files:
           - "{{ k8s_artifacts_dir }}/netris/netris_controller.yaml"
         state: present
+        # Do not wait yet: stock vendor mariadb-crs.yaml hardcodes MariaDB /
+        # MaxScale / Backup to 3. Scale those CRs down first so a single-node
+        # lab does not burn the LVP PVC budget or hang on anti-affinity.
+        wait: false
+
+    # Stock chart templates hardcode replicas: 3 / until 3. Values-driven
+    # mariadb.replicas only apply if the OCI chart carries the Mirantis patch;
+    # these merges are idempotent either way. Disable replication when forcing
+    # a single MariaDB pod - the vendor template enables it for the HA trio.
+    - name: Force MariaDB CR to a single replica
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        merge_type: merge
+        definition:
+          apiVersion: k8s.mariadb.com/v1alpha1
+          kind: MariaDB
+          metadata:
+            name: netris-controller-ha-mariadb-ha
+            namespace: netris-controller
+          spec:
+            replicas: 1
+            replication:
+              enabled: false
+      register: netris_mariadb_scale
+      until: netris_mariadb_scale is succeeded
+      retries: 30
+      delay: 5
+
+    - name: Force MaxScale CR to a single replica
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        merge_type: merge
+        definition:
+          apiVersion: k8s.mariadb.com/v1alpha1
+          kind: MaxScale
+          metadata:
+            name: netris-controller-ha-mariadb
+            namespace: netris-controller
+          spec:
+            replicas: 1
+      register: netris_maxscale_scale
+      until: netris_maxscale_scale is succeeded
+      retries: 30
+      delay: 5
+
+    - name: Remove surplus MariaDB Backup CRs
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: absent
+        api_version: k8s.mariadb.com/v1alpha1
+        kind: Backup
+        name: "netris-controller-ha-mariadb-backup{{ item }}"
+        namespace: netris-controller
+      loop:
+        - 2
+        - 3
+
+    # Do not re-run helm --wait here: a second upgrade would re-apply the
+    # stock templates and reset MariaDB/MaxScale back to 3 replicas.
+    - name: Wait for MariaDB CR to become Ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: k8s.mariadb.com/v1alpha1
+        kind: MariaDB
+        name: netris-controller-ha-mariadb-ha
+        namespace: netris-controller
         wait: true
-        # MariaDB bootstrap plus ~17 sequential SqlJob init jobs; the vendor
-        # documents 5-10 minutes for this release.
-        wait_timeout: 1200s
+        wait_sleep: 15
+        wait_timeout: 1200
+        wait_condition:
+          type: Ready
+          status: "True"
+
+    - name: Wait for MaxScale CR to become Ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: k8s.mariadb.com/v1alpha1
+        kind: MaxScale
+        name: netris-controller-ha-mariadb
+        namespace: netris-controller
+        wait: true
+        wait_sleep: 15
+        wait_timeout: 1200
+        wait_condition:
+          type: Ready
+          status: "True"
+
+    - name: Wait for netris controller Deployments to become Available
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        kind: Deployment
+        name: "netris-controller-ha-{{ item }}"
+        namespace: netris-controller
+        wait: true
+        wait_sleep: 15
+        wait_timeout: 1200
+        wait_condition:
+          type: Available
+          status: "True"
+      loop:
+        - web-service-backend
+        - web-service-frontend
+        - grpc
+        - telescope
+        - telescope-notifier
+        - web-session-generator
+        - self-monitoring
+        - self-monitoring-ha

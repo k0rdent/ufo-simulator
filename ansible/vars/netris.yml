@@ -1,18 +1,20 @@
 sdn_provider: netris
 ufo_fabric_backend: 'netris'
 
-# Netris controller version. Drives both the vendored controller chart and the
-# switch/softgate agent packages, which must match.
-#
-# The controller chart is vendored at ansible/files/charts/netris-controller-ha
-# because Netris does not publish it: netrisai/charts only carries the non-HA
-# chart, frozen at 2.8.2 / controller 4.6.0. See that directory's PATCHES.md.
+# Netris controller version. Switch/softgate agent packages must match.
 netris_ctl_version: "4.16.0"
 
+# Controller HA chart (OCI). Release name must stay netris-controller-ha so
+# netris-controller.fullname agrees with the bundled subchart service names.
+netris_controller_chart_repo: oci://registry.ci.mirantis.com/pvt-vsaienko/charts/netris/netris-controller-ha
+netris_controller_chart_version: 0.13.0-alpha.0
+
 # mariadb-operator reconciles the MariaDB/MaxScale/SqlJob CRs the controller
-# chart creates. The bundled mariadb subchart is gone as of the HA chart.
-mariadb_operator_chart_repo: https://mariadb-operator.github.io/mariadb-operator
+# chart creates. Operator chart is OCI; CRDs still come from the upstream repo
+# (mariadb-operator-crds is a separate chart, not republished under charts/netris).
+mariadb_operator_chart_repo: oci://registry.ci.mirantis.com/pvt-vsaienko/charts/netris/mariadb-operator
 mariadb_operator_chart_version: 25.10.4
+mariadb_operator_crds_chart_repo: https://mariadb-operator.github.io/mariadb-operator
 
 # Traefik fronts the controller and terminates the fabric-facing ports
 # (grpc 50051, telescope 3033/3034, graphite 2003) that haproxy used to serve.
