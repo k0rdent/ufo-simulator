@@ -50,6 +50,34 @@
         src: "{{ item }}"
         dest: "{{ k0rdent_apis_patches_dir }}/{{ item | basename }}"
       with_fileglob: "files/k0rdent-apis/patches/*.patch"
+      register: k0rdent_apis_staged_patches
+
+    # copy + with_fileglob only ever adds or updates, so a patch RENAMED or
+    # DELETED in the repo stays on the node forever and is still applied by the
+    # loop below. That is not hypothetical: 26cbe9f consolidated
+    # 01-provision-apply-image.patch + 01b-web-origins.patch into
+    # 01-web-origins-and-provision-apply.patch, and nodes staged before that
+    # kept all three — the stale pair applied first, then the consolidated patch
+    # failed both directions (its provision-apply hunk already in the tree, its
+    # webOrigins hunk not yet) and failed the play. Make the repo authoritative.
+    - name: Find staged patches
+      ansible.builtin.find:
+        paths: "{{ k0rdent_apis_patches_dir }}"
+        patterns: "*.patch"
+      register: k0rdent_apis_found_patches
+
+    - name: Remove staged patches no longer vendored in the repo
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ k0rdent_apis_found_patches.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      when:
+        - (item.path | basename) not in (
+            k0rdent_apis_staged_patches.results
+            | map(attribute='item') | map('basename') | list
+          )
 
     - name: Apply k0rdent-apis patches (skip any already applied)
       ansible.builtin.shell:
