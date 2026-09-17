@@ -42,12 +42,6 @@
     index_var: idx
     label: "{{ link_item.port }}"
 
-- name: "{{ switch_name }} - Remove legacy breakout udev rules if present"
-  ansible.builtin.file:
-    path: /etc/udev/rules.d/10-persistent-net.rules
-    state: absent
-  become: true
-
 - name: "{{ switch_name }} - Install rename-swp.sh"
   ansible.builtin.template:
     src: cumulus/rename-swp.sh.j2
