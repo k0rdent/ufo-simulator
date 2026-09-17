@@ -203,3 +203,9 @@
         - web-session-generator
         - self-monitoring
         - self-monitoring-ha
+
+    # No Helm knob for the post-install "must change password" prompt. Probe
+    # /api/auth for a force-change flag and try setting the same password via
+    # candidate REST endpoints (see task file for the list).
+    - name: Clear forced password change via Netris API probes
+      ansible.builtin.include_tasks: tasks/netris_clear_force_password.yml
