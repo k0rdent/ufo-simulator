@@ -1,6 +1,6 @@
-"""Assertions for Netris east-west fabric after an HCP cluster is Ready.
+"""Assertions for Netris east-west fabric after cluster / instance-group Ready.
 
-When a cluster owns a VPC on the netris backend, UFO renders per-machine
+When an owner owns a VPC on the netris backend, UFO renders per-machine
 ``NicoNetworkConfig.spec.networkv2`` with concrete addresses/routes on ``eth-ew*``
 interfaces, and the netris backend creates ``LinkAttachment`` objects owned by
 each machine's ``ServerNICAttachment``. Success for those attachments is
@@ -10,6 +10,7 @@ each machine's ``ServerNICAttachment``. Success for those attachments is
 from __future__ import annotations
 
 import ipaddress
+from collections.abc import Callable
 from typing import Any
 
 from helpers import k8s, wait
@@ -72,67 +73,70 @@ def assert_ew_networkv2_resolved(cfg: dict[str, Any]) -> list[str]:
     return sorted(ew)
 
 
-def await_cluster_ew_netris_ready(
+def _link_attachments_for_bundles(
+    kube, namespace: str, bundle_names: set[str]
+) -> list[dict[str, Any]] | None:
+    """Non-provisioning LinkAttachments owned by SNAs for the given bundles.
+
+    Returns ``None`` while SNAs or Applied attachments are still missing.
+    """
+    if not bundle_names:
+        return None
+
+    snas: list[dict[str, Any]] = []
+    for bundle in sorted(bundle_names):
+        snas.extend(
+            k8s.list_servernicattachments(
+                kube,
+                namespace,
+                label_selector=f"{k8s.LABEL_NETWORK_BUNDLE}={bundle}",
+            )
+        )
+    if not snas:
+        return None
+
+    related: list[dict[str, Any]] = []
+    for la in k8s.list_link_attachments(kube, namespace):
+        if k8s.is_provisioning_link_attachment(la):
+            continue
+        if any(k8s.owns(sna, la) for sna in snas):
+            related.append(la)
+    if not related:
+        return None
+    if not all(k8s.link_attachment_applied(la) for la in related):
+        return None
+    return related
+
+
+def _await_ew_netris_ready(
     kube,
     namespace: str,
     *,
-    cluster_deployment_name: str,
+    find_configs: Callable[[], list[dict[str, Any]] | None],
     log: Steps,
     timeout: int = 900,
     interval: int = 10,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Wait until every cluster machine has resolved EW netplan and Applied LAs.
-
-    Returns ``(nico_network_configs, link_attachments)`` that were asserted.
-    """
+    """Shared wait: resolved eth-ew* netplan + Applied LinkAttachments."""
 
     def _pred():
-        machines = k8s.list_capi_machines(
-            kube, namespace, cluster_name=cluster_deployment_name
-        )
-        if not machines:
+        configs = find_configs()
+        if not configs:
+            return None
+        try:
+            for cfg in configs:
+                assert_ew_networkv2_resolved(cfg)
+        except AssertionError:
             return None
 
-        configs: list[dict[str, Any]] = []
         bundle_names: set[str] = set()
-        for machine in machines:
-            cfg = k8s.nico_network_config_for_machine(kube, namespace, machine)
-            if not cfg:
-                return None
-            try:
-                assert_ew_networkv2_resolved(cfg)
-            except AssertionError:
-                return None
-            configs.append(cfg)
+        for cfg in configs:
             labels = (cfg.get("metadata") or {}).get("labels") or {}
             bundle = labels.get(k8s.LABEL_NETWORK_BUNDLE)
             if bundle:
                 bundle_names.add(bundle)
-
-        if not bundle_names:
-            return None
-
-        snas: list[dict[str, Any]] = []
-        for bundle in sorted(bundle_names):
-            snas.extend(
-                k8s.list_servernicattachments(
-                    kube,
-                    namespace,
-                    label_selector=f"{k8s.LABEL_NETWORK_BUNDLE}={bundle}",
-                )
-            )
-        if not snas:
-            return None
-
-        related: list[dict[str, Any]] = []
-        for la in k8s.list_link_attachments(kube, namespace):
-            if k8s.is_provisioning_link_attachment(la):
-                continue
-            if any(k8s.owns(sna, la) for sna in snas):
-                related.append(la)
-        if not related:
-            return None
-        if not all(k8s.link_attachment_applied(la) for la in related):
+        related = _link_attachments_for_bundles(kube, namespace, bundle_names)
+        if related is None:
             return None
         return configs, related
 
@@ -167,3 +171,80 @@ def await_cluster_ew_netris_ready(
         f"{len(attachments)} LinkAttachment(s) Applied"
     )
     return configs, attachments
+
+
+def await_cluster_ew_netris_ready(
+    kube,
+    namespace: str,
+    *,
+    cluster_deployment_name: str,
+    log: Steps,
+    timeout: int = 900,
+    interval: int = 10,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Wait until every CAPI Machine for the ClusterDeployment has EW netplan + LAs."""
+
+    def _find_configs() -> list[dict[str, Any]] | None:
+        machines = k8s.list_capi_machines(
+            kube, namespace, cluster_name=cluster_deployment_name
+        )
+        if not machines:
+            return None
+        configs: list[dict[str, Any]] = []
+        for machine in machines:
+            cfg = k8s.nico_network_config_for_machine(kube, namespace, machine)
+            if not cfg:
+                return None
+            configs.append(cfg)
+        return configs
+
+    return _await_ew_netris_ready(
+        kube,
+        namespace,
+        find_configs=_find_configs,
+        log=log,
+        timeout=timeout,
+        interval=interval,
+    )
+
+
+def await_instance_group_ew_netris_ready(
+    kube,
+    namespace: str,
+    *,
+    instance_group_uid: str,
+    log: Steps,
+    timeout: int = 900,
+    interval: int = 10,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Wait until IG NetworkBundle machines have EW netplan + Applied LAs.
+
+    Instance-group create names NetworkBundles ``nb-<ig-uid>-<poolSlug>``
+    (k0rdent-apis ``NetworkBundleName``) and stamps that name on
+    NicoNetworkConfig / ServerNICAttachment via ``ufo.mirantis.com/networkbundle``.
+    """
+    uid = (instance_group_uid or "").strip().lower()
+    assert uid, "instance_group_uid is required"
+    bundle_prefix = f"nb-{uid}-"
+
+    def _find_configs() -> list[dict[str, Any]] | None:
+        configs = [
+            cfg
+            for cfg in k8s.list_ufo_nico_network_configs(kube, namespace)
+            if (
+                ((cfg.get("metadata") or {}).get("labels") or {}).get(
+                    k8s.LABEL_NETWORK_BUNDLE
+                )
+                or ""
+            ).startswith(bundle_prefix)
+        ]
+        return configs or None
+
+    return _await_ew_netris_ready(
+        kube,
+        namespace,
+        find_configs=_find_configs,
+        log=log,
+        timeout=timeout,
+        interval=interval,
+    )
