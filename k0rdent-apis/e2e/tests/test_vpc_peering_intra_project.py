@@ -18,7 +18,9 @@ from conftest import auth_configured
 from helpers.steps import Steps
 from helpers.vpc_peering import peer_cluster_with_instance_group
 
-pytestmark = [pytest.mark.peering]
+# One hour, overriding pytest.ini's 1800s. Provisioning a cluster and an
+# instance group is alone allowed 1800s, and both teardown rounds run after it.
+pytestmark = [pytest.mark.peering, pytest.mark.timeout(3600)]
 
 
 @pytest.mark.smoke

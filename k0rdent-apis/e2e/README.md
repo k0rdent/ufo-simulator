@@ -71,7 +71,10 @@ pytest -m peering -s                      # both, incl. the extra IG in E2E_PEER
 pytest -m crossorg -s                     # cross-org only
 ```
 
-`-s` shows print/log output; default timeout is 1800s (`pytest.ini`).
+`-s` shows print/log output; default per-test timeout is 1800s (`pytest.ini`),
+raised to 3600s by a `timeout` marker on the peering and verity EW tests. It is
+wall-clock, so `E2E_DEMO_MODE` confirmation pauses count against it — add
+`--timeout=0` for a demo run.
 
 ### 3. Token refresh
 
