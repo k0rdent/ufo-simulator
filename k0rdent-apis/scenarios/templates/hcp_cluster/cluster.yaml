@@ -1,5 +1,5 @@
-id: lab-nico-verity-21
-displayName: Lab NICo+Verity cluster
+id: lab-nico-01
+displayName: Lab NICo HCP cluster
 clusterType: /v1/regions/local/compute/cluster-types/nico-hcp
 nodePools:
   - id: default
