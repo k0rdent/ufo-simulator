@@ -16,5 +16,5 @@ nico_operator_image_tag: 0.3.1-56072da
 
 netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
 netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-netris_operator_chart_version: 0.0.1-f8f3810
-netris_operator_image_tag: 0.0.1-f8f3810.1789653509
+netris_operator_chart_version: 0.0.1-4481257
+netris_operator_image_tag: 0.0.1-4481257.1789736241
