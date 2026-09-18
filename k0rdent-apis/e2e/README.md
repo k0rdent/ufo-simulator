@@ -71,7 +71,10 @@ pytest -m peering -s                      # both, incl. the extra IG in E2E_PEER
 pytest -m crossorg -s                     # cross-org only
 ```
 
-`-s` shows print/log output; default timeout is 1800s (`pytest.ini`).
+`-s` shows print/log output; default per-test timeout is 1800s (`pytest.ini`),
+raised to 3600s by a `timeout` marker on the peering and verity EW tests. It is
+wall-clock, so `E2E_DEMO_MODE` confirmation pauses count against it — add
+`--timeout=0` for a demo run.
 
 ### 3. Token refresh
 
@@ -155,8 +158,8 @@ Resource ids for clusters, instance groups, and security groups are
 | `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
 | `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=instance_group`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
 | `test_security_groups_effective.py` | `smoke` | `security-groups-effective` negatives (422 on missing/unknown `objectKind`/`objectId`, 404 on an unknown or cross-kind id) and the `vpc` arm against a materialized VPC. Creates nothing, needs no cluster — run it first to confirm Kong routes the path |
-| `test_vpc_peering_intra_project.py` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`; teardown |
-| `test_vpc_peering_inter_project.py` | `peering`, `crossorg` | Same handshake across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
+| `test_vpc_peering_intra_project.py` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`. Then both teardown rounds (below) |
+| `test_vpc_peering_inter_project.py` | `peering`, `crossorg` | The same scenario across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
 
 Do not run these against the same project in parallel — they share address
 pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
@@ -171,12 +174,29 @@ The peering tests have two extra requirements:
   of these tests.
 - **Two available `nico-lab` servers.** A cluster and an instance group are
   alive simultaneously (they are POSTed together so provisioning overlaps, then
-  awaited together). Every other scenario needs only one.
+  awaited together; teardown is batched the same way). Every other scenario
+  needs only one.
 
 `crossorg` is a *narrowing* marker, not an exclusion: both peering tests carry
 `peering`, so `-m peering` runs both. Use `-m "peering and not crossorg"` to skip
 the cross-org one. Only the same-project test carries `smoke`, so the default
 `-m smoke` run never provisions in the peer project.
+
+**Both teardown paths run in every peering test.** A peering can only be torn
+down once, so the two paths need two pairs — and both run against one cluster +
+IG, since the owners are what cost a provision:
+
+1. **Delete the peerings.** The tenant path where a peering is withdrawn
+   directly; the only place the NICo `VPCPeering`'s removal is observable.
+2. **Delete the owners**, with a second pair declared and never deleted by hand.
+   Deleting the IG must take only its own side (row tombstoned + UFO CR removed)
+   and leave the counterpart's row and CR dangling at a VPC that no longer
+   exists; deleting the cluster must then take the survivor **with it**. Covers
+   both terminate implementations — the IG path waits for its `Vpc`s, the
+   cluster path does not.
+
+The two tests are identical in flow and differ only in which project the
+instance group goes in.
 
 ### East-west tests are per-backend
 
@@ -218,7 +238,7 @@ e2e/
     secgroups.py       # SG lifecycle, one rule vocabulary, effective-read asserts
     vpc_peering.py     # shared peering handshake (provision, CR/backend asserts)
     steps.py           # numbered runtime STEP progress (pytest -s)
-    wait.py            # await_predicate / await_api_state / await_api_states
+    wait.py            # await_predicate / await_api_state(s) / await_api_absent(s)
   tests/
     test_hcp_cluster.py
     test_hcp_cluster_security_groups.py
@@ -237,7 +257,11 @@ copy that drifted would silently compare nothing.
 
 `helpers/vpc_peering.py` holds the handshake shared by the intra- and
 inter-project peering tests — provision cluster + IG, declare both halves,
-assert UFO/NICo objects, tear down.
+assert UFO/NICo objects, tear down. `_declare_both_sides` is the shared
+declaration; `run_handshake` (round 1, delete the peerings) and
+`run_owner_teardown` (round 2, delete the owners) each wrap it with one teardown
+path, and `peer_cluster_with_instance_group` runs both in turn. Round 2 passes
+`suffix="2"` so its pair does not reuse round 1's now-tombstoned ids.
 
 Templates live under [`../scenarios/templates`](../scenarios/templates):
 
