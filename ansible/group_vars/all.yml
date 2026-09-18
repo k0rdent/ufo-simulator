@@ -284,8 +284,8 @@ netris_auth_token: <token from webapi>
 netris_admin_username: netris
 netris_admin_password: password
 netris_license: ""
-# The netris_operator_* pins live in ansible/vars/common.yml, which every netris
-# playbook loads via vars_files and which therefore always wins over group_vars.
+# The netris_operator_* pins live in ansible/vars/artifacts-*.yaml (selected by
+# artifacts_vars_file), which every netris playbook loads via vars_files.
 
 loopback_base: "192.169"
 management_base: "192.168"

@@ -1,4 +1,4 @@
-# UFO / Verity / NICo operator artifact pins for branch main.
+# UFO / Verity / NICo / Netris operator artifact pins for branch main.
 # Managed by .github/workflows/bump-operator-artifacts.yaml
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
@@ -13,3 +13,8 @@ nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-
 nico_operator_chart_version: 0.3.1-38782c9
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
 nico_operator_image_tag: 0.3.1-38782c9
+
+netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
+netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
+netris_operator_chart_version: 0.0.1-f8f3810
+netris_operator_image_tag: 0.0.1-f8f3810.1789653509
