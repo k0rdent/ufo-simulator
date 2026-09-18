@@ -140,6 +140,12 @@ def _delete_owners(session, owners: list[tuple[str | None, str]], *, log: Steps)
     for url, what in owners:
         if not url:
             continue
+        # Skip rather than fire a DELETE that would 404: on the happy path round
+        # 2 already removed both owners, and a no-op step here is noise — and one
+        # more confirmation prompt under E2E_DEMO_MODE.
+        if api.get(session, url).status_code == 404:
+            log.info(f"{what} already gone")
+            continue
         log.step(f"DELETE {what}")
         deleted = api.delete(session, url)
         assert deleted.status_code in (202, 204, 404), deleted.text
@@ -675,6 +681,7 @@ def run_owner_teardown(
             log=log,
             run_id=run_id,
             test_name=test_name,
+            suffix=suffix,
             local_project=local_project,
             local_vpc=local_vpc,
             remote_project=remote_project,
@@ -685,9 +692,8 @@ def run_owner_teardown(
         # the contract is only observable in the window where this owner is gone
         # and the other is still alive. Deleting both together would leave
         # nothing to attribute.
-        log.step(f"DELETE {remote_owner_what} with BOTH peering sides still live")
+        log.info("both peering sides still declared — deleting the remote owner")
         _delete_owners(session, [(remote_owner_url, remote_owner_what)], log=log)
-        log.ok("owner gone")
 
         log.step(f"assert the torn-down owner's side ({hs.rev_id}) is gone")
         _await_absent(
@@ -735,9 +741,8 @@ def run_owner_teardown(
         # cleanup belongs to the owner's terminate workflow. This also exercises
         # the cluster path, which unlike the instance-group one does not wait
         # for its Vpcs.
-        log.step(f"DELETE {local_owner_what} with its peering still declared")
+        log.info("the surviving peering is still declared — deleting its owner")
         _delete_owners(session, [(local_owner_url, local_owner_what)], log=log)
-        log.ok("owner gone")
 
         log.step(f"assert the surviving side ({hs.fwd_id}) went with its owner")
         _await_absent(
