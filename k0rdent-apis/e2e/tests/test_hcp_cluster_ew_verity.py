@@ -140,20 +140,34 @@ def test_hcp_cluster_ew_verity_create_ready_terminate(
 
         backend = verity_backend_name()
         log.step(f"assert cluster owns a {backend} east-west VPC")
-        verity_vpcs = secgroups.owner_vpcs(
+        # Unfiltered first, so a failure can say whether the cluster owns no
+        # VPCs at all (not materialized yet) or owns them under some other
+        # backend name — the filtered call alone cannot tell those apart.
+        owned = secgroups.owner_vpcs(
             session,
             api_base,
             region,
             project,
             owner_kind="cluster",
             owner_uid=cluster_uid,
-            backend=backend,
+            backend=None,
         )
+        for v in owned:
+            log.info(
+                f"owned VPC {v.get('id')} backend={v.get('backend')!r} "
+                f"ufoCrName={v.get('ufoCrName')!r}"
+            )
+        verity_vpcs = [
+            v for v in owned if (v.get("backend") or "").lower() == backend.lower()
+        ]
         assert verity_vpcs, (
             f"expected at least one {backend} VPC owned by cluster "
-            f"uid={cluster_uid}. If the cluster type names a verity backend "
-            "instance without site/fabric_type, UFO takes the Clos path and no "
-            "Spectrum-X attachment happens."
+            f"uid={cluster_uid}, found {len(owned)} owned VPC(s) with backends "
+            f"{sorted((v.get('backend') or '<none>') for v in owned)!r}. "
+            "An empty list means no VPC is materialized for this cluster yet; "
+            "a different backend name means the cluster type names another "
+            "instance — and if that instance has no site/fabric_type, UFO takes "
+            "the Clos path and no Spectrum-X attachment happens."
         )
         log.ok(
             f"{len(verity_vpcs)} {backend} VPC(s): "
