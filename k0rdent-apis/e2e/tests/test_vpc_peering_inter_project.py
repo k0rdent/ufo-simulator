@@ -1,5 +1,9 @@
 """VPC peering across projects/orgs: cluster-VPC <-> instance-group-VPC.
 
+Identical in flow to the intra-project test — same scenario, both teardown
+rounds — and differing only in which project the instance group goes in. See
+``helpers.vpc_peering`` for the rounds.
+
 MOCK BOUNDARY. Requires MOCK_MODE **off** (``lab-inject.sh mock off``). Under
 mock, VPCPeeringCreate returns before applying a UFO VpcPeering CR, so every CR
 assertion here fails. See ``helpers.vpc_peering`` for the shared handshake and
@@ -14,9 +18,8 @@ from __future__ import annotations
 import pytest
 
 from conftest import auth_configured
-from helpers import api
 from helpers.steps import Steps
-from helpers.vpc_peering import peer_cluster_with_instance_group
+from helpers.vpc_peering import peer_cluster_with_instance_group, require_peer_project
 
 pytestmark = [pytest.mark.peering]
 
@@ -33,19 +36,14 @@ def test_vpc_peering_cross_org(
     exactly like the same-project case; this pins it. The one visible
     difference is spec.remote.namespace, which is set only when the projects
     differ — asserted by the shared handshake.
+
+    Both teardown rounds run here exactly as they do same-project; see
+    ``helpers.vpc_peering``.
     """
     log = Steps("VPC peering: cross-org (inter-project)")
     log.info(f"run_id={run_id} local={project} remote={peer_project}")
 
-    if peer_project == project:
-        pytest.skip("E2E_PEER_PROJECT must name a project other than PROJECT")
-    probe = api.get(
-        session,
-        api.region_url(api_base, region, "compute/instance-groups", project=peer_project),
-    )
-    if probe.status_code == 404:
-        pytest.skip(f"peer project {peer_project!r} not present on this lab")
-    api.raise_for_status(probe)
+    require_peer_project(session, api_base, region, project, peer_project)
 
     peer_cluster_with_instance_group(
         session,

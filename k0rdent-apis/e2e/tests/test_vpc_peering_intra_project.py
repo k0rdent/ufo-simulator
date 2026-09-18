@@ -1,5 +1,9 @@
 """VPC peering within one project: cluster-VPC <-> instance-group-VPC.
 
+Identical in flow to the inter-project test — same scenario, both teardown
+rounds — and differing only in which project the instance group goes in. See
+``helpers.vpc_peering`` for the rounds.
+
 MOCK BOUNDARY. Requires MOCK_MODE **off** (``lab-inject.sh mock off``). Under
 mock, VPCPeeringCreate returns before applying a UFO VpcPeering CR, so every CR
 assertion here fails. See ``helpers.vpc_peering`` for the shared handshake and
