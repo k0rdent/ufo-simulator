@@ -1,0 +1,36 @@
+---
+# Shared preamble for operator functional suites (UFO / NICo / Verity).
+#
+# Expects:
+#   e2e_workdir — operator checkout (e.g. /tmp/unified-fabric-operator)
+# Sets:
+#   e2e_test_results, e2e_test_failures, e2e_ginkgo_filters
+
+- name: Verify operator checkout exists
+  ansible.builtin.stat:
+    path: "{{ e2e_workdir }}/Makefile"
+  register: e2e_operator_makefile
+
+- name: Fail if operator checkout is missing
+  ansible.builtin.fail:
+    msg: >-
+      Missing {{ e2e_workdir }}/Makefile. Copy the operator sources under
+      {{ e2e_workdir }} before running this suite.
+  when: not e2e_operator_makefile.stat.exists
+
+- name: Init functional result lists
+  ansible.builtin.set_fact:
+    e2e_test_results: []
+    e2e_test_failures: []
+
+# e2e_tests holds pytest module names for k0rdent_apis. For operator suites,
+# non-.py entries are treated as Ginkgo label filters. If only .py defaults
+# remain (or the list is empty), run the full suite once as "all".
+- name: Resolve Ginkgo label filters from e2e_tests
+  ansible.builtin.set_fact:
+    e2e_ginkgo_filters: "{{ e2e_tests | reject('search', '\\.py$') | list }}"
+
+- name: Default to full functional suite when no labels given
+  ansible.builtin.set_fact:
+    e2e_ginkgo_filters: [""]
+  when: e2e_ginkgo_filters | length == 0

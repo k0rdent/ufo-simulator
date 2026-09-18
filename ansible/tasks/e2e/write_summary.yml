@@ -1,0 +1,43 @@
+---
+# Write combined PASS/FAIL summary for the current e2e run.
+#
+# Counts individual test cases from each report.xml, so a suite that ran one
+# ginkgo invocation with dozens of specs is not reported as a single test.
+#
+# Expects:
+#   e2e_results_dir, e2e_run_id, e2e_suite, e2e_test_results
+
+- name: Write raw run results
+  ansible.builtin.copy:
+    dest: "{{ e2e_results_dir }}/{{ e2e_run_id }}/results.json"
+    mode: "0644"
+    content: "{{ e2e_test_results | to_nice_json }}"
+
+- name: Build summary.txt / summary.yml / index.html
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ playbook_dir }}/files/e2e/junit_report.py"
+      - summary
+      - --run-dir
+      - "{{ e2e_results_dir }}/{{ e2e_run_id }}"
+      - --run-id
+      - "{{ e2e_run_id }}"
+      - --suite
+      - "{{ e2e_suite | default('') }}"
+      - --results
+      - "{{ e2e_results_dir }}/{{ e2e_run_id }}/results.json"
+  changed_when: false
+
+- name: Make run artifacts readable by nginx
+  ansible.builtin.file:
+    path: "{{ e2e_results_dir }}/{{ e2e_run_id }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0755"
+    recurse: true
+
+- name: Show e2e summary
+  ansible.builtin.debug:
+    msg: "{{ lookup('file', e2e_results_dir ~ '/' ~ e2e_run_id ~ '/summary.txt').splitlines() }}"

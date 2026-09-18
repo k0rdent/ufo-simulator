@@ -32,7 +32,53 @@ This creates:
 Re-run the playbook after `requirements.txt` changes to refresh packages, or
 whenever HCP creates fail with `no host cluster registered for ClusterType …`.
 
-### 2. Source env and run
+### 2. Run via Ansible (preferred)
+
+[`ansible/run-e2e-tests.yml`](../../ansible/run-e2e-tests.yml) runs the default
+test list from [`group_vars/all.yml`](../../ansible/group_vars/all.yml)
+(`e2e_tests`), writes a dedicated directory per test, and keeps going if one
+fails (the play fails at the end if any failed).
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+
+# Default set (HCP / IG / SG / VPC peering inter-project)
+ansible-playbook run-e2e-tests.yml
+
+# One or more specific modules
+ansible-playbook run-e2e-tests.yml \
+  -e '{"e2e_tests":["test_instance_group_security_groups.py"]}'
+
+ansible-playbook run-e2e-tests.yml \
+  -e '{"e2e_tests":["test_hcp_cluster.py","test_instance_group.py"]}'
+```
+
+Artifacts land under `/opt/ufo_simulator/e2e-results/<run_id>/<test_stem>/`:
+
+| File | Contents |
+|---|---|
+| `pytest.log` | Full stdout/stderr (`ginkgo.log` for operator suites) |
+| `report.html` | Self-contained HTML report |
+| `report.xml` | JUnit XML |
+| `cases.json` | Per-case results parsed from the JUnit XML |
+| `exit_code` | Runner process exit code |
+| `meta.yml` | Test path / workdir / start time |
+
+Per-run combined status (next to the per-test dirs):
+
+| File | Contents |
+|---|---|
+| `summary.txt` | PASS/FAIL lines + per-case totals |
+| `summary.yml` | Same data as structured YAML |
+| `index.html` | Clickable table linking every report and log |
+
+Counts come from each `report.xml`, so an operator suite that runs as a single
+Ginkgo invocation still reports all of its specs rather than one test.
+
+After `ansible-playbook ipa.yml` (nginx), browse results at
+`http://<cmp>:80/tests/` (autoindex of `e2e_results_dir`).
+
+### 3. Source env and run pytest by hand
 
 ```bash
 source /opt/ufo_simulator/venvs/e2e/env
@@ -73,7 +119,7 @@ pytest -m crossorg -s                     # cross-org only
 
 `-s` shows print/log output; default timeout is 1800s (`pytest.ini`).
 
-### 3. Token refresh
+### 4. Token refresh
 
 Every API call goes through `AuthedSession`:
 

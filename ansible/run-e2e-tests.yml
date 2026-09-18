@@ -1,0 +1,73 @@
+---
+# Run selected e2e / functional tests and store per-run logs + reports.
+#
+# Prerequisite for k0rdent_apis (once per lab):
+#   ansible-playbook prepare-e2e-tests.yml
+#
+# Operator functional suites expect a full git checkout under /tmp (override
+# e2e_*_dir), with go available on the CMP. The operator must already be
+# deployed on the cluster pointed at by e2e_kubeconfig.
+#
+# Suites (tasks/e2e/<e2e_suite>.yml):
+#   k0rdent_apis              — pytest under k0rdent-apis/e2e
+#   unified_fabric_operator   — make test-functional in e2e_ufo_dir
+#   nico_operator             — make test-functional in e2e_nico_operator_dir
+#   verity_operator           — make test-functional in e2e_verity_operator_dir
+#
+# Examples:
+#   ansible-playbook run-e2e-tests.yml
+#
+#   ansible-playbook run-e2e-tests.yml \
+#     -e '{"e2e_tests":["test_instance_group_security_groups.py"]}'
+#
+#   # Full UFO functional suite (sources at /tmp/unified-fabric-operator)
+#   ansible-playbook run-e2e-tests.yml -e e2e_suite=unified_fabric_operator \
+#     -e '{"e2e_tests":[]}'
+#
+#   # Label-filtered NICo / Verity runs
+#   ansible-playbook run-e2e-tests.yml -e e2e_suite=nico_operator \
+#     -e '{"e2e_tests":["vpc","ipblock"]}'
+#   ansible-playbook run-e2e-tests.yml -e e2e_suite=verity_operator \
+#     -e '{"e2e_tests":["gateway"]}' \
+#     -e '{"e2e_functional_env":{"VERITY_API_URL":"https://10.200.0.2/api","VERITY_API_LOGIN":"admin","VERITY_API_PASSWORD":"..."}}'
+#
+# Layout under e2e_results_dir/<run_id>/:
+#   k0rdent: <test_stem>/{pytest.log,report.html,report.xml,cases.json,meta.yml}
+#     report.html from pytest-html
+#   operators: <operator-name>/{ginkgo.log,report.html,report.xml,cases.json,meta.yaml}
+#     report.html from make test-functional / junit2html
+#     e.g. unified-fabric-operator/, nico-operator/, verity-operator/
+#     label-filtered runs nest as <operator-name>/<label>/
+#
+# Plus summary.txt / summary.yml / index.html for the run (junit_report.py
+# summary only — no custom per-test HTML conversion).
+
+- name: Run e2e tests
+  hosts: cmps
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ./vars/common.yml
+    - ./vars/{{ artifacts_vars_file }}
+    - ./vars/{{ sdn_provider }}.yml
+
+  # Defaults for e2e_suite / e2e_tests / paths live in group_vars/all.yml.
+
+  tasks:
+    - name: Allocate e2e run id
+      ansible.builtin.set_fact:
+        e2e_run_id: "{{ lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+
+    - name: Ensure e2e results root exists
+      ansible.builtin.file:
+        path: "{{ e2e_results_dir }}/{{ e2e_run_id }}"
+        state: directory
+        owner: root
+        group: www-data
+        mode: "0755"
+
+    - name: Run suite {{ e2e_suite }}
+      ansible.builtin.include_tasks: "tasks/e2e/{{ e2e_suite }}.yml"
+      tags: [e2e, run-e2e-tests]

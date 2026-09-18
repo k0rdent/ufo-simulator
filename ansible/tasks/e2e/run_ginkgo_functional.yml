@@ -1,0 +1,97 @@
+---
+# Run one make test-functional (Ginkgo) invocation; store log + JUnit (+ HTML).
+#
+# Expected vars:
+#   e2e_workdir           — operator checkout root (has Makefile)
+#   e2e_label_filter      — Ginkgo label filter; empty = full suite
+#   e2e_test_name         — short name for the result directory / summary
+#   e2e_test_outdir       — destination directory for this run's artifacts
+#   e2e_kubeconfig        — kubeconfig for the live cluster
+#   e2e_functional_procs  — Ginkgo --procs (default 1)
+#   e2e_functional_env    — optional extra env dict (E2E_*, NICO_*, VERITY_*, …)
+#   e2e_test_results / e2e_test_failures — list facts updated after the run
+#
+# make test-functional runs junit2html (same as verity-operator) into report.html
+# when the checkout Makefile includes that target.
+
+- name: Ensure per-test result directory exists
+  ansible.builtin.file:
+    path: "{{ e2e_test_outdir }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0755"
+
+- name: Write functional test run metadata
+  ansible.builtin.copy:
+    dest: "{{ e2e_test_outdir }}/meta.yaml"
+    mode: "0644"
+    content: |
+      test: {{ e2e_test_name }}
+      label_filter: {{ e2e_label_filter | default('') | to_json }}
+      workdir: {{ e2e_workdir }}
+      started_at: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      suite: {{ e2e_suite | default('') }}
+
+- name: Run make test-functional ({{ e2e_test_name }})
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cd {{ e2e_workdir | quote }}
+    export KUBECONFIG={{ e2e_kubeconfig | quote }}
+    {% for key, value in (e2e_functional_env | default({})) | dictsort %}
+    export {{ key }}={{ value | quote }}
+    {% endfor %}
+    make test-functional \
+      E2E_ENABLED=true \
+      E2E_PROCS={{ e2e_functional_procs | default(1) | quote }} \
+      E2E_LABEL_FILTER={{ e2e_label_filter | default('') | quote }} \
+      E2E_REPORT_DIR={{ e2e_test_outdir | quote }} \
+      E2E_JUNIT_REPORT=report.xml \
+      E2E_HTML_REPORT=report.html \
+      2>&1 | tee {{ (e2e_test_outdir ~ '/ginkgo.log') | quote }}
+  args:
+    executable: /bin/bash
+  register: e2e_ginkgo_run
+  changed_when: false
+  failed_when: false
+
+- name: Record ginkgo exit code
+  ansible.builtin.copy:
+    dest: "{{ e2e_test_outdir }}/exit_code"
+    mode: "0644"
+    content: "{{ e2e_ginkgo_run.rc }}\n"
+
+- name: Collect per-case counts for run summary
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ playbook_dir }}/files/e2e/junit_report.py"
+      - counts
+      - --junit
+      - "{{ e2e_test_outdir }}/report.xml"
+      - --json
+      - "{{ e2e_test_outdir }}/cases.json"
+  changed_when: false
+  failed_when: false
+
+- name: Make result artifacts world-readable for nginx
+  ansible.builtin.file:
+    path: "{{ e2e_test_outdir }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0755"
+    recurse: true
+
+- name: Record per-test result
+  ansible.builtin.set_fact:
+    e2e_test_results: "{{ e2e_test_results + [e2e_result_entry] }}"
+    e2e_test_failures: "{{ e2e_test_failures + ([e2e_test_name] if e2e_ginkgo_run.rc != 0 else []) }}"
+  vars:
+    e2e_result_entry:
+      test: "{{ e2e_test_name }}"
+      name: "{{ e2e_test_name }}"
+      label_filter: "{{ e2e_label_filter | default('') }}"
+      status: "{{ 'PASS' if e2e_ginkgo_run.rc == 0 else 'FAIL' }}"
+      rc: "{{ e2e_ginkgo_run.rc }}"
+      outdir: "{{ e2e_test_outdir }}"

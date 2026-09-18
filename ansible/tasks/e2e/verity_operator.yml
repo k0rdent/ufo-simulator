@@ -1,0 +1,62 @@
+---
+# verity-operator functional e2e (make test-functional).
+#
+# Sources expected at e2e_verity_operator_dir (default /tmp/verity-operator).
+# e2e_tests entries that are not *.py are Ginkgo label filters (e.g. gateway,
+# tenant). Empty / pytest-only list → full suite once.
+# Verity credentials: set via e2e_functional_env (VERITY_API_*) or config.yaml.
+# Skipped when fabric backend is not verity.
+
+- name: Skip verity-operator functional when fabric backend is not verity
+  when: (ufo_fabric_backend | default(sdn_provider)) != 'verity'
+  block:
+    - name: Note Verity functional skip
+      ansible.builtin.debug:
+        msg: >-
+          Skipping verity_operator functional tests: fabric backend is
+          {{ ufo_fabric_backend | default(sdn_provider) }} (need verity).
+
+    - name: Write skip summary for verity-operator
+      ansible.builtin.copy:
+        dest: "{{ e2e_results_dir }}/{{ e2e_run_id }}/summary.txt"
+        mode: "0644"
+        content: |
+          e2e run: {{ e2e_run_id }}
+          suite: verity_operator
+          status: SKIPPED
+          reason: fabric backend is {{ ufo_fabric_backend | default(sdn_provider) }} (need verity)
+          results: {{ e2e_results_dir }}/{{ e2e_run_id }}/
+
+- name: Run verity-operator functional
+  when: (ufo_fabric_backend | default(sdn_provider)) == 'verity'
+  block:
+    - name: Configure Verity functional suite
+      ansible.builtin.set_fact:
+        e2e_workdir: "{{ e2e_verity_operator_dir }}"
+        e2e_functional_env: "{{ (e2e_functional_env | default({})) | combine(e2e_verity_extra_env) }}"
+      vars:
+        e2e_verity_extra_env: "{{ {} | combine( {'E2E_HGX': e2e_verity_hgx} if (e2e_verity_hgx | default('')) | length > 0 else {} ) | combine( {'E2E_SWITCHPORT': e2e_verity_switchport} if (e2e_verity_switchport | default('')) | length > 0 else {} ) }}"
+
+    - name: Verity functional preamble
+      ansible.builtin.include_tasks: operator_functional_preamble.yml
+
+    - name: Run each Verity functional filter
+      ansible.builtin.include_tasks: run_ginkgo_functional.yml
+      vars:
+        e2e_label_filter: "{{ item }}"
+        e2e_test_name: "{{ (item | length > 0) | ternary(item | regex_replace('[^A-Za-z0-9._-]+', '_'), 'all') }}"
+        e2e_test_outdir: "{{ e2e_results_dir }}/{{ e2e_run_id }}/verity-operator{{ ('/' ~ (item | regex_replace('[^A-Za-z0-9._-]+', '_'))) if (item | length > 0) else '' }}"
+      loop: "{{ e2e_ginkgo_filters }}"
+      loop_control:
+        label: "{{ (item | length > 0) | ternary(item, 'all') }}"
+
+    - name: Write combined e2e summary
+      ansible.builtin.include_tasks: write_summary.yml
+
+    - name: Fail play if any Verity functional run failed
+      ansible.builtin.fail:
+        msg: >-
+          e2e failures ({{ e2e_test_failures | length }}):
+          {{ e2e_test_failures | join(', ') }}.
+          See {{ e2e_results_dir }}/{{ e2e_run_id }}/summary.txt
+      when: e2e_test_failures | length > 0

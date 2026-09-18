@@ -1,0 +1,56 @@
+---
+# k0rdent-apis lab e2e (pytest under k0rdent-apis/e2e).
+#
+# Expects playbook vars:
+#   e2e_tests, e2e_run_id, e2e_results_dir, e2e_venv_dir, e2e_env_file
+# Optional overrides:
+#   e2e_dir — checkout of k0rdent-apis/e2e (default: sibling of ansible/)
+
+- name: Resolve k0rdent-apis e2e paths
+  ansible.builtin.set_fact:
+    e2e_workdir: "{{ e2e_dir | default((playbook_dir ~ '/../k0rdent-apis/e2e') | realpath) }}"
+    e2e_test_results: []
+    e2e_test_failures: []
+
+- name: Verify e2e env file exists
+  ansible.builtin.stat:
+    path: "{{ e2e_env_file }}"
+  register: e2e_env_stat
+
+- name: Fail if e2e env was not prepared
+  ansible.builtin.fail:
+    msg: >-
+      Missing {{ e2e_env_file }}. Run prepare-e2e-tests.yml first so the venv
+      and sourceable env exist.
+  when: not e2e_env_stat.stat.exists
+
+- name: Verify e2e workdir exists
+  ansible.builtin.stat:
+    path: "{{ e2e_workdir }}"
+  register: e2e_workdir_stat
+
+- name: Fail if e2e workdir is missing
+  ansible.builtin.fail:
+    msg: "Missing k0rdent-apis e2e dir at {{ e2e_workdir }}"
+  when: not e2e_workdir_stat.stat.exists
+
+- name: Run each k0rdent-apis test
+  ansible.builtin.include_tasks: run_pytest.yml
+  vars:
+    e2e_test_relpath: "{{ item if ('/' in item) else ('tests/' ~ item) }}"
+    e2e_test_name: "{{ item | basename | regex_replace('\\.py$', '') }}"
+    e2e_test_outdir: "{{ e2e_results_dir }}/{{ e2e_run_id }}/{{ e2e_test_name }}"
+  loop: "{{ e2e_tests }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Write combined e2e summary
+  ansible.builtin.include_tasks: write_summary.yml
+
+- name: Fail play if any k0rdent-apis test failed
+  ansible.builtin.fail:
+    msg: >-
+      e2e failures ({{ e2e_test_failures | length }}):
+      {{ e2e_test_failures | join(', ') }}.
+      See {{ e2e_results_dir }}/{{ e2e_run_id }}/summary.txt
+  when: e2e_test_failures | length > 0
