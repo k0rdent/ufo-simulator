@@ -4,15 +4,32 @@
     path: /opt/netris/installer.lock
   register: lock_file
 
+# Same trap as the switches: get-netris.sh writes installer.lock even when the
+# loopback never lands, and the agent then aborts on GetLoopbackAddress without
+# ever pushing config. Gating on the lock alone makes that permanent, so check
+# the loopback too and let a partial enrollment be retried.
+- name: "{{ sg_name }} - Check loopback address is configured"
+  ansible.builtin.command: ip -4 -oneline addr show lo
+  register: sg_lo_addr
+  changed_when: false
+  failed_when: false
+
+- name: "{{ sg_name }} - Set enrollment fact"
+  ansible.builtin.set_fact:
+    # Match "inet <ip>/" so .1 does not match .10, .11, ...
+    sg_enrolled: >-
+      {{ lock_file.stat.exists
+         and ('inet ' ~ loopback_ip ~ '/') in (sg_lo_addr.stdout | default('')) }}
+
 - name: Download netris installator
   ansible.builtin.shell: |
     curl -f -L -o /tmp/get-netris.sh https://get.netris.io; chmod 755 /tmp/get-netris.sh
   args:
     creates: /tmp/get-netris.sh
-  when: not lock_file.stat.exists
+  when: not sg_enrolled | bool
 
 - name: Enroll Softgate to netris
-  when: not lock_file.stat.exists
+  when: not sg_enrolled | bool
   args:
     executable: /bin/sh
   become: true
@@ -27,11 +44,32 @@
 - name: Failed to register
   fail:
     msg: "Failed to enroll softgate {{ sg_name }} with stdout: {{ enroll_cmd.stdout }} \n error: {{ enroll_cmd.stderr }}"
-  when: not lock_file.stat.exists and enroll_cmd.rc != 0
+  when: not sg_enrolled | bool and enroll_cmd.rc != 0
 
 
 - name: Reboot sg to apply netris agent config
   become: true
   ansible.builtin.reboot:
     reboot_timeout: 300
-  when: not lock_file.stat.exists and enroll_cmd.rc == 0
+  when: not sg_enrolled | bool and enroll_cmd.rc == 0
+
+- name: "{{ sg_name }} - Wait for loopback {{ loopback_ip }} after enrollment"
+  ansible.builtin.command: ip -4 -oneline addr show lo
+  register: sg_lo_verify
+  changed_when: false
+  failed_when: false
+  until: ('inet ' ~ loopback_ip ~ '/') in (sg_lo_verify.stdout | default(''))
+  retries: 12
+  delay: 10
+  when: not sg_enrolled | bool
+
+- name: "{{ sg_name }} - Fail if the loopback was never configured"
+  fail:
+    msg: >-
+      get-netris.sh did not configure loopback {{ loopback_ip }} on {{ sg_name }};
+      the agent aborts on GetLoopbackAddress and pushes no config. Re-running retries
+      enrollment automatically. Check the enrollment output above and journalctl -u netris-sg
+      on the softgate.
+  when:
+    - not sg_enrolled | bool
+    - ('inet ' ~ loopback_ip ~ '/') not in (sg_lo_verify.stdout | default(''))

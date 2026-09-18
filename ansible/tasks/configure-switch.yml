@@ -44,43 +44,85 @@
   debug:
     msg: "{{ nv_commands }}"
 
+- name: "{{ switch_name }} - Set loopback address fact"
+  ansible.builtin.set_fact:
+    switch_loopback_ip: "{{ loopback_base_switch }}.{{ switch_id | int + 1 }}"
+
 - name: Check if switch enrolled
   ansible.builtin.stat:
     path: /opt/netris/installer.lock
   register: lock_file
+
+# get-netris.sh writes installer.lock even when it fails to apply the loopback,
+# and without it the agent aborts with "GetLoopbackAddress loopback address not
+# found": no BGP config is ever generated and the switch stays red in the UI.
+# Gating on the lock alone makes that state permanent, because every later run
+# skips the switch and reports success. Require the loopback too, so a partial
+# enrollment is retried instead of silently accepted.
+- name: "{{ switch_name }} - Check loopback address is configured"
+  ansible.builtin.command: ip -4 -oneline addr show lo
+  register: switch_lo_addr
+  changed_when: false
+  failed_when: false
+
+- name: "{{ switch_name }} - Set enrollment fact"
+  ansible.builtin.set_fact:
+    # Match "inet <ip>/" so .1 does not match .10, .11, ...
+    switch_enrolled: >-
+      {{ lock_file.stat.exists
+         and ('inet ' ~ switch_loopback_ip ~ '/') in (switch_lo_addr.stdout | default('')) }}
 
 - name: Download netris installator
   ansible.builtin.shell: |
     curl -f -L -o /tmp/get-netris.sh https://get.netris.io; chmod 755 /tmp/get-netris.sh
   args:
     creates: /tmp/get-netris.sh
-  when: not lock_file.stat.exists
+  when: not switch_enrolled | bool
 
 - name: Enroll switch to netris
-  when: not lock_file.stat.exists
+  when: not switch_enrolled | bool
   args:
     executable: /bin/sh
-  vars:
-    switch_digit: "{{ switch_id | int + 1 }}"
-    loopback_ip: "{{ loopback_base_switch }}.{{ switch_digit }}"
   become: true
   environment:
     PATH: "/usr/bin:/bin:/usr/cumulus/bin:/sbin:/usr/sbin"
   shell: |
-    /tmp/get-netris.sh --lo {{ loopback_ip }} --controller {{ netris_controller_ip }} --ctl-version {{ netris_ctl_version }} --hostname {{ switch_name }} --auth {{ netris_auth_token }} --node-type switch --hw-nos cumulus_nvue --debug --apt-repo dev
+    /tmp/get-netris.sh --lo {{ switch_loopback_ip }} --controller {{ netris_controller_ip }} --ctl-version {{ netris_ctl_version }} --hostname {{ switch_name }} --auth {{ netris_auth_token }} --node-type switch --hw-nos cumulus_nvue --debug --apt-repo dev
   register: enroll_cmd
   ignore_errors: True
 
 - name: Failed to register
   fail:
     msg: "Failed to enroll switch {{ switch_name }} with stdout: {{ enroll_cmd.stdout }} \n error: {{ enroll_cmd.stderr }}"
-  when: not lock_file.stat.exists and enroll_cmd.rc != 0
+  when: not switch_enrolled | bool and enroll_cmd.rc != 0
 
 - name: Reboot switch to apply netris agent config
   become: true
   ansible.builtin.reboot:
     reboot_timeout: 120
-  when: not lock_file.stat.exists and enroll_cmd.rc == 0
+  when: not switch_enrolled | bool and enroll_cmd.rc == 0
+
+- name: "{{ switch_name }} - Wait for loopback {{ switch_loopback_ip }} after enrollment"
+  ansible.builtin.command: ip -4 -oneline addr show lo
+  register: switch_lo_verify
+  changed_when: false
+  failed_when: false
+  until: ('inet ' ~ switch_loopback_ip ~ '/') in (switch_lo_verify.stdout | default(''))
+  retries: 12
+  delay: 10
+  when: not switch_enrolled | bool
+
+- name: "{{ switch_name }} - Fail if the loopback was never configured"
+  fail:
+    msg: >-
+      get-netris.sh did not configure loopback {{ switch_loopback_ip }} on {{ switch_name }};
+      the agent aborts on GetLoopbackAddress and pushes no BGP config. Re-running retries
+      enrollment automatically. To fix by hand on the switch:
+      nv set interface lo ip address {{ switch_loopback_ip }}/32 && nv config apply --assume-yes
+      && systemctl restart netris-sw
+  when:
+    - not switch_enrolled | bool
+    - ('inet ' ~ switch_loopback_ip ~ '/') not in (switch_lo_verify.stdout | default(''))
 
 - name: "{{ switch_name }} - Netris enrollment complete"
   debug:
