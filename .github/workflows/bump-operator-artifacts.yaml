@@ -1,13 +1,17 @@
 name: bump-operator-artifacts
 
-# Fetch latest UFO / Verity / NICo operator chart+image tags from each repo's
-# successful `dev-build-artifacts.yml` run on the chosen branch (same approach as
-# k0rdent/core-services e2e-periodic-ufo), then open a PR that bumps:
+# Fetch latest UFO / Verity / NICo / Netris operator chart+image tags from each
+# repo's successful `dev-build-artifacts.yml` run on the chosen branch (same
+# approach as k0rdent/core-services e2e-periodic-ufo), then open a PR that bumps:
 #   - ansible/vars/artifacts-main.yaml              when release is "main"
 #   - ansible/vars/artifacts-<release>.yaml         otherwise (create or update)
 #
+# Branch mapping for netris-operator: workflow input "main" → git branch
+# "extensions"; other releases (e.g. release-v0.3.x) use the same branch name.
+#
 # Requires repo secret GH_RUNNERS_READ_PAT (PAT that can read Actions artifacts from
-# k0rdent/unified-fabric-operator, k0rdent/verity-operator, k0rdent/nico-operator).
+# k0rdent/unified-fabric-operator, k0rdent/verity-operator, k0rdent/nico-operator,
+# k0rdent/netris-operator).
 
 on:
   schedule:
@@ -18,7 +22,8 @@ on:
       release:
         description: >
           Operator git branch to fetch artifacts from (e.g. main, release-v0.3.x).
-          Writes ansible/vars/artifacts-main.yaml or ansible/vars/artifacts-<release>.yaml
+          Writes ansible/vars/artifacts-main.yaml or ansible/vars/artifacts-<release>.yaml.
+          For netris-operator, "main" maps to the "extensions" branch.
         required: true
         type: string
         default: main
@@ -36,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       branch: ${{ steps.resolve.outputs.branch }}
+      netris_branch: ${{ steps.resolve.outputs.netris_branch }}
       vars_file: ${{ steps.resolve.outputs.vars_file }}
       pr_branch: ${{ steps.resolve.outputs.pr_branch }}
     steps:
@@ -49,14 +55,21 @@ jobs:
             echo "invalid release/branch name: ${branch}" >&2
             exit 1
           fi
+          # netris-operator's default development branch is "extensions", not "main"
+          if [ "$branch" = "main" ]; then
+            netris_branch="extensions"
+          else
+            netris_branch="$branch"
+          fi
           vars_file="ansible/vars/artifacts-${branch}.yaml"
           slug="${branch//\//-}"
           {
             echo "branch=${branch}"
+            echo "netris_branch=${netris_branch}"
             echo "vars_file=${vars_file}"
             echo "pr_branch=chore/bump-operator-artifacts-${slug}"
           } >> "$GITHUB_OUTPUT"
-          echo "branch=${branch} vars_file=${vars_file}"
+          echo "branch=${branch} netris_branch=${netris_branch} vars_file=${vars_file}"
 
   get-latest-ufo:
     needs: resolve-release
@@ -118,9 +131,29 @@ jobs:
           chmod +x .github/scripts/get-latest-build-artifacts.sh
           .github/scripts/get-latest-build-artifacts.sh
 
+  get-latest-netris:
+    needs: resolve-release
+    runs-on: ubuntu-latest
+    outputs:
+      chart_version: ${{ steps.fetch.outputs.chart_version }}
+      image_version: ${{ steps.fetch.outputs.image_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get latest netris-operator
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.GH_RUNNERS_READ_PAT }}
+          TARGET_REPO: k0rdent/netris-operator
+          WORKFLOW_ID: dev-build-artifacts.yml
+          TARGET_BRANCH: ${{ needs.resolve-release.outputs.netris_branch }}
+          OUT_DIR: /tmp/netris-artifacts
+        run: |
+          chmod +x .github/scripts/get-latest-build-artifacts.sh
+          .github/scripts/get-latest-build-artifacts.sh
+
   bump-and-pr:
     name: Bump versions and open PR
-    needs: [resolve-release, get-latest-ufo, get-latest-verity, get-latest-nico]
+    needs: [resolve-release, get-latest-ufo, get-latest-verity, get-latest-nico, get-latest-netris]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -129,12 +162,15 @@ jobs:
         env:
           VARS_FILE: ${{ needs.resolve-release.outputs.vars_file }}
           RELEASE_BRANCH: ${{ needs.resolve-release.outputs.branch }}
+          NETRIS_BRANCH: ${{ needs.resolve-release.outputs.netris_branch }}
           UFO_CHART: ${{ needs.get-latest-ufo.outputs.chart_version }}
           UFO_IMAGE: ${{ needs.get-latest-ufo.outputs.image_version }}
           VERITY_CHART: ${{ needs.get-latest-verity.outputs.chart_version }}
           VERITY_IMAGE: ${{ needs.get-latest-verity.outputs.image_version }}
           NICO_CHART: ${{ needs.get-latest-nico.outputs.chart_version }}
           NICO_IMAGE: ${{ needs.get-latest-nico.outputs.image_version }}
+          NETRIS_CHART: ${{ needs.get-latest-netris.outputs.chart_version }}
+          NETRIS_IMAGE: ${{ needs.get-latest-netris.outputs.image_version }}
         run: |
           set -euo pipefail
           file="$VARS_FILE"
@@ -166,6 +202,11 @@ jobs:
               echo "nico_operator_chart_version: ${NICO_CHART}"
               echo "nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator"
               echo "nico_operator_image_tag: ${NICO_IMAGE}"
+              echo
+              echo "netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator"
+              echo "netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator"
+              echo "netris_operator_chart_version: ${NETRIS_CHART}"
+              echo "netris_operator_image_tag: ${NETRIS_IMAGE}"
             } > "$file"
           else
             echo "Updating existing ${file}"
@@ -175,16 +216,21 @@ jobs:
             set_key verity_operator_image_tag "$VERITY_IMAGE"
             set_key nico_operator_chart_version "$NICO_CHART"
             set_key nico_operator_image_tag "$NICO_IMAGE"
+            set_key netris_operator_chart_repo "oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator"
+            set_key netris_operator_image "registry.ci.mirantis.com/k0rdent-bm/images/netris-operator"
+            set_key netris_operator_chart_version "$NETRIS_CHART"
+            set_key netris_operator_image_tag "$NETRIS_IMAGE"
           fi
 
           {
             echo "## Proposed bumps (\`${RELEASE_BRANCH}\` → \`${file}\`)"
             echo ""
-            echo "| Component | Chart | Image |"
-            echo "|---|---|---|"
-            echo "| unified-fabric-operator | \`${UFO_CHART}\` | \`${UFO_IMAGE}\` |"
-            echo "| verity-operator | \`${VERITY_CHART}\` | \`${VERITY_IMAGE}\` |"
-            echo "| nico-operator | \`${NICO_CHART}\` | \`${NICO_IMAGE}\` |"
+            echo "| Component | Chart | Image | Source branch |"
+            echo "|---|---|---|---|"
+            echo "| unified-fabric-operator | \`${UFO_CHART}\` | \`${UFO_IMAGE}\` | \`${RELEASE_BRANCH}\` |"
+            echo "| verity-operator | \`${VERITY_CHART}\` | \`${VERITY_IMAGE}\` | \`${RELEASE_BRANCH}\` |"
+            echo "| nico-operator | \`${NICO_CHART}\` | \`${NICO_IMAGE}\` | \`${RELEASE_BRANCH}\` |"
+            echo "| netris-operator | \`${NETRIS_CHART}\` | \`${NETRIS_IMAGE}\` | \`${NETRIS_BRANCH}\` |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           git diff -- "$file" || true
@@ -194,23 +240,25 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: |
-            chore: bump UFO / Verity / NICo artifacts (${{ needs.resolve-release.outputs.branch }})
+            chore: bump UFO / Verity / NICo / Netris artifacts (${{ needs.resolve-release.outputs.branch }})
 
             Update pins in ${{ needs.resolve-release.outputs.vars_file }} from the latest
-            successful ${{ needs.resolve-release.outputs.branch }} dev-build-artifacts.yml runs.
+            successful ${{ needs.resolve-release.outputs.branch }} (netris: ${{ needs.resolve-release.outputs.netris_branch }})
+            dev-build-artifacts.yml runs.
           title: "chore: bump operator artifacts (${{ needs.resolve-release.outputs.branch }})"
           body: |
             Automated bump of operator artifacts for branch `${{ needs.resolve-release.outputs.branch }}`.
 
             Target file: `${{ needs.resolve-release.outputs.vars_file }}` (created if missing).
 
-            Versions from the latest successful `dev-build-artifacts.yml` run on `${{ needs.resolve-release.outputs.branch }}`:
+            Versions from the latest successful `dev-build-artifacts.yml` runs:
 
-            | Component | Chart | Image |
-            |---|---|---|
-            | unified-fabric-operator | `${{ needs.get-latest-ufo.outputs.chart_version }}` | `${{ needs.get-latest-ufo.outputs.image_version }}` |
-            | verity-operator | `${{ needs.get-latest-verity.outputs.chart_version }}` | `${{ needs.get-latest-verity.outputs.image_version }}` |
-            | nico-operator | `${{ needs.get-latest-nico.outputs.chart_version }}` | `${{ needs.get-latest-nico.outputs.image_version }}` |
+            | Component | Chart | Image | Source branch |
+            |---|---|---|---|
+            | unified-fabric-operator | `${{ needs.get-latest-ufo.outputs.chart_version }}` | `${{ needs.get-latest-ufo.outputs.image_version }}` | `${{ needs.resolve-release.outputs.branch }}` |
+            | verity-operator | `${{ needs.get-latest-verity.outputs.chart_version }}` | `${{ needs.get-latest-verity.outputs.image_version }}` | `${{ needs.resolve-release.outputs.branch }}` |
+            | nico-operator | `${{ needs.get-latest-nico.outputs.chart_version }}` | `${{ needs.get-latest-nico.outputs.image_version }}` | `${{ needs.resolve-release.outputs.branch }}` |
+            | netris-operator | `${{ needs.get-latest-netris.outputs.chart_version }}` | `${{ needs.get-latest-netris.outputs.image_version }}` | `${{ needs.resolve-release.outputs.netris_branch }}` |
 
             Source workflow: `bump-operator-artifacts`.
           branch: ${{ needs.resolve-release.outputs.pr_branch }}
