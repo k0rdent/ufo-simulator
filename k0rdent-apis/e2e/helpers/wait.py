@@ -168,3 +168,48 @@ def await_api_absent(
         steps=steps,
         log_every=log_every,
     )
+
+
+def await_api_absents(
+    getters: dict[str, Callable[[], Any]],
+    *,
+    timeout: float = 1800,
+    interval: float = 15,
+    steps: "Steps | None" = None,
+    log_every: int = 1,
+) -> None:
+    """Wait until ALL of several resources are gone (each getter returns None).
+
+    The teardown counterpart of :func:`await_api_states`: delete everything
+    first, then wait once, so the wall clock is max() rather than sum(). Deletes
+    are asynchronous in the same way creates are — DELETE returns long before
+    the resource is reaped — so the parallelism again comes from deferring the
+    waits, not from threads.
+
+    ``getters`` maps a display name to a zero-arg getter returning None once
+    that resource is gone.
+    """
+    deadline = time.monotonic() + timeout
+    gone: set[str] = set()
+    attempt = 0
+    if steps:
+        steps.info(f"waiting for {', '.join(getters)} to go (timeout={timeout:.0f}s)")
+    while time.monotonic() < deadline:
+        for name, get_fn in getters.items():
+            if name in gone:
+                continue
+            if get_fn() is None:
+                gone.add(name)
+                if steps:
+                    steps.ok(f"{name} gone")
+        if len(gone) == len(getters):
+            return
+        attempt += 1
+        if steps and attempt % max(log_every, 1) == 0:
+            pending = ", ".join(name for name in getters if name not in gone)
+            steps.progress(f"… still waiting for {pending} to go")
+        time.sleep(interval)
+    pending = [name for name in getters if name not in gone]
+    if steps:
+        steps.info(f"{', '.join(pending)} still present, TIMED OUT after {timeout:.0f}s")
+    raise AssertionError(f"{', '.join(pending)} not gone within {timeout}s")
