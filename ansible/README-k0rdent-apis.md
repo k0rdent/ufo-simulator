@@ -205,51 +205,33 @@ PROJECT= $K0R create compute/address-pools --file "$TPL/global/address-pool-glob
 PROJECT= $K0R create compute/address-pools --file "$TPL/global/address-pool-global-public.yaml"
 ```
 
-### 3a. Two-VPC (nico + verity) HCP cluster with per-slot NIC pinning
+### 3a. Single-VPC (nico) HCP cluster
 
-Exercises the multi-VPC schema (`networkSchema.vpcs[]`) with two different
-fabric backends in a single cluster-type, plus a two-ethernet nodePool
-where each interface is pinned to a specific physical NIC by PCI slot.
+The smallest end-to-end deploy: one VPC, one worker pool, one DHCP interface.
+`cluster-type-nico-hcp.yaml` declares:
 
-`match.pciSlot` resolves against the machine's advertised inventory via
-the Link CR's `spec.peer.pciSlot`, not against on-VM `ip link` output.
-`nico-rest.yml` renders a topology-derived inventory overlay
-([`templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2`](templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2))
-and passes it to Helm with `-f`, overriding the chart defaults. UUID/MAC/LLDP
-match `create-vms.yml` on cmp01 (calculable on gtw01 — no libvirt query):
-
-```
-eth1   0000:a3:00.0   → leaf-0   swp{N+1}     (MAC offset vm_index * vm_port_count + 0)
-eth2   0000:a3:00.1   → leaf-1   swp{N+1}
-eth5…eth12            → ew-leaf-0…7 breakout ports (swpXsY)
-```
-
-Only LLDP-attached interfaces get a NicoMachine Link CR, so those are the
-slots `byslot` can resolve. For the nico mgmt interface we therefore use the
-OS interface name (`enp1s0` per systemd-predictable naming) as the ethernet
-map key and skip `match` entirely. The schema declares:
-
-- `vpc-nico` (backend `nico`) with `net-nico` and a subnet from
-  `global-default`.
-- `vpc-verity` (backend `verity`) with `net-verity` and a subnet from
-  `global-public`. The `verity` backend must be enabled in the region's
-  fabric operator; on a nico-only lab the ClusterType create validates but
-  the cluster reconcile will stall on the verity-backed Vpc until a verity
-  fabric operator is present.
-- Two ethernets per worker: `enp1s0` (interface-name matched, DHCP)
-  attached to `net-nico`; `ns_verity` pinned by
-  `match.pciSlot: 0000:a3:00.0` (mock `eth1`, LLDP-attached to `leaf-0`
-  port `swp1`) attached to `net-verity` — this is the SNA case, where
-  the Verity backend programs the required switch ports for the
-  attached interface. `byslot` matching requires `connectToNetwork`,
-  and `connectToNetwork` is mutually exclusive with `addresses`, so
-  addressing on the verity interface is left to the Verity fabric /
-  DHCP rather than pinned via `ipFromSubnet`.
+- `vpc-nico` (backend `nico`) with the l3vpn network `net-nico` and the subnet
+  `sub-nico` from `global-default`.
+- One worker pool, id `default`, on machine-type `nico-lab`
+  (`nodeCountDefault: 1`, bounds 1–6). Its single ethernet `enp1s0` is
+  keyed by OS-predictable name with no `match` block — the NIC behind it has
+  no LLDP peer and therefore no Link CR, which is what `match` resolves
+  against — and attaches to `net-nico` by `connectToNetwork` with `dhcp4`.
 
 ```bash
 PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico-hcp.yaml"
 PROJECT=$PROJECT $K0R create compute/clusters --file "$TPL/hcp_cluster/cluster.yaml"
 ```
+
+The deployment body references the pool by id — `nodePools[].id: default` on a
+cluster, `nodePools[].nodePool: default` on an instance group. The id must name
+a pool on the bound ClusterType version, or the create is rejected with
+`422 validation: nodePools[0]: id … not found on bound ClusterType`.
+
+For the multi-VPC east-west variants — a second, fabric-backed VPC and
+rail-pinned interfaces — see `cluster-type-netris-hcp-ew.yaml` (netris) and
+`cluster-type-nico-verity-hcp-ew.yaml` (verity), with the matching
+`hcp_cluster_ew/` and `hcp_cluster_ew_verity/` deployment bodies.
 
 Field notes:
 
@@ -263,33 +245,15 @@ Field notes:
   NetworkBundle carries the resolved UFO subnet ref, which is what
   downstream reconciles binding the ethernet to the network the subnet
   belongs to.
+- Node pools are materialized **ClusterType-driven**: one pool per ClusterType
+  pool, in ClusterType order. The body's `nodePools[]` are sparse size
+  overrides, not the pool set — a pool you omit is still created, at its
+  `nodeCountDefault`.
 
-**Version requirement.** `match.pciSlot` and `connectToNetwork` on the
-v3 (HCP/CAPI) code path were added by
-[KCS-1276](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/cluster_deployment_create_v3.go)
-(commits `84fbf9160`, `ab380b93a`, `a45372183`). A workflow-worker image
-built from `main` before those landed silently drops both at
-`json.Unmarshal` in the v3 translator's `naEthernet` / `naMatch` structs
-(the sibling translator in
-[`child-workflows/providers/ufo/create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go)
-used by 3b has always carried them). Confirm by inspecting the
-materialized NetworkBundle:
+### 3b. Single-VPC (nico) standalone BMaaS
 
-```bash
-sudo kubectl -n prj-kind-main get networkbundle \
-  -l cluster.k0rdent.ai/name=lab-nico-verity-04 \
-  -o yaml | grep -E 'pciSlot|connectToNetwork'
-```
-
-If those keys don't show up, rebuild the workflow-worker with
-[`lab-inject.sh rebuild workflow-worker`](lab-inject.sh) against the
-current checkout.
-
-### 3b. Two-VPC (nico + verity) standalone BMaaS with per-slot NIC pinning
-
-Same networkSchema + slot-pinning pattern as 3a, applied to the standalone
-BMaaS flow: no `k8s` block on the cluster-type, and the deployment target
-is `/compute/instance-groups` rather than `/compute/clusters`. Ensure the
+Same cluster-type as 3a, applied to the standalone BMaaS flow: the deployment
+target is `/compute/instance-groups` rather than `/compute/clusters`. Ensure the
 project namespace carries the k0rdent labels the KCM/k0rdent-apis operators
 look for:
 
@@ -308,33 +272,68 @@ PROJECT= $K0R create compute/cluster-types --file "$TPL/global/cluster-type-nico
 PROJECT=$PROJECT $K0R create compute/instance-groups --file "$TPL/instance_group/instance-group.yaml"
 ```
 
-Same interface-selection rules as 3a apply: the nico interface uses
-its OS-predictable name (`enp1s0`) as the ethernet-map key because the
-`0000:01:00.0` NIC (mock `eth0`, Mellanox) has no LLDP peer → no Link
-CR → `byslot` can't resolve it. The verity side exercises two
-byslot-pinned interfaces, both against LLDP-attached slots that carry a
-Link CR (per the topology-rendered nico-core-mock inventory from
-[`nico_core_mock_inventory_values.yaml.j2`](templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2)):
-
-- `verity-l3-addr` → slot `0000:a3:00.0` (eth1 → leaf-0) on the l3vpn network `net-verity-l3`, addressed via
-  `addresses[].ipFromSubnet: "sub-verity-l3"`.
-- `verity-l2-net` → slot `0000:a3:00.1` (eth2 → leaf-1) on the l2vpn network `net-verity-l2` (VLAN 500), joined via
-  `connectToNetwork: { name: "net-verity-l2" }` with no `addresses` —
-  L2 addressing is left to the fabric / DHCP.
-
-Unlike 3a's HCP path, the instance-group translator
-([`create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go))
-does not enforce mutual exclusion between `match.pciSlot` and
-`addresses[]`: `translateMatch` and `translateAddresses` are emitted
-independently, so byslot-pinning coexists with subnet-allocated
-addressing on the same ethernet. `verity` must be an enabled fabric
-backend in the region for the `vpc-verity` reconcile to complete.
-
 The instance-group flow uses the sibling translator in
 [`child-workflows/providers/ufo/create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go)
-rather than the v3 inline one, so the KCS-1276 version requirement
-called out for 3a does not apply here — `match.pciSlot` and
-`connectToNetwork` have always been carried through in this code path.
+rather than the v3 inline one used by 3a. East-west variant:
+`cluster-type-nico-verity-ew.yaml` with `instance_group_ew_verity/`.
+
+### 3c. Field notes: interface matching
+
+An ethernet is keyed either by OS-predictable name or by a `match` block, and
+`match` resolves against the NicoMachine **Link CR** — the machine's advertised
+inventory — not against on-VM `ip link` output. Only LLDP-attached interfaces
+get a Link CR, so a mgmt NIC with no LLDP peer cannot be matched at all; use its
+OS name as the map key and skip `match`, as every current cluster type does for
+`enp1s0`.
+
+`nico-rest.yml` renders a topology-derived inventory overlay
+([`templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2`](templates/k8s/nico/nico_core_mock_inventory_values.yaml.j2))
+and passes it to Helm with `-f`, overriding the chart defaults. UUID/MAC/LLDP
+match `create-vms.yml` on cmp01 (calculable on gtw01 — no libvirt query):
+
+```
+eth1   0000:a3:00.0   → leaf-0   swp{N+1}     (MAC offset vm_index * vm_port_count + 0)
+eth2   0000:a3:00.1   → leaf-1   swp{N+1}
+eth5…eth12            → ew-leaf-0…7 breakout ports (swpXsY)
+```
+
+**What the current templates use.** The east-west types match by
+`match.fabricLocation.railId` — the Link CR carries `rail_id`, so a block picks
+whichever NIC LLDP found on that rail whatever the guest calls it. That is the
+portable form, and it is what `cluster-type-netris-hcp-ew.yaml` and
+`cluster-type-nico-verity-hcp-ew.yaml` declare.
+
+**`match.pciSlot`** pins an interface to one physical NIC by slot instead. No
+template in this repo currently uses it; these notes are kept because the
+semantics still apply to any schema that does. The two code paths differ on one
+rule:
+
+- **v3 (HCP/CAPI).** `byslot` matching requires `connectToNetwork`, and
+  `connectToNetwork` is mutually exclusive with `addresses` — addressing on a
+  pinned interface is left to the fabric / DHCP rather than pinned via
+  `ipFromSubnet`.
+- **Instance groups.** The sibling translator does not enforce that exclusion:
+  `translateMatch` and `translateAddresses` are emitted independently, so
+  byslot-pinning coexists with subnet-allocated addressing on the same ethernet.
+
+**Version requirement (v3 only).** `match.pciSlot` and `connectToNetwork` on the
+v3 code path were added by
+[KCS-1276](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/cluster_deployment_create_v3.go)
+(commits `84fbf9160`, `ab380b93a`, `a45372183`). A workflow-worker image
+built from `main` before those landed silently drops both at
+`json.Unmarshal` in the v3 translator's `naEthernet` / `naMatch` structs
+(the sibling instance-group translator has always carried them). Confirm by
+inspecting the materialized NetworkBundle:
+
+```bash
+sudo kubectl -n prj-kind-main get networkbundle \
+  -l cluster.k0rdent.ai/name=lab-nico-01 \
+  -o yaml | grep -E 'pciSlot|connectToNetwork'
+```
+
+If those keys don't show up, rebuild the workflow-worker with
+[`lab-inject.sh rebuild workflow-worker`](lab-inject.sh) against the
+current checkout.
 
 ## Iterating on Go changes
 

@@ -36,8 +36,9 @@ from helpers.steps import Steps
 _SCENARIO = "vpc_peering"
 
 # The nico VPC both global cluster types declare. Selected by schemaEntryId
-# rather than by filtering on backend: both types also declare a verity VPC,
-# and an entry id stays unambiguous even if a type grows a second nico VPC.
+# rather than by filtering on backend: netris-hcp-ew declares a second,
+# netris-backed VPC, and an entry id stays unambiguous even if a type grows a
+# second nico VPC.
 _NICO_ENTRY = "vpc-nico"
 
 
