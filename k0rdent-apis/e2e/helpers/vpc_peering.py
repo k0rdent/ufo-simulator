@@ -342,41 +342,42 @@ def _await_peering_cr(
     )
 
 
-def _await_peering_cr_absent(
-    kube,
-    namespace: str,
-    *,
-    local_cr: str,
-    remote_cr: str,
-    remote_namespace: str | None,
-    log: Steps,
-) -> None:
-    """Wait until the UFO VpcPeering CR for one side is gone.
+def _get_peering_cr(kube, cr: dict[str, Any]) -> dict[str, Any] | None:
+    """Re-read a UFO VpcPeering CR we already located, by name.
 
-    Matched on spec, like the positive lookup — the CR carries a finalizer that
-    is held until its backend cleanup finishes, so "deleted" here means really
-    gone, not merely marked for deletion.
+    By NAME, deliberately, unlike the initial lookup: once the object has been
+    found, re-deriving the spec filter is a way to be wrong. A filter that no
+    longer matches reports "absent" — so an absence assertion built on one can
+    pass for the wrong reason and prove nothing. Same-project peerings leave
+    spec.remote.namespace unset, which is exactly the mismatch that hides.
     """
+    meta = cr["metadata"]
+    return k8s.get_custom(
+        kube,
+        "ufo.mirantis.com",
+        "v1alpha1",
+        "vpcpeerings",
+        meta["namespace"],
+        meta["name"],
+    )
+
+
+def _await_peering_cr_gone(kube, cr: dict[str, Any], *, log: Steps) -> None:
+    """Wait until a UFO VpcPeering CR is really gone.
+
+    The CR carries a finalizer held until its backend cleanup finishes, so
+    "deleted" here means really gone, not merely marked for deletion.
+    """
+    meta = cr["metadata"]
 
     def _gone():
-        return (
-            True
-            if k8s.find_ufo_vpc_peering(
-                kube,
-                namespace,
-                local_cr=local_cr,
-                remote_cr=remote_cr,
-                remote_namespace=remote_namespace,
-            )
-            is None
-            else None
-        )
+        return True if _get_peering_cr(kube, cr) is None else None
 
     wait.await_predicate(
         _gone,
         timeout=600,
         interval=10,
-        desc=f"UFO VpcPeering {local_cr} -> {remote_cr} in {namespace} gone",
+        desc=f"UFO VpcPeering {meta['namespace']}/{meta['name']} gone",
         steps=log,
         log_every=2,
     )
@@ -449,6 +450,10 @@ class _Handshake:
         self.rev_id: str = ""
         self.fwd_url: str = ""
         self.rev_url: str = ""
+        # The CRs as first located. Held so later checks can re-read them by name
+        # instead of rebuilding the spec filter that found them.
+        self.fwd_cr: dict[str, Any] = {}
+        self.rev_cr: dict[str, Any] = {}
         self.crs: list[dict[str, Any]] = []
 
 
@@ -511,6 +516,7 @@ def _declare_both_sides(
         log=log,
     )
     _assert_peering_cr(fwd_cr, fwd_row, remote_ns=remote_ns if cross_project else None)
+    hs.fwd_cr = fwd_cr
     hs.crs.append(fwd_cr)
     log.ok(f"CR {fwd_cr['metadata']['name']} ReconcileReady")
 
@@ -548,6 +554,7 @@ def _declare_both_sides(
         log=log,
     )
     _assert_peering_cr(rev_cr, rev_row, remote_ns=local_ns if cross_project else None)
+    hs.rev_cr = rev_cr
     hs.crs.append(rev_cr)
     log.ok(f"CR {rev_cr['metadata']['name']} ReconcileReady")
 
@@ -667,9 +674,6 @@ def run_owner_teardown(
     Nothing else tests either: upstream's equivalent runs under MOCK_MODE and
     disclaims proving that any CR was applied or removed.
     """
-    local_ns = k8s.project_namespace(local_project)
-    remote_ns = k8s.project_namespace(remote_project)
-
     hs = _Handshake()
     try:
         _declare_both_sides(
@@ -703,14 +707,7 @@ def run_owner_teardown(
             log=log,
             timeout=900,
         )
-        _await_peering_cr_absent(
-            kube,
-            remote_ns,
-            local_cr=remote_vpc["ufoCrName"],
-            remote_cr=local_vpc["ufoCrName"],
-            remote_namespace=local_ns,
-            log=log,
-        )
+        _await_peering_cr_gone(kube, hs.rev_cr, log=log)
         hs.rev_url = ""  # already gone; keep the finally from re-deleting it
         log.ok("row and CR both removed by the owner's teardown")
 
@@ -720,16 +717,9 @@ def run_owner_teardown(
             f"the counterpart must outlive the other owner, got {survivor.status_code}: "
             f"{survivor.text}"
         )
-        assert (
-            k8s.find_ufo_vpc_peering(
-                kube,
-                local_ns,
-                local_cr=local_vpc["ufoCrName"],
-                remote_cr=remote_vpc["ufoCrName"],
-                remote_namespace=remote_ns,
-            )
-            is not None
-        ), "the counterpart's UFO CR must be left in place"
+        assert _get_peering_cr(kube, hs.fwd_cr) is not None, (
+            "the counterpart's UFO CR must be left in place"
+        )
         log.ok(f"row state={survivor.json().get('state')!r}, CR still present")
 
         log.step("assert the fabric peering went with the torn-down side")
@@ -752,14 +742,7 @@ def run_owner_teardown(
             log=log,
             timeout=900,
         )
-        _await_peering_cr_absent(
-            kube,
-            local_ns,
-            local_cr=local_vpc["ufoCrName"],
-            remote_cr=remote_vpc["ufoCrName"],
-            remote_namespace=remote_ns,
-            log=log,
-        )
+        _await_peering_cr_gone(kube, hs.fwd_cr, log=log)
         hs.fwd_url = ""
         log.ok("row and CR both removed by the owner's teardown")
     finally:
