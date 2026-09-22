@@ -522,3 +522,34 @@ users:
     ssh_key:
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDKHYD4WFo0aVocuBooUlZEmJI/GBwUZ/sg4f+RaFN7m vsaienko@mirantis.com"
       - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCp0evjOaK8c8SKYK4r2+0BN7g+8YSvQ2n8nFgOURCyvkJqOHi1qPGZmuN0CclYVdVuZiXbWw3VxRbSW3EH736VzgY1U0JmoTiSamzLHaWsXvEIW8VCi7boli539QJP0ikJiBaNAgZILyCrVPN+A6mfqtacs1KXdZ0zlMq1BPtFciR1JTCRcVs5vP2Wwz5QtY2jMIh3aiwkePjMTQPcfmh1TkOlxYu5IbQyZ3G1ahA0mNKI9a0dtF282av/F6pwB/N1R1nEZ/9VtcN2I1mf1NW/tTHEEcTzXYo1R/8K9vlqAN8QvvGLZtZduGviNVNoNWvoxaXxDt8CPv2B2NCdQFZp"
+
+# Lab e2e runner (ansible/run-e2e-tests.yml). Override e2e_tests / e2e_suite with -e.
+e2e_suite: k0rdent_apis
+e2e_tests:
+  - test_hcp_cluster.py
+  - test_hcp_cluster_ew.py
+  - test_hcp_cluster_security_groups.py
+  - test_instance_group.py
+  - test_instance_group_ew.py
+  - test_instance_group_security_groups.py
+  - test_security_groups_effective.py
+  - test_vpc_peering_inter_project.py
+e2e_results_dir: /opt/ufo_simulator/e2e-results
+e2e_venv_dir: /opt/ufo_simulator/venvs/e2e
+e2e_env_file: "{{ e2e_venv_dir }}/env"
+e2e_pytest_extra_args: "-s"
+
+# Operator functional suites (make test-functional). Checkouts are expected under
+# e2e_operator_src_root (copied to the CMP before the run).
+e2e_operator_src_root: /tmp
+e2e_ufo_dir: "{{ e2e_operator_src_root }}/unified-fabric-operator"
+e2e_nico_operator_dir: "{{ e2e_operator_src_root }}/nico-operator"
+e2e_verity_operator_dir: "{{ e2e_operator_src_root }}/verity-operator"
+e2e_kubeconfig: "{{ kubeconfig_path }}"
+e2e_functional_procs: 1
+e2e_functional_env: {}
+# Optional suite knobs (empty = omit / use operator defaults).
+e2e_ufo_vpc_backend: ""
+e2e_nico_ipblock_cidr: ""
+e2e_verity_hgx: ""
+e2e_verity_switchport: ""

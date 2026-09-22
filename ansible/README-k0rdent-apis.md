@@ -134,7 +134,32 @@ cd /opt/ufo_lab/ufo-simulator/ansible
 ansible-playbook prepare-e2e-tests.yml
 ```
 
-**Run on the CMP:**
+**Run via Ansible** (default `e2e_tests` from `group_vars/all.yml`; per-test
+logs/HTML/JUnit under `/opt/ufo_simulator/e2e-results/<run_id>/`):
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+ansible-playbook run-e2e-tests.yml
+
+# Or a subset:
+ansible-playbook run-e2e-tests.yml \
+  -e '{"e2e_tests":["test_instance_group_security_groups.py"]}'
+```
+
+Operator functional suites (checkout under `/tmp/<repo>`, then):
+
+```bash
+# Full suite
+ansible-playbook run-e2e-tests.yml -e e2e_suite=unified_fabric_operator -e '{"e2e_tests":[]}'
+ansible-playbook run-e2e-tests.yml -e e2e_suite=nico_operator -e '{"e2e_tests":[]}'
+ansible-playbook run-e2e-tests.yml -e e2e_suite=verity_operator -e '{"e2e_tests":[]}'
+
+# Ginkgo label filters (non-*.py e2e_tests entries)
+ansible-playbook run-e2e-tests.yml -e e2e_suite=nico_operator \
+  -e '{"e2e_tests":["vpc","ipblock"]}'
+```
+
+**Or run pytest by hand on the CMP:**
 
 ```bash
 source /opt/ufo_simulator/venvs/e2e/env

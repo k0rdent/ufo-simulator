@@ -34,6 +34,18 @@
             validate: nginx -t -c %s
           notify: reload nginx
           tags: [config]
+
+        - name: Ensure e2e results path is traversable by nginx
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: www-data
+            mode: "0755"
+          loop:
+            - "{{ e2e_results_dir | dirname }}"
+            - "{{ e2e_results_dir }}"
+          tags: [config]
     
     - name: Ensure initramfs files
       block:

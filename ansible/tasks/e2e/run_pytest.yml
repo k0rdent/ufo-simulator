@@ -1,0 +1,80 @@
+---
+# Run one pytest module and write log + HTML + JUnit into e2e_test_outdir.
+#
+# Expected vars:
+#   e2e_env_file          — sourceable env (activates venv, exports API/KUBECONFIG)
+#   e2e_workdir           — pytest cwd (directory with pytest.ini / tests/)
+#   e2e_test_relpath      — path passed to pytest (e.g. tests/test_foo.py)
+#   e2e_test_name         — short name used for the result directory
+#   e2e_test_outdir       — destination directory for this test's artifacts
+#   e2e_pytest_extra_args — optional extra CLI flags (default empty)
+#   e2e_test_results      — list fact updated with {test,name,status,rc,outdir}
+#   e2e_test_failures     — list fact updated when the run fails
+
+- name: Ensure per-test result directory exists
+  ansible.builtin.file:
+    path: "{{ e2e_test_outdir }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0755"
+
+- name: Write test run metadata
+  ansible.builtin.copy:
+    dest: "{{ e2e_test_outdir }}/meta.yml"
+    mode: "0644"
+    content: |
+      test: {{ e2e_test_relpath }}
+      workdir: {{ e2e_workdir }}
+      started_at: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      suite: {{ e2e_suite | default('') }}
+
+- name: Run pytest {{ e2e_test_relpath }}
+  ansible.builtin.shell: |
+    set -euo pipefail
+    # shellcheck disable=SC1090
+    source "{{ e2e_env_file }}"
+    cd "{{ e2e_workdir }}"
+    pytest {{ e2e_test_relpath | quote }} \
+      {{ e2e_pytest_extra_args | default('') }} \
+      --junitxml={{ (e2e_test_outdir ~ '/report.xml') | quote }} \
+      --html={{ (e2e_test_outdir ~ '/report.html') | quote }} \
+      --self-contained-html \
+      2>&1 | tee {{ (e2e_test_outdir ~ '/pytest.log') | quote }}
+  args:
+    executable: /bin/bash
+  register: e2e_pytest_run
+  changed_when: false
+  failed_when: false
+
+- name: Record pytest exit code
+  ansible.builtin.copy:
+    dest: "{{ e2e_test_outdir }}/exit_code"
+    mode: "0644"
+    content: "{{ e2e_pytest_run.rc }}\n"
+
+# pytest-html writes report.html; this only parses JUnit for the run summary.
+- name: Collect per-case counts
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ playbook_dir }}/files/e2e/junit_report.py"
+      - counts
+      - --junit
+      - "{{ e2e_test_outdir }}/report.xml"
+      - --json
+      - "{{ e2e_test_outdir }}/cases.json"
+  changed_when: false
+  failed_when: false
+
+- name: Record per-test result
+  ansible.builtin.set_fact:
+    e2e_test_results: "{{ e2e_test_results + [e2e_result_entry] }}"
+    e2e_test_failures: "{{ e2e_test_failures + ([e2e_test_relpath] if e2e_pytest_run.rc != 0 else []) }}"
+  vars:
+    e2e_result_entry:
+      test: "{{ e2e_test_relpath }}"
+      name: "{{ e2e_test_name }}"
+      status: "{{ 'PASS' if e2e_pytest_run.rc == 0 else 'FAIL' }}"
+      rc: "{{ e2e_pytest_run.rc }}"
+      outdir: "{{ e2e_test_outdir }}"

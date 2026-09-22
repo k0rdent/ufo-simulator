@@ -1,0 +1,62 @@
+---
+# nico-operator functional e2e (make test-functional).
+#
+# Sources expected at e2e_nico_operator_dir (default /tmp/nico-operator).
+# e2e_tests entries that are not *.py are Ginkgo label filters (e.g. vpc,
+# ipblock). Empty / pytest-only list → full suite once.
+# NICo credentials: set via e2e_functional_env (NICO_*) or config.yaml in the
+# checkout.
+# Skipped when nico_enabled is false.
+
+- name: Skip nico-operator functional when NICo is disabled
+  when: not (nico_enabled | default(true) | bool)
+  block:
+    - name: Note NICo functional skip
+      ansible.builtin.debug:
+        msg: >-
+          Skipping nico_operator functional tests: nico_enabled is false.
+
+    - name: Write skip summary for nico-operator
+      ansible.builtin.copy:
+        dest: "{{ e2e_results_dir }}/{{ e2e_run_id }}/summary.txt"
+        mode: "0644"
+        content: |
+          e2e run: {{ e2e_run_id }}
+          suite: nico_operator
+          status: SKIPPED
+          reason: nico_enabled is false
+          results: {{ e2e_results_dir }}/{{ e2e_run_id }}/
+
+- name: Run nico-operator functional
+  when: nico_enabled | default(true) | bool
+  block:
+    - name: Configure NICo functional suite
+      ansible.builtin.set_fact:
+        e2e_workdir: "{{ e2e_nico_operator_dir }}"
+        e2e_functional_env: "{{ (e2e_functional_env | default({})) | combine(e2e_nico_extra_env) }}"
+      vars:
+        e2e_nico_extra_env: "{{ {'E2E_IPBLOCK_CIDR': e2e_nico_ipblock_cidr} if (e2e_nico_ipblock_cidr | default('')) | length > 0 else {} }}"
+
+    - name: NICo functional preamble
+      ansible.builtin.include_tasks: operator_functional_preamble.yml
+
+    - name: Run each NICo functional filter
+      ansible.builtin.include_tasks: run_ginkgo_functional.yml
+      vars:
+        e2e_label_filter: "{{ item }}"
+        e2e_test_name: "{{ (item | length > 0) | ternary(item | regex_replace('[^A-Za-z0-9._-]+', '_'), 'all') }}"
+        e2e_test_outdir: "{{ e2e_results_dir }}/{{ e2e_run_id }}/nico-operator{{ ('/' ~ (item | regex_replace('[^A-Za-z0-9._-]+', '_'))) if (item | length > 0) else '' }}"
+      loop: "{{ e2e_ginkgo_filters }}"
+      loop_control:
+        label: "{{ (item | length > 0) | ternary(item, 'all') }}"
+
+    - name: Write combined e2e summary
+      ansible.builtin.include_tasks: write_summary.yml
+
+    - name: Fail play if any NICo functional run failed
+      ansible.builtin.fail:
+        msg: >-
+          e2e failures ({{ e2e_test_failures | length }}):
+          {{ e2e_test_failures | join(', ') }}.
+          See {{ e2e_results_dir }}/{{ e2e_run_id }}/summary.txt
+      when: e2e_test_failures | length > 0

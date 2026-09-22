@@ -1,0 +1,37 @@
+---
+# unified-fabric-operator functional e2e (make test-functional).
+#
+# Sources expected at e2e_ufo_dir (default /tmp/unified-fabric-operator).
+# e2e_tests entries that are not *.py are Ginkgo label filters (e.g. vpc,
+# securitygroup). Empty / pytest-only list → full suite once.
+
+- name: Configure UFO functional suite
+  ansible.builtin.set_fact:
+    e2e_workdir: "{{ e2e_ufo_dir }}"
+    e2e_functional_env: "{{ (e2e_functional_env | default({})) | combine(e2e_ufo_extra_env) }}"
+  vars:
+    e2e_ufo_extra_env: "{{ {'E2E_VPC_BACKEND': e2e_ufo_vpc_backend} if (e2e_ufo_vpc_backend | default('')) | length > 0 else {} }}"
+
+- name: UFO functional preamble
+  ansible.builtin.include_tasks: operator_functional_preamble.yml
+
+- name: Run each UFO functional filter
+  ansible.builtin.include_tasks: run_ginkgo_functional.yml
+  vars:
+    e2e_label_filter: "{{ item }}"
+    e2e_test_name: "{{ (item | length > 0) | ternary(item | regex_replace('[^A-Za-z0-9._-]+', '_'), 'all') }}"
+    e2e_test_outdir: "{{ e2e_results_dir }}/{{ e2e_run_id }}/unified-fabric-operator{{ ('/' ~ (item | regex_replace('[^A-Za-z0-9._-]+', '_'))) if (item | length > 0) else '' }}"
+  loop: "{{ e2e_ginkgo_filters }}"
+  loop_control:
+    label: "{{ (item | length > 0) | ternary(item, 'all') }}"
+
+- name: Write combined e2e summary
+  ansible.builtin.include_tasks: write_summary.yml
+
+- name: Fail play if any UFO functional run failed
+  ansible.builtin.fail:
+    msg: >-
+      e2e failures ({{ e2e_test_failures | length }}):
+      {{ e2e_test_failures | join(', ') }}.
+      See {{ e2e_results_dir }}/{{ e2e_run_id }}/summary.txt
+  when: e2e_test_failures | length > 0
