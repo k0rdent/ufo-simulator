@@ -1,7 +1,7 @@
 diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/provision-apply.yaml
 --- a/deploy/k8s/k0r-tools/provision-apply.yaml
 +++ b/deploy/k8s/k0r-tools/provision-apply.yaml
-@@ -37,6 +37,8 @@
+@@ -37,6 +37,8 @@ spec:
        restartPolicy: Never
        # The tool only calls the platform's own HTTP APIs — no K8s API access.
        automountServiceAccountToken: false
@@ -10,7 +10,7 @@ diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/pr
        # Hardened pod context: run as the image's non-root user (uid 65532, set
        # in build/Dockerfile.go-tools) and apply the default seccomp profile.
        securityContext:
-@@ -54,8 +56,8 @@
+@@ -54,8 +56,8 @@ spec:
            # For a real cluster, pin a published tag here. For kind, build and load it
            # locally (`make docker-build-k0r-tools`, then `kind load
            # docker-image k0r-tools:latest`) — IfNotPresent keeps the loaded image.
@@ -21,7 +21,7 @@ diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/pr
            # The image bundles multiple tool binaries (no ENTRYPOINT); select
            # the provision tool explicitly.
            command: ["/usr/local/bin/provision"]
-@@ -80,13 +82,11 @@
+@@ -80,13 +82,11 @@ spec:
                    key: KEYCLOAK_BOOTSTRAP_ADMIN_CLIENT_SECRET
              - name: BOOTSTRAP_INTERNAL_URL
                value: "http://kong-internal:8100"
@@ -43,7 +43,7 @@ diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/pr
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -184,10 +184,12 @@
+@@ -225,10 +225,12 @@ portalClients:
        - http://localhost:8083/*
        - http://localhost:3000/*
        - http://localhost:3010/*
@@ -56,7 +56,7 @@ diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/e
    # customer-portal: the login client for customer users (alice, bob).
    - clientId: customer-portal
      displayName: Customer Portal (kind)
-@@ -198,7 +200,9 @@
+@@ -239,10 +241,12 @@ portalClients:
        - http://localhost:8083/*
        - http://localhost:3000/*
        - http://localhost:3010/*
@@ -66,3 +66,6 @@ diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/e
        - http://localhost:3000
        - http://localhost:3010
 +      - http://10.200.0.254:30080
+   # arc: Arc's own json-mode client (k0rdent-ui adr-browser-auth, option O2),
+   # for running the Arc token handler locally on :3005. The mock IdP keeps no
+   # redirect allowlist, so idpCallbackUrl needs no IdP-side registration here

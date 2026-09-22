@@ -1,20 +1,22 @@
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -112,4 +112,20 @@
+@@ -129,6 +129,23 @@ policies:
+     principal: {type: user, id: usr-acme-bob}
      scope: {type: project, org: acme, project: acme-main}
      displayName: Bob - compute-viewer (acme-main)
-+  - role: iam-admin
-+    principal: {type: user, id: usr-kind-admin}
-+    scope:     {type: org, org: kind}
-+    displayName: Kind Admin - iam-admin
++  # Lab-only platform-scope grants for the kind admin. The stock fixture scopes
++  # compute-admin to the kind-main project and binds no infrastructure/cluster
++  # admin at all; the UFO lab drives switches, softgates and cluster objects
++  # that live at platform scope, so usr-kind-admin needs them there.
++  # iam-admin (org kind) is upstream already — do not re-add it here.
 +  - role: infrastructure-admin
 +    principal: {type: user, id: usr-kind-admin}
-+    scope:     {type: platform}
++    scope: {type: platform}
 +    displayName: Kind Admin - infrastructure-admin (platform)
 +  - role: cluster-admin
 +    principal: {type: user, id: usr-kind-admin}
-+    scope:     {type: platform}
++    scope: {type: platform}
 +    displayName: Kind Admin - cluster-admin (platform)
 +  - role: compute-admin
 +    principal: {type: user, id: usr-kind-admin}
@@ -22,3 +24,4 @@ diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/e
 +    displayName: Kind Admin - compute-admin (platform)
  
  identityProviders:
+ # In-cluster mock-oauth2-server (k0rdent-kind-extras). Each row's issuer path +
