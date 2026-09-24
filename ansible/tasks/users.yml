@@ -26,12 +26,14 @@
     mode: "0700"
   loop: "{{ users }}"
 
+# exclusive removes any key not listed in ssh_key (e.g. injected by cloud-init).
 - name: Install authorized keys
   ansible.posix.authorized_key:
-    user: "{{ item.0.username }}"
-    key: "{{ item.1 }}"
+    user: "{{ item.username }}"
+    key: "{{ item.ssh_key | join('\n') }}"
     state: present
-  loop: "{{ users | subelements('ssh_key') }}"
+    exclusive: true
+  loop: "{{ users }}"
 
 - name: Allow passwordless sudo for admin users
   ansible.builtin.copy:
