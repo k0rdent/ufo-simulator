@@ -39,3 +39,8 @@ backends:
     nico:
       enabled: {{ 'true' if nico_enabled else 'false' }}
       driver: nico
+host_agent:
+  enabled: true
+  binaryRootDir: "http://10.200.0.254/artifacts/ufo/"
+  apiServerURL: "https://10.10.0.240:6443"
+  insecureSkipTLSVerify: true   # default; set false + caFileContent for prod
