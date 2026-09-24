@@ -34,6 +34,15 @@
             validate: nginx -t -c %s
           notify: reload nginx
           tags: [config]
+
+        - name: Ensure ufo artifacts directory
+          ansible.builtin.file:
+            path: /var/www/html/ufo
+            state: directory
+            owner: root
+            group: www-data
+            mode: "0755"
+          tags: [config]
     
     - name: Ensure initramfs files
       block:
