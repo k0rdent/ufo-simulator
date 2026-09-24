@@ -66,17 +66,21 @@ nodePools:
           dhcp4: true
           connectToNetwork:
             name: net-nico
-        # Rail 0. Matched by fabric location rather than by name: the Link CR
-        # carries rail_id, so this selects whichever NIC LLDP found on the
-        # rail-0 leaf (eth5 -> ew-leaf-0 in this lab) regardless of what the
-        # guest calls it.
+        # Rails 0-3, as in cluster-type-nico-verity-hcp-ew.yaml. Matched by
+        # fabric location rather than by name: the Link CR carries rail_id, so
+        # each selects whichever NIC LLDP found on that rail's leaf (rail 0 is
+        # eth5 -> ew-leaf-0 in this lab) regardless of what the guest calls it.
+        # A railId whose leaf is not registered in Verity produces no Link CR,
+        # so fabricLocation never resolves and the allocation stalls.
         eth-ew0:
           match:
             fabricLocation:
               railId: 0
           addresses:
             - ipFromSubnet: ew-subnet
-          routes:
+          # Shared by every rail below: the routes are symbolic, and each
+          # interface resolves cidrFromRailsubnet against its own rail.
+          routes: &ew-routes
             # The node's own rail, 172.16.0.0/25 for rail 0 -- reaches every
             # other host on this leaf, which is the cross-node path.
             - to:
@@ -92,3 +96,24 @@ nodePools:
               via:
                 gatewayFromSubnet:
                   name: ew-subnet
+        eth-ew1:
+          match:
+            fabricLocation:
+              railId: 1
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+        eth-ew2:
+          match:
+            fabricLocation:
+              railId: 2
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+        eth-ew3:
+          match:
+            fabricLocation:
+              railId: 3
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
