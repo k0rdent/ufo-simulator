@@ -4,6 +4,8 @@
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
 ufo_chart_version: 0.3.1-1b45858
 ufo_image_tag: 0.3.1-1b45858
+# Branch folder of UFO CI host-agent builds; the operator (ufo_image_tag) picks its own version.
+ufo_host_agent_binary_root_dir: "{{ ufo_host_agent_s3_root }}/release-v0.3.x/"
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
 verity_operator_chart_version: 0.3.1-bc5b921

@@ -193,6 +193,8 @@ jobs:
               echo "ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator"
               echo "ufo_chart_version: ${UFO_CHART}"
               echo "ufo_image_tag: ${UFO_IMAGE}"
+              echo "# Branch folder of UFO CI host-agent builds; the operator (ufo_image_tag) picks its own version."
+              echo "ufo_host_agent_binary_root_dir: \"{{ ufo_host_agent_s3_root }}/${RELEASE_BRANCH}/\""
               echo
               echo "verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator"
               echo "verity_operator_chart_version: ${VERITY_CHART}"
