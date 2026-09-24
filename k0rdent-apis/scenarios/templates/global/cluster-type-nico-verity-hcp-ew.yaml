@@ -83,20 +83,24 @@ nodePools:
           dhcp4: true
           connectToNetwork:
             name: net-nico
-        # Rail 0. Selected by fabric location rather than by name: the Link CR
-        # carries rail_id, so this picks whichever NIC LLDP found on the rail-0
-        # leaf (eth5 -> ew-leaf-0 in this lab) whatever the guest calls it.
+        # Rails 0-3, matching cluster-type-netris-hcp-ew.yaml. Selected by
+        # fabric location rather than by name: the Link CR carries rail_id, so
+        # each picks whichever NIC LLDP found on that rail's leaf (rail 0 is
+        # eth5 -> ew-leaf-0 in this lab) whatever the guest calls it.
         #
-        # Add rails 1-7 by repeating this block with railId 1..7; the routes
-        # are symbolic, so an anchor can be shared across them -- each
-        # interface resolves cidrFromRailsubnet against its own rail.
+        # topology_ew wires 8 rail leaves, so more can be added the same way --
+        # but only once the leaf is registered in Verity. A railId with no
+        # registered leaf produces no Link CR, so fabricLocation never resolves
+        # and the allocation stalls until the test times out.
         eth-ew0:
           match:
             fabricLocation:
               railId: 0
           addresses:
             - ipFromSubnet: ew-subnet
-          routes:
+          # Shared by every rail below: the routes are symbolic, and each
+          # interface resolves cidrFromRailsubnet against its own rail.
+          routes: &ew-routes
             # This node's own rail -- 172.16.0.0/25 for rail 0 -- which reaches
             # every other host on the same leaf. That is the cross-node path.
             - to:
@@ -112,3 +116,24 @@ nodePools:
               via:
                 gatewayFromSubnet:
                   name: ew-subnet
+        eth-ew1:
+          match:
+            fabricLocation:
+              railId: 1
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+        eth-ew2:
+          match:
+            fabricLocation:
+              railId: 2
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
+        eth-ew3:
+          match:
+            fabricLocation:
+              railId: 3
+          addresses:
+            - ipFromSubnet: ew-subnet
+          routes: *ew-routes
