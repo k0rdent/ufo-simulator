@@ -387,6 +387,10 @@ ufo_dev_mode: false
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
 ufo_chart_version: 0.0.1-8586bfe
 ufo_image_tag: 0.0.1-8586bfe.1769198335
+# host_agent.binaryRootDir: per-branch folder of host-agent builds UFO CI publishes; the operator
+# passes its own version (ufo_image_tag) to pick the binary. ansible/vars/artifacts-*.yaml set the branch.
+ufo_host_agent_s3_root: https://unified-fabric-operator.s3.us-east-1.amazonaws.com
+ufo_host_agent_binary_root_dir: "{{ ufo_host_agent_s3_root }}/main/"
 ufo_fabric_backend: netris
 
 verity_operator_mode: false
