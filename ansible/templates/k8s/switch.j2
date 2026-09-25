@@ -22,8 +22,16 @@ metadata:
 spec:
   hostname: {{ switch_name }}
   server_ports: {{ server_ports | join(',') }}
+{# Rail leaves carry no PXE. provisioning_network routes a switch into UFO's
+   Clos provisioning path, which parks every free server port on the network
+   with a Verity Switchport named <port>@<hostname> -- and then looks up
+   "Bundle for <hostname>", which a Spectrum-X leaf does not have (Verity names
+   those by fabric coordinates, e.g. ewf-leaf-su00-r7). PXE belongs to the
+   north-south leaf-0; see ctl.j2. #}
+{% if not is_spectrum %}
   provisioning_network:
     name: pxe
+{% endif %}
 {% if switch.type is defined %}
   type: {{ switch.type }}
 {% endif %}
