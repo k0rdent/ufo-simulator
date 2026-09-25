@@ -2,8 +2,8 @@
 # Managed by .github/workflows/bump-operator-artifacts.yaml
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.3.1-8958644
-ufo_image_tag: 0.3.1-8958644
+ufo_chart_version: 0.3.1-655ed87
+ufo_image_tag: 0.3.1-655ed87
 # Branch folder of UFO CI host-agent builds; the operator (ufo_image_tag) picks its own version.
 ufo_host_agent_binary_root_dir: "{{ ufo_host_agent_s3_root }}/main/"
 
