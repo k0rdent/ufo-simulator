@@ -1,8 +1,9 @@
 name: bump-operator-artifacts
 
-# Fetch latest UFO / Verity / NICo / Netris operator chart+image tags from each
-# repo's successful `dev-build-artifacts.yml` run on the chosen branch (same
-# approach as k0rdent/core-services e2e-periodic-ufo), then open a PR that bumps:
+# Fetch UFO / Verity / NICo / Netris operator chart+image tags from each repo's
+# `dev-build-artifacts.yml` run for the head commit of the chosen branch (same
+# approach as k0rdent/core-services e2e-periodic-ufo). The job fails if that run
+# did not succeed. Otherwise it opens a PR that bumps:
 #   - ansible/vars/artifacts-main.yaml              when release is "main"
 #   - ansible/vars/artifacts-<release>.yaml         otherwise (create or update)
 #
@@ -244,16 +245,16 @@ jobs:
           commit-message: |
             chore: bump UFO / Verity / NICo / Netris artifacts (${{ needs.resolve-release.outputs.branch }})
 
-            Update pins in ${{ needs.resolve-release.outputs.vars_file }} from the latest
-            successful ${{ needs.resolve-release.outputs.branch }} (netris: ${{ needs.resolve-release.outputs.netris_branch }})
-            dev-build-artifacts.yml runs.
+            Update pins in ${{ needs.resolve-release.outputs.vars_file }} from the
+            dev-build-artifacts.yml runs for the head commits of
+            ${{ needs.resolve-release.outputs.branch }} (netris: ${{ needs.resolve-release.outputs.netris_branch }}).
           title: "chore: bump operator artifacts (${{ needs.resolve-release.outputs.branch }})"
           body: |
             Automated bump of operator artifacts for branch `${{ needs.resolve-release.outputs.branch }}`.
 
             Target file: `${{ needs.resolve-release.outputs.vars_file }}` (created if missing).
 
-            Versions from the latest successful `dev-build-artifacts.yml` runs:
+            Versions from the `dev-build-artifacts.yml` runs for each branch's head commit:
 
             | Component | Chart | Image | Source branch |
             |---|---|---|---|
