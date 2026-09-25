@@ -118,7 +118,7 @@ def ew_breakout_server_links(leafs, nodes, port_prefix="swp", eth_base=5, breako
         leaf_name = leaf["name"] if isinstance(leaf, dict) else leaf
         eth = "eth%d" % (eth_base + leaf_i)
         role = "ew%d" % (leaf_i + 1)
-        # Prefer explicit leaf rail_id; default to leaf index (ew-leaf-N → rail N).
+        # Prefer explicit leaf rail_id; default to position in the leaf list.
         if isinstance(leaf, dict) and leaf.get("rail_id") is not None:
             rail_id = int(leaf["rail_id"])
         else:
