@@ -22,9 +22,11 @@
       register: virsh_all_domains
       changed_when: false
 
-    - name: Add any ew-* switch domains still defined in libvirt
+    # 'ewf-' is the current naming (Verity's fabric coordinates); plain 'ew-' is
+    # kept so a lab built before the rename still tears down.
+    - name: Add any east-west switch domains still defined in libvirt
       ansible.builtin.set_fact:
-        all_switch_names: "{{ (all_switch_names + (virsh_all_domains.stdout_lines | select('match', '^ew-(leaf|spine)-') | list)) | unique }}"
+        all_switch_names: "{{ (all_switch_names + (virsh_all_domains.stdout_lines | select('match', '^ewf?-(leaf|spine)-') | list)) | unique }}"
 
     - name: Stop switch VMs
       ansible.builtin.command: virsh destroy {{ item }}

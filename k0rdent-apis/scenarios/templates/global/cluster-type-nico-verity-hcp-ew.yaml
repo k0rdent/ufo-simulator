@@ -37,7 +37,8 @@ networkSchema:
       # 172.16.0.0 with (rail << 17) | (su << 8) | (host << 1), host even and
       # switch odd -- the same layout UFO's rail-optimised allocator computes.
       # So rail 0 host 0 is 172.16.0.0/31 with the leaf on .1, host 1 is
-      # .2/.3, and each rail occupies 172.(16 + 2*rail).0.0/25.
+      # .2/.3, and each rail occupies 172.(16 + 2*rail).0.0/15 -- a /15 because
+      # `rail << 17` gives every rail two second-octet values.
       cidr: 172.16.0.0/12
       addressAllocator:
         backend: rail-optimised
@@ -86,7 +87,7 @@ nodePools:
         # Rails 0-3, matching cluster-type-netris-hcp-ew.yaml. Selected by
         # fabric location rather than by name: the Link CR carries rail_id, so
         # each picks whichever NIC LLDP found on that rail's leaf (rail 0 is
-        # eth5 -> ew-leaf-0 in this lab) whatever the guest calls it.
+        # eth5 -> ewf-leaf-su00-r0 here) whatever the guest calls it.
         #
         # topology_ew wires 8 rail leaves, so more can be added the same way --
         # but only once the leaf is registered in Verity. A railId with no
@@ -101,8 +102,10 @@ nodePools:
           # Shared by every rail below: the routes are symbolic, and each
           # interface resolves cidrFromRailsubnet against its own rail.
           routes: &ew-routes
-            # This node's own rail -- 172.16.0.0/25 for rail 0 -- which reaches
-            # every other host on the same leaf. That is the cross-node path.
+            # This node's own rail -- 172.16.0.0/15 for rail 0 -- which reaches
+            # every other host on the same leaf. That is the cross-node path,
+            # and being more specific than the /12 below it is what keeps
+            # same-rail traffic on this interface.
             - to:
                 cidrFromRailsubnet:
                   name: ew-subnet

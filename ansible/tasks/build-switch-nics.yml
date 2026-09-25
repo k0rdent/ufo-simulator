@@ -27,18 +27,21 @@
 
 - name: "{{ switch_name }} - Resolve switch MAC index and bases"
   vars:
+    # EW membership comes from ew_switch_names (group_vars). The EW names carry
+    # Verity's fabric coordinates (ewf-leaf-su00-r0), so there is no prefix to
+    # test for -- a startswith('ew-') check would silently treat every EW switch
+    # as north-south.
     ns_switch_names: "{{ (topology.spines + topology.leafs) | map(attribute='name') | list }}"
-    ew_switch_names: "{{ (topology_ew.spines + topology_ew.leafs) | map(attribute='name') | list }}"
     ns_mac_by_name: "{{ dict(ns_switch_names | zip(range(ns_switch_names | length))) }}"
     ew_mac_by_name: "{{ dict(ew_switch_names | zip(range(ew_switch_names | length))) }}"
   set_fact:
-    switch_mac_index: "{{ (ew_mac_by_name[switch_name] | int) if switch_name.startswith('ew-') else (ns_mac_by_name[switch_name] | int) }}"
-    switch_mgmt_mac: "{{ (ew_switch_base_mac ~ ':' ~ ('%02x' | format(ew_mac_by_name[switch_name] | int)) ~ ':00') if switch_name.startswith('ew-') else (switch_base_mac ~ ':' ~ ('%02x' | format(ns_mac_by_name[switch_name] | int)) ~ ':00') }}"
-    switch_nic_mac_prefix: "{{ ew_switch_data_mac_base if switch_name.startswith('ew-') else switch_data_mac_base }}"
+    switch_mac_index: "{{ (ew_mac_by_name[switch_name] | int) if switch_name in ew_switch_names else (ns_mac_by_name[switch_name] | int) }}"
+    switch_mgmt_mac: "{{ (ew_switch_base_mac ~ ':' ~ ('%02x' | format(ew_mac_by_name[switch_name] | int)) ~ ':00') if switch_name in ew_switch_names else (switch_base_mac ~ ':' ~ ('%02x' | format(ns_mac_by_name[switch_name] | int)) ~ ':00') }}"
+    switch_nic_mac_prefix: "{{ ew_switch_data_mac_base if switch_name in ew_switch_names else switch_data_mac_base }}"
     switch_is_leaf_or_spine: "{{ ('leaf' in switch_name) or ('spine' in switch_name) }}"
-    switch_breakout_lanes: "{{ 2 if (switch_name.startswith('ew-') and (ew_switch_breakout | default('') | length) > 0) else 1 }}"
+    switch_breakout_lanes: "{{ 2 if ((switch_name in ew_switch_names) and (ew_switch_breakout | default('') | length) > 0) else 1 }}"
     # EW models a 64-port Spectrum-X; north-south keeps the smaller grid.
-    switch_grid_ports: "{{ (ew_switch_ports_count | default(64)) if switch_name.startswith('ew-') else (switch_ports_count | default(48)) }}"
+    switch_grid_ports: "{{ (ew_switch_ports_count | default(64)) if switch_name in ew_switch_names else (switch_ports_count | default(48)) }}"
     # switch_mac_index restarts at 0 for the EW family, so it cannot be used to
     # carve stub UDP windows. Index across every switch instead.
     switch_global_index: "{{ (all_topology_switches | map(attribute='name') | list).index(switch_name) }}"
@@ -64,7 +67,7 @@
         br_ext_name
         if switch_name.startswith('ext-leaf-')
         else br_pxe_name
-        if (switch_name.startswith('leaf-') and not switch_name.startswith('ew-'))
+        if (switch_name.startswith('leaf-') and switch_name not in ew_switch_names)
         else ''
       }}
     switch_host_bridge_port: "{{ switch_port_name_prefix }}{{ switch_links | length + 1 }}"

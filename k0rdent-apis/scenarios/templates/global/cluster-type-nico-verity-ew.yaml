@@ -34,7 +34,8 @@ networkSchema:
       # (rail << 17) | (su << 8) | (host << 1), host even and switch odd --
       # the same layout the rail-optimised allocator computes. So rail 0
       # host 0 is 172.16.0.0/31 with the leaf on .1, host 1 is .2/.3, and
-      # each rail occupies 172.(16 + 2*rail).0.0/25.
+      # each rail occupies 172.(16 + 2*rail).0.0/15 -- a /15 because
+      # `rail << 17` gives every rail two second-octet values.
       cidr: 172.16.0.0/12
       addressAllocator:
         backend: rail-optimised
@@ -69,7 +70,7 @@ nodePools:
         # Rails 0-3, as in cluster-type-nico-verity-hcp-ew.yaml. Matched by
         # fabric location rather than by name: the Link CR carries rail_id, so
         # each selects whichever NIC LLDP found on that rail's leaf (rail 0 is
-        # eth5 -> ew-leaf-0 in this lab) regardless of what the guest calls it.
+        # eth5 -> ewf-leaf-su00-r0 here) regardless of what the guest calls it.
         # A railId whose leaf is not registered in Verity produces no Link CR,
         # so fabricLocation never resolves and the allocation stalls.
         eth-ew0:
@@ -81,8 +82,10 @@ nodePools:
           # Shared by every rail below: the routes are symbolic, and each
           # interface resolves cidrFromRailsubnet against its own rail.
           routes: &ew-routes
-            # The node's own rail, 172.16.0.0/25 for rail 0 -- reaches every
-            # other host on this leaf, which is the cross-node path.
+            # The node's own rail, 172.16.0.0/15 for rail 0 -- reaches every
+            # other host on this leaf, which is the cross-node path. Being more
+            # specific than the /12 below, it is what keeps same-rail traffic
+            # on this interface.
             - to:
                 cidrFromRailsubnet:
                   name: ew-subnet
