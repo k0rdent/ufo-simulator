@@ -527,3 +527,4 @@ users:
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDKHYD4WFo0aVocuBooUlZEmJI/GBwUZ/sg4f+RaFN7m vsaienko@mirantis.com"
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDTqwm8l33tGVsiLmrSH6xvzWutNg51ls29AelBwp4dh yar@yisakov-lpt"
       - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKwcYGMXm8xg4Fa6ZXQ3ubLyQ21G8n8hSpYR3ihsDqSc"
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEmtor9LrhBLZT5dYmekpIu0kuWn34TyvMwSHR+Nj3tG ishakhat@mirantis.com"
