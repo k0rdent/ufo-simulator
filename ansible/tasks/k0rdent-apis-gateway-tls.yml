@@ -1,0 +1,236 @@
+---
+# nginx terminating TLS in front of Kong, with a lab CA that workload clusters
+# trust. The CA is created once; delete the PKI directory to rotate it.
+
+- name: Ensure gateway PKI directory exists
+  ansible.builtin.file:
+    path: "{{ k0rdent_apis_gateway_tls_pki_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Create the lab issuer CA
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes
+      -keyout ca.key -out ca.crt
+      -subj "/CN=ufo-simulator k0rdent-apis issuer CA"
+      -addext "basicConstraints=critical,CA:TRUE"
+      -addext "keyUsage=critical,keyCertSign,cRLSign"
+    chdir: "{{ k0rdent_apis_gateway_tls_pki_dir }}"
+    creates: "{{ k0rdent_apis_gateway_tls_pki_dir }}/ca.crt"
+
+- name: Check the lab issuer CA is not about to expire
+  ansible.builtin.command:
+    cmd: >-
+      openssl x509 -noout -checkend {{ (k0rdent_apis_gateway_tls_renew_days | int) * 86400 }}
+      -in {{ k0rdent_apis_gateway_tls_pki_dir }}/ca.crt
+  register: k0rdent_apis_gateway_tls_ca_check
+  changed_when: false
+  failed_when: false
+
+# Rotating the CA is deliberate, so it is not done automatically.
+- name: Fail if the lab issuer CA expires soon
+  ansible.builtin.fail:
+    msg: >-
+      {{ k0rdent_apis_gateway_tls_pki_dir }}/ca.crt expires within
+      {{ k0rdent_apis_gateway_tls_renew_days }} days. Delete the directory and re-run
+      to rotate the CA; workload clusters pick up the new one on their own.
+  when: k0rdent_apis_gateway_tls_ca_check.rc != 0
+
+- name: Render gateway certificate extensions
+  ansible.builtin.copy:
+    dest: "{{ k0rdent_apis_gateway_tls_pki_dir }}/server.ext"
+    mode: "0600"
+    content: |
+      basicConstraints=CA:FALSE
+      keyUsage=critical,digitalSignature,keyEncipherment
+      extendedKeyUsage=serverAuth
+      subjectAltName={{ (['IP:' ~ k0rdent_apis_gateway_tls_host] + k0rdent_apis_gateway_tls_extra_sans) | join(',') }}
+  register: k0rdent_apis_gateway_tls_ext
+
+- name: Check for an existing gateway certificate
+  ansible.builtin.stat:
+    path: "{{ k0rdent_apis_gateway_tls_pki_dir }}/server.crt"
+  register: k0rdent_apis_gateway_tls_cert
+
+- name: Check whether the gateway certificate expires soon
+  ansible.builtin.command:
+    cmd: >-
+      openssl x509 -noout -checkend {{ (k0rdent_apis_gateway_tls_renew_days | int) * 86400 }}
+      -in {{ k0rdent_apis_gateway_tls_pki_dir }}/server.crt
+  register: k0rdent_apis_gateway_tls_cert_check
+  changed_when: false
+  failed_when: false
+  when: k0rdent_apis_gateway_tls_cert.stat.exists
+
+- name: Issue the gateway certificate
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      openssl req -newkey rsa:2048 -nodes -keyout server.key -out server.csr \
+        -subj "/CN={{ k0rdent_apis_gateway_tls_host }}"
+      openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+        -sha256 -days 825 -extfile server.ext -out server.crt
+      rm -f server.csr
+    chdir: "{{ k0rdent_apis_gateway_tls_pki_dir }}"
+    executable: /bin/bash
+  when: >-
+    k0rdent_apis_gateway_tls_ext.changed
+    or not k0rdent_apis_gateway_tls_cert.stat.exists
+    or k0rdent_apis_gateway_tls_cert_check.rc | default(0) != 0
+  register: k0rdent_apis_gateway_tls_issued
+
+- name: Read gateway certificate, key and CA
+  ansible.builtin.slurp:
+    src: "{{ k0rdent_apis_gateway_tls_pki_dir }}/{{ item }}"
+  loop:
+    - ca.crt
+    - server.crt
+    - server.key
+  register: k0rdent_apis_gateway_tls_files
+  no_log: true
+
+- name: Index gateway PKI material
+  ansible.builtin.set_fact:
+    k0rdent_apis_gateway_tls_b64: >-
+      {{ dict(k0rdent_apis_gateway_tls_files.results | map(attribute='item')
+              | zip(k0rdent_apis_gateway_tls_files.results | map(attribute='content'))) }}
+  no_log: true
+
+- name: Ensure gateway TLS Secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: kubernetes.io/tls
+      metadata:
+        name: "{{ k0rdent_apis_gateway_tls_secret }}"
+        namespace: "{{ k0rdent_apis_namespace }}"
+      data:
+        tls.crt: "{{ k0rdent_apis_gateway_tls_b64['server.crt'] }}"
+        tls.key: "{{ k0rdent_apis_gateway_tls_b64['server.key'] }}"
+  register: k0rdent_apis_gateway_tls_secret_result
+  no_log: true
+
+# The worker expects key ca.crt.
+- name: Ensure issuer CA Secret for workload clusters
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: Opaque
+      metadata:
+        name: "{{ k0rdent_apis_issuer_ca_secret }}"
+        namespace: "{{ k0rdent_apis_namespace }}"
+      data:
+        ca.crt: "{{ k0rdent_apis_gateway_tls_b64['ca.crt'] }}"
+
+- name: Ensure gateway nginx configuration
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: k0rdent-apis-gateway-tls
+        namespace: "{{ k0rdent_apis_namespace }}"
+      data:
+        default.conf: |
+          server {
+            listen 8443 ssl;
+            ssl_certificate     /etc/nginx/tls/tls.crt;
+            ssl_certificate_key /etc/nginx/tls/tls.key;
+            ssl_protocols       TLSv1.2 TLSv1.3;
+
+            location / {
+              proxy_pass         http://kong-proxy.{{ k0rdent_apis_namespace }}.svc.cluster.local:8000;
+              proxy_http_version 1.1;
+              proxy_set_header   Host              $http_host;
+              proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto https;
+              proxy_set_header   X-Forwarded-Port  {{ k0rdent_apis_gateway_tls_node_port }};
+            }
+          }
+  register: k0rdent_apis_gateway_tls_conf
+
+- name: Ensure gateway Deployment
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: k0rdent-apis-gateway-tls
+        namespace: "{{ k0rdent_apis_namespace }}"
+        labels:
+          app: k0rdent-apis-gateway-tls
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: k0rdent-apis-gateway-tls
+        template:
+          metadata:
+            labels:
+              app: k0rdent-apis-gateway-tls
+            annotations:
+              # Restart nginx when the certificate or config changes.
+              ufo-simulator/tls-config: >-
+                {{ (k0rdent_apis_gateway_tls_b64['server.crt'] ~ k0rdent_apis_gateway_tls_conf.result.data['default.conf']) | hash('sha256') }}
+          spec:
+            containers:
+              - name: nginx
+                image: "{{ k0rdent_apis_gateway_tls_image }}"
+                imagePullPolicy: IfNotPresent
+                ports:
+                  - name: https
+                    containerPort: 8443
+                readinessProbe:
+                  tcpSocket:
+                    port: https
+                  periodSeconds: 5
+                resources:
+                  requests:
+                    cpu: 10m
+                    memory: 16Mi
+                volumeMounts:
+                  - name: tls
+                    mountPath: /etc/nginx/tls
+                    readOnly: true
+                  - name: conf
+                    mountPath: /etc/nginx/conf.d
+                    readOnly: true
+            volumes:
+              - name: tls
+                secret:
+                  secretName: "{{ k0rdent_apis_gateway_tls_secret }}"
+              - name: conf
+                configMap:
+                  name: k0rdent-apis-gateway-tls
+    wait: true
+    wait_timeout: 300
+
+- name: Ensure gateway NodePort Service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: k0rdent-apis-gateway-tls
+        namespace: "{{ k0rdent_apis_namespace }}"
+      spec:
+        type: NodePort
+        selector:
+          app: k0rdent-apis-gateway-tls
+        # One expression keeps nodePort an integer.
+        ports: >-
+          {{ [{'name': 'https', 'port': 443, 'targetPort': 'https',
+               'nodePort': k0rdent_apis_gateway_tls_node_port | int}] }}
