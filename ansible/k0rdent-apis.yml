@@ -24,10 +24,29 @@
     k0rdent_apis_helm_timeout: 15m
     k0rdent_apis_extras_helm_timeout: 3m
     k0rdent_apis_base_url: "http://10.200.0.254:30080"
-    # Chart + auth require https (or http on loopback only) for global.authIssuerUrl.
-    # Lab Kong is plaintext http for browsers; advertise issuer as https so helm
-    # render and auth boot validation pass. Override if you terminate TLS.
-    k0rdent_apis_auth_issuer_url: "https://10.200.0.254:30080"
+    # TLS gateway in front of Kong (which stays http on :30080), serving the OIDC
+    # issuer that workload API servers fetch over https only. Workload API
+    # servers must reach host:node_port. Toggling it changes the issuer (users
+    # sign in again); false removes it. To terminate TLS elsewhere, set false
+    # and override k0rdent_apis_auth_issuer_url.
+    k0rdent_apis_gateway_tls_enabled: true
+    k0rdent_apis_gateway_tls_host: 10.200.0.254
+    k0rdent_apis_gateway_tls_node_port: 30443
+    k0rdent_apis_gateway_tls_url: "https://{{ k0rdent_apis_gateway_tls_host }}:{{ k0rdent_apis_gateway_tls_node_port }}"
+    # Extra subjectAltNames for the gateway certificate, e.g. ["IP:172.19.116.29"].
+    k0rdent_apis_gateway_tls_extra_sans: []
+    # Override with a mirror if Docker Hub is unreachable.
+    k0rdent_apis_gateway_tls_image: nginx:1.27-alpine
+    k0rdent_apis_gateway_tls_pki_dir: "{{ workspace }}pki/k0rdent-apis-gateway"
+    # Reissue the server certificate this many days before expiry.
+    k0rdent_apis_gateway_tls_renew_days: 30
+    k0rdent_apis_gateway_tls_secret: k0rdent-apis-gateway-tls
+    k0rdent_apis_issuer_ca_secret: k0rdent-apis-issuer-ca
+    # Must be https. Without the gateway this https URL is not actually served,
+    # so workload clusters cannot validate OIDC tokens.
+    k0rdent_apis_auth_issuer_url: >-
+      {{ k0rdent_apis_gateway_tls_url
+         if k0rdent_apis_gateway_tls_enabled | bool else 'https://10.200.0.254:30080' }}
     k0rdent_apis_nico_sync_path: "{{ k0rdent_apis_dir }}/nico-sync.sh"
     k0rdent_apis_platform_admin_dir: "{{ k8s_artifacts_dir }}/nico/child/platform_admin"
     k0rdent_apis_helm_repo_url: oci://registry.ci.mirantis.com/k0rdent-apis/charts
@@ -35,6 +54,19 @@
     k0rdent_apis_cluster_chart_version: 0.0.0-main
 
   tasks:
+    # Otherwise workload clusters get the lab CA for an issuer it did not sign.
+    - name: Refuse an issuer override while the TLS gateway is enabled
+      ansible.builtin.assert:
+        that:
+          - k0rdent_apis_auth_issuer_url == k0rdent_apis_gateway_tls_url
+        fail_msg: >-
+          k0rdent_apis_auth_issuer_url is {{ k0rdent_apis_auth_issuer_url }}, but the
+          TLS gateway ({{ k0rdent_apis_gateway_tls_url }}) is enabled and would hand
+          workload clusters its lab CA for that issuer. To terminate TLS elsewhere,
+          also set k0rdent_apis_gateway_tls_enabled=false.
+        quiet: true
+      when: k0rdent_apis_gateway_tls_enabled | bool
+
     - name: Ensure workspace exists
       ansible.builtin.file:
         path: "{{ workspace }}"
@@ -261,10 +293,25 @@
           }}).
           Ensure platform-admin CRs have reconciled and name variables match.
 
+    # Before the chart, so the worker starts with the CA Secret in place.
+    - name: Deploy TLS gateway for the OIDC issuer
+      ansible.builtin.include_tasks: tasks/k0rdent-apis-gateway-tls.yml
+      when: k0rdent_apis_gateway_tls_enabled | bool
+
     - name: Render k0rdent-apis values overrides
       ansible.builtin.template:
         src: k0rdent-apis/values-socks-overrides.yaml.j2
         dest: "{{ k0rdent_apis_values_path }}"
+
+    # Detects an issuer change, which needs the restarts below.
+    - name: Read the issuer of the installed k0rdent-apis release
+      ansible.builtin.command:
+        cmd: >-
+          helm --kubeconfig {{ kubeconfig_path }} -n {{ k0rdent_apis_namespace }}
+          get values k0rdent-apis -o json
+      register: k0rdent_apis_previous_values
+      changed_when: false
+      failed_when: false
 
     - name: Deploy/upgrade k0rdent-apis helm release
       kubernetes.core.helm:
@@ -279,6 +326,74 @@
         state: present
         wait: true
         wait_timeout: "{{ k0rdent_apis_helm_timeout }}"
+
+    # The same fetches a workload API server makes, trusting only the lab CA.
+    - name: Verify the OIDC issuer is served over TLS by the gateway
+      when: k0rdent_apis_gateway_tls_enabled | bool
+      block:
+        # The discoveryURL the chart derives for region "local".
+        - name: Fetch the issuer discovery document through the TLS gateway
+          ansible.builtin.uri:
+            url: "{{ k0rdent_apis_auth_issuer_url }}/v1/regions/local/auth/.well-known/openid-configuration"
+            ca_path: "{{ k0rdent_apis_gateway_tls_pki_dir }}/ca.crt"
+            return_content: true
+          register: k0rdent_apis_issuer_discovery
+          until: k0rdent_apis_issuer_discovery.status == 200
+          retries: 30
+          delay: 10
+
+        - name: Fetch the issuer signing keys through the TLS gateway
+          ansible.builtin.uri:
+            url: "{{ k0rdent_apis_issuer_discovery.json.jwks_uri }}"
+            ca_path: "{{ k0rdent_apis_gateway_tls_pki_dir }}/ca.crt"
+          register: k0rdent_apis_issuer_jwks
+
+        - name: Ensure discovery names the TLS gateway as issuer
+          ansible.builtin.assert:
+            that:
+              - k0rdent_apis_issuer_discovery.json.issuer == k0rdent_apis_auth_issuer_url ~ '/realms/k0rdent'
+            fail_msg: >-
+              The issuer advertises {{ k0rdent_apis_issuer_discovery.json.issuer }},
+              expected {{ k0rdent_apis_auth_issuer_url }}/realms/k0rdent.
+
+    # Services and UIs (Atlas) cache tokens and discovery with the old issuer,
+    # which Kong rejects with 401 ISSUER_NOT_ALLOWED until they expire.
+    - name: Restart k0rdent-apis workloads after an issuer change
+      when:
+        - k0rdent_apis_previous_values.rc == 0
+        - (k0rdent_apis_previous_values.stdout | from_json).global.authIssuerUrl | default('') != k0rdent_apis_auth_issuer_url
+      block:
+        - name: Restart every Deployment in {{ k0rdent_apis_namespace }}
+          ansible.builtin.command:
+            cmd: kubectl --kubeconfig {{ kubeconfig_path }} -n {{ k0rdent_apis_namespace }} rollout restart deployment
+
+        - name: Wait for the restarted Deployments
+          ansible.builtin.command:
+            cmd: >-
+              kubectl --kubeconfig {{ kubeconfig_path }} -n {{ k0rdent_apis_namespace }}
+              rollout status deployment --timeout=10m
+          changed_when: false
+
+    # After the upgrade, so the worker no longer references the CA Secret. The
+    # PKI directory is kept for re-enabling.
+    - name: Remove the TLS gateway when it is disabled
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: absent
+        api_version: "{{ item.api_version }}"
+        kind: "{{ item.kind }}"
+        namespace: "{{ k0rdent_apis_namespace }}"
+        name: "{{ item.name }}"
+        wait: true
+      loop:
+        - { api_version: apps/v1, kind: Deployment, name: k0rdent-apis-gateway-tls }
+        - { api_version: v1, kind: Service, name: k0rdent-apis-gateway-tls }
+        - { api_version: v1, kind: ConfigMap, name: k0rdent-apis-gateway-tls }
+        - { api_version: v1, kind: Secret, name: "{{ k0rdent_apis_gateway_tls_secret }}" }
+        - { api_version: v1, kind: Secret, name: "{{ k0rdent_apis_issuer_ca_secret }}" }
+      loop_control:
+        label: "{{ item.kind }}/{{ item.name }}"
+      when: not (k0rdent_apis_gateway_tls_enabled | bool)
 
     - name: Deploy/upgrade k0rdent-kind-extras helm release
       kubernetes.core.helm:
@@ -359,6 +474,12 @@
         src: files/k0rdent-apis/nico-sync.sh
         dest: "{{ k0rdent_apis_nico_sync_path }}"
         mode: "0755"
+
+    # k0r_token's cache may hold a token from an earlier issuer.
+    - name: Drop the cached k0r CLI token
+      ansible.builtin.file:
+        path: /tmp/k0r-token
+        state: absent
 
     - name: Sync NICO servers into k0rdent-apis
       ansible.builtin.command:
