@@ -2,21 +2,21 @@
 # Managed by .github/workflows/bump-operator-artifacts.yaml
 
 ufo_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/unified-fabric-operator
-ufo_chart_version: 0.3.1-d64e950c
-ufo_image_tag: 0.3.1-d64e950c
+ufo_chart_version: 0.3.1-3a858ba6
+ufo_image_tag: 0.3.1-3a858ba6
 # Branch folder of UFO CI host-agent builds; the operator (ufo_image_tag) picks its own version.
 ufo_host_agent_binary_root_dir: "{{ ufo_host_agent_s3_root }}/main/"
 
 verity_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/verity-operator
-verity_operator_chart_version: 0.3.1-fd1da4e
-verity_operator_image_tag: 0.3.1-fd1da4e
+verity_operator_chart_version: 0.3.1-9d26781
+verity_operator_image_tag: 0.3.1-9d26781
 
 nico_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/nico-operator
-nico_operator_chart_version: 0.3.1-7eae6e2
+nico_operator_chart_version: 0.3.1-18aaed2
 nico_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/nico-operator
-nico_operator_image_tag: 0.3.1-7eae6e2
+nico_operator_image_tag: 0.3.1-18aaed2
 
 netris_operator_chart_repo: oci://registry.ci.mirantis.com/k0rdent-bm/charts/netris-operator
 netris_operator_image: registry.ci.mirantis.com/k0rdent-bm/images/netris-operator
-netris_operator_chart_version: 0.0.1-ce706c0
-netris_operator_image_tag: 0.0.1-ce706c0.1789735803
+netris_operator_chart_version: 0.0.1-c94db82
+netris_operator_image_tag: 0.0.1-c94db82.1790861475
