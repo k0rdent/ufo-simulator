@@ -6,7 +6,7 @@ nodePools:
   # scheduler picks is not fixed -- NicoMachineTemplate is annotated
   # 'random-instance-type' -- so they land on whichever host_ids are free.
   # Each gets (host_id << 1) added to its rail base with the leaf on the odd
-  # half: host 2 on rail 0 is 172.16.0.4/31 via .5, at ew-leaf-0 swp2s0.
+  # half: host 2 on rail 0 is 172.16.0.4/31 via .5, at ewf-leaf-su00-r0 swp2s0.
   #
   # Avoid asserting on host 0 of rail 0: 172.16.0.0 collided with the fabric's
   # router-id base prefix and was unroutable until that was moved in Verity.

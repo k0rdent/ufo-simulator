@@ -294,7 +294,7 @@ match `create-vms.yml` on cmp01 (calculable on gtw01 — no libvirt query):
 ```
 eth1   0000:a3:00.0   → leaf-0   swp{N+1}     (MAC offset vm_index * vm_port_count + 0)
 eth2   0000:a3:00.1   → leaf-1   swp{N+1}
-eth5…eth12            → ew-leaf-0…7 breakout ports (swpXsY)
+eth5…eth12            → ewf-leaf-su00-r0…r7 breakout ports (swpXsY)
 ```
 
 **What the current templates use.** The east-west types match by

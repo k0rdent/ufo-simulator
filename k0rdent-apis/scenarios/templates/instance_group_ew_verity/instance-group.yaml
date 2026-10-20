@@ -7,7 +7,7 @@ nodePools:
   # 'random-instance-type' -- so they land on whichever host_ids are free, not
   # necessarily adjacent subports. Each gets (host_id << 1) added to its rail
   # base with the leaf on the odd half: host 2 on rail 0 is 172.16.0.4/31 with
-  # the leaf on .5, at ew-leaf-0 swp2s0.
+  # the leaf on .5, at ewf-leaf-su00-r0 swp2s0.
   - nodePool: default
     size: 2
 sshAccess:

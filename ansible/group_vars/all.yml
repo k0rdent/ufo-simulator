@@ -148,55 +148,62 @@ topology:
     - { local: "spine-1", local_port: "{{ switch_port_name_prefix }}4", remote: "ext-leaf-1", remote_port: "{{ switch_port_name_prefix }}2" }
 
 # East-west leaf-spine fabric (shared by netris and verity). Each VM connects to
-# every ew-leaf (eth5→ew-leaf-0 … eth12→ew-leaf-7). Leaf→server ports use 2-way
+# every rail leaf (eth5→rail 0 … eth12→rail 7). Leaf→server ports use 2-way
 # breakouts, assigned sequentially: vm-0 -> swp1s0, vm-1 -> swp1s1,
 # vm-2 -> swp2s0, and so on.
+#
+# Switch names are Verity's, not ours: the FCA import names a device from its
+# fabric coordinates (FABRIC + role + SU + RAIL GROUP / SLOT), so rail 7 is
+# ewf-leaf-su00-r7 and spine slot 0 is ewf-spine-s00. UFO carries one switch
+# identity -- Link name, Switch.spec.hostname and the Verity device name are
+# all the same string -- so these have to match what the controller calls them
+# or Switchport bundle lookups miss. 'ewf' is the site in ufo_conf.yaml.
 # Netris Switch CR create-time breakout for all EW switches (2 ports per physical port).
 ew_switch_breakout: "2x100"
 topology_ew:
   spines:
-    - name: ew-spine-0
+    - name: ewf-spine-s00
       mgmt_ip: 10.200.0.130
-    - name: ew-spine-1
+    - name: ewf-spine-s01
       mgmt_ip: 10.200.0.131
   leafs:
     # EW leaves: spectrum-x with rail_id (rail topology allowed only on this type).
-    - name: ew-leaf-0
+    - name: ewf-leaf-su00-r0
       mgmt_ip: 10.200.0.120
       type: spectrum-x
       su_id: 0
       rail_id: 0
-    - name: ew-leaf-1
+    - name: ewf-leaf-su00-r1
       mgmt_ip: 10.200.0.121
       type: spectrum-x
       su_id: 0
       rail_id: 1
-    - name: ew-leaf-2
+    - name: ewf-leaf-su00-r2
       mgmt_ip: 10.200.0.122
       type: spectrum-x
       su_id: 0
       rail_id: 2
-    - name: ew-leaf-3
+    - name: ewf-leaf-su00-r3
       mgmt_ip: 10.200.0.123
       type: spectrum-x
       su_id: 0
       rail_id: 3
-    - name: ew-leaf-4
+    - name: ewf-leaf-su00-r4
       mgmt_ip: 10.200.0.124
       type: spectrum-x
       su_id: 0
       rail_id: 4
-    - name: ew-leaf-5
+    - name: ewf-leaf-su00-r5
       mgmt_ip: 10.200.0.125
       type: spectrum-x
       su_id: 0
       rail_id: 5
-    - name: ew-leaf-6
+    - name: ewf-leaf-su00-r6
       mgmt_ip: 10.200.0.126
       type: spectrum-x
       su_id: 0
       rail_id: 6
-    - name: ew-leaf-7
+    - name: ewf-leaf-su00-r7
       mgmt_ip: 10.200.0.127
       type: spectrum-x
       su_id: 0
@@ -237,6 +244,11 @@ topology_ew_links: >-
 all_topology_switches: "{{ topology.spines + topology.leafs + topology_ew.spines + topology_ew.leafs }}"
 # Names of every spine (NS + EW); everything else in all_topology_switches is a leaf.
 all_topology_spine_names: "{{ (topology.spines + topology_ew.spines) | map(attribute='name') | list }}"
+# Names of every east-west switch. Membership in this list is what separates EW
+# from north-south (MAC base, breakout lanes, port grid, Netris profile) -- the
+# names themselves carry Verity's fabric coordinates, so they share no prefix
+# with anything and cannot be pattern-matched.
+ew_switch_names: "{{ (topology_ew.spines + topology_ew.leafs) | map(attribute='name') | list }}"
 all_topology_links: "{{ (topology.links + topology_ew_links) | resolve_topology_link_ports(all_topology_switches, switch_port_name_prefix) }}"
 
 # Highest ethN on any VM link (covers NS + EW). Used for Netris portsCount and MAC offsets.
