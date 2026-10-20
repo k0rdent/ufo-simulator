@@ -294,7 +294,7 @@
           Ensure platform-admin CRs have reconciled and name variables match.
 
     # Before the chart, so the worker starts with the CA Secret in place.
-    - name: Deploy TLS gateway for the OIDC issuer
+    - name: Prepare TLS gateway certificates for the OIDC issuer
       ansible.builtin.include_tasks: tasks/k0rdent-apis-gateway-tls.yml
       when: k0rdent_apis_gateway_tls_enabled | bool
 
@@ -326,6 +326,11 @@
         state: present
         wait: true
         wait_timeout: "{{ k0rdent_apis_helm_timeout }}"
+
+    # After the chart: nginx exits at startup until the kong-proxy Service exists.
+    - name: Deploy TLS gateway for the OIDC issuer
+      ansible.builtin.include_tasks: tasks/k0rdent-apis-gateway-tls-nginx.yml
+      when: k0rdent_apis_gateway_tls_enabled | bool
 
     # The same fetches a workload API server makes, trusting only the lab CA.
     - name: Verify the OIDC issuer is served over TLS by the gateway
