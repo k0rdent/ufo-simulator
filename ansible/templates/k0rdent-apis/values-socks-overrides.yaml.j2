@@ -124,6 +124,12 @@ keycloak:
   image:
     repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-keycloak"
     pullPolicy: Always
+  # Twice the chart's limits (requests unchanged). At 500m CPU a cold start
+  # (Quarkus build + realm import) took ~7m20s of the 630s startup-probe budget.
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1536Mi
 
 kong:
   image:
