@@ -103,8 +103,8 @@ def test_instance_group_vpc_security_groups(
     ig_uid = ig_obj["uid"]
     log.info(f"instance group uid={ig_uid}")
 
-    default_sg_id: str | None = None
-    default_sg_uid: str | None = None
+    # The VPC's platform groups (baseline, default), checked gone in cleanup.
+    platform_sgs: list[dict[str, Any]] = []
 
     log.step("find NICo VPC owned by instance group")
     vpcs = secgroups.owner_vpcs(
@@ -133,23 +133,21 @@ def test_instance_group_vpc_security_groups(
     )
     vpc_uid = vpc["uid"]
 
-    log.step("assert VPC has only the platform default security group")
-    bound = list(vpc.get("securityGroups") or [])
-    assert len(bound) == 1, f"expected only default SG on new VPC, got {bound!r}"
-    default_sg_id = bound[0]
-    assert default_sg_id.endswith("-default"), (
-        f"default SG id shape: want *-default, got {default_sg_id!r}"
+    log.step("assert VPC has only its platform security groups (baseline, default)")
+    baseline_sg, default_sg = secgroups.assert_vpc_platform_groups(
+        session, sg_collection, vpc, log=log
     )
-    default_sg = api.get_json(session, f"{sg_collection}/{default_sg_id}")
-    default_sg_uid = default_sg["uid"]
-    assert default_sg.get("ownerKind") == "vpc", (
-        f"default SG ownerKind={default_sg.get('ownerKind')!r}, want vpc"
+    default_sg_id = default_sg["id"]
+    platform_sgs = [sg for sg in (baseline_sg, default_sg) if sg]
+    # A baseline is pinned first in every binding of this VPC (KNF-551).
+    pinned = [baseline_sg["id"]] if baseline_sg else []
+    baseline_fps = (
+        secgroups.api_rule_fingerprints(baseline_sg) if baseline_sg else set()
     )
-    assert default_sg.get("state") == "active"
-    log.ok(f"default SG {default_sg_id!r} (ownerKind=vpc uid={default_sg_uid})")
+    log.ok(f"VPC platform SGs {pinned + [default_sg_id]!r}")
 
     if effective_ready:
-        log.step("effective read: fresh VPC reports only the platform default")
+        log.step("effective read: fresh VPC reports only its platform groups")
         eff = _effective("vpc", vpc_id)
         secgroups.assert_effective_object(eff, kind="vpc", obj_id=vpc_id, uid=vpc_uid)
         assert [b.get("id") for b in eff.get("vpcs") or []] == [vpc_id], (
@@ -157,10 +155,11 @@ def test_instance_group_vpc_security_groups(
             f"{[b.get('id') for b in eff.get('vpcs') or []]!r}"
         )
         block = secgroups.effective_block(eff, vpc_id)
-        assert secgroups.effective_group_ids(block) == [default_sg_id]
-        secgroups.assert_effective_group(
-            block, default_sg_id, source="vpc", source_id=vpc_id, sg=default_sg
-        )
+        assert secgroups.effective_group_ids(block) == pinned + [default_sg_id]
+        for sg in platform_sgs:
+            secgroups.assert_effective_group(
+                block, sg["id"], source="vpc", source_id=vpc_id, sg=sg
+            )
 
         eff = _effective("instance_group", ig_id)
         secgroups.assert_effective_object(
@@ -168,8 +167,9 @@ def test_instance_group_vpc_security_groups(
         )
         assert secgroups.effective_group_ids(
             secgroups.effective_block(eff, vpc_id)
-        ) == [default_sg_id], (
-            "the instance-group binding is still empty, so only the VPC floor applies"
+        ) == pinned + [default_sg_id], (
+            "the instance-group binding is still empty, so only the VPC's platform "
+            "groups apply"
         )
         # A VPC on a backend with no security-group construct must come back as an
         # empty block rather than with the owner's binding merged into it.
@@ -189,12 +189,13 @@ def test_instance_group_vpc_security_groups(
         log.ok(f"{len(eff.get('vpcs') or [])} block(s); non-nico blocks empty")
 
     log.step(
-        f"attach VPC SGs [{vpc_custom_sg_id}, {default_sg_id}] (custom + default)"
+        f"attach VPC SGs [{vpc_custom_sg_id}, {default_sg_id}] (custom + default; "
+        "a baseline stays first)"
     )
     attached = api.set_vpc_security_groups(
         session, vpc_url, [vpc_custom_sg_id, default_sg_id]
     )
-    assert list(attached.get("securityGroups") or []) == [
+    assert list(attached.get("securityGroups") or []) == pinned + [
         vpc_custom_sg_id,
         default_sg_id,
     ]
@@ -207,7 +208,10 @@ def test_instance_group_vpc_security_groups(
         steps=log,
         log_every=2,
     )
-    assert list(vpc.get("securityGroups") or []) == [vpc_custom_sg_id, default_sg_id]
+    assert list(vpc.get("securityGroups") or []) == pinned + [
+        vpc_custom_sg_id,
+        default_sg_id,
+    ]
     log.info("wait for instance group to settle after VPC re-render")
     wait.await_api_state(
         _get_ig,
@@ -231,7 +235,9 @@ def test_instance_group_vpc_security_groups(
         default_sg_id: secgroups.await_sg_active(session, sg_collection, default_sg_id),
         ig_sg_id: ig_sg,
     }
-    for sg_id in (vpc_custom_sg_id, default_sg_id):
+    if baseline_sg:
+        sgs_by_id[baseline_sg["id"]] = baseline_sg
+    for sg_id in (*pinned, vpc_custom_sg_id, default_sg_id):
         log.info(f"check UFO CR for {sg_id} → sg-{sgs_by_id[sg_id]['uid']}")
         secgroups.assert_ufo_security_group_cr(
             kube, ns, sgs_by_id[sg_id], api_id=sg_id
@@ -241,20 +247,22 @@ def test_instance_group_vpc_security_groups(
     if effective_ready:
         log.step("effective read: VPC block matches the binding, rules in write order")
         block = secgroups.effective_block(_effective("vpc", vpc_id), vpc_id)
-        assert secgroups.effective_group_ids(block) == [
+        assert secgroups.effective_group_ids(block) == pinned + [
             vpc_custom_sg_id,
             default_sg_id,
         ], (
             f"a vpc read must report the ids GET /vpcs/{vpc_id} lists, in the same "
             f"order; got {secgroups.effective_group_ids(block)!r}"
         )
-        for sg_id in (vpc_custom_sg_id, default_sg_id):
+        for sg_id in (*pinned, vpc_custom_sg_id, default_sg_id):
             secgroups.assert_effective_group(
                 block, sg_id, source="vpc", source_id=vpc_id, sg=sgs_by_id[sg_id]
             )
-        want = secgroups.api_rule_fingerprints(
-            sgs_by_id[vpc_custom_sg_id]
-        ) | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
+        want = (
+            baseline_fps
+            | secgroups.api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
+            | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
+        )
         have = secgroups.effective_rule_fingerprints(block)
         assert have == want, (
             f"effective rules for vpc {vpc_id}: missing {want - have!r}, "
@@ -382,23 +390,25 @@ def test_instance_group_vpc_security_groups(
     )
     log.ok("NICo has security group attached")
 
-    log.step("assert NICo NSG rules include VPC custom + default")
+    log.step("assert NICo NSG rules include VPC baseline + custom + default")
 
     def _nsg_has_vpc_merged_rules():
         fresh = _nsg_fresh()
         if not fresh:
             return None
         have = secgroups.nsg_rule_fingerprints(fresh)
-        want = secgroups.api_rule_fingerprints(
-            sgs_by_id[vpc_custom_sg_id]
-        ) | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
+        want = (
+            baseline_fps
+            | secgroups.api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
+            | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
+        )
         return fresh if want <= have else None
 
     wait.await_predicate(
         _nsg_has_vpc_merged_rules,
         timeout=900,
         interval=10,
-        desc="NICo NSG rules include VPC custom + default SG rules",
+        desc="NICo NSG rules include VPC baseline + custom + default SG rules",
         steps=log,
         log_every=2,
     )
@@ -452,7 +462,7 @@ def test_instance_group_vpc_security_groups(
     }
     vpc_rule_names = {
         r.get("name")
-        for sg_id in (vpc_custom_sg_id, default_sg_id)
+        for sg_id in (*pinned, vpc_custom_sg_id, default_sg_id)
         for r in secgroups.sg_api_rules(sgs_by_id[sg_id])["ingress"]
         if r.get("name")
     }
@@ -468,6 +478,7 @@ def test_instance_group_vpc_security_groups(
         have = secgroups.nsg_rule_fingerprints(fresh)
         want = (
             secgroups.api_rule_fingerprints(sgs_by_id[ig_sg_id])
+            | baseline_fps
             | secgroups.api_rule_fingerprints(sgs_by_id[vpc_custom_sg_id])
             | secgroups.api_rule_fingerprints(sgs_by_id[default_sg_id])
         )
@@ -501,7 +512,7 @@ def test_instance_group_vpc_security_groups(
 
     if effective_ready:
         log.step("effective read: IG binding merges ahead of the VPC floor")
-        want_ids = [ig_sg_id, vpc_custom_sg_id, default_sg_id]
+        want_ids = [ig_sg_id, *pinned, vpc_custom_sg_id, default_sg_id]
 
         def _effective_merged():
             block = secgroups.effective_block(
@@ -524,12 +535,12 @@ def test_instance_group_vpc_security_groups(
             source_id=ig_id,
             sg=sgs_by_id[ig_sg_id],
         )
-        for sg_id in (vpc_custom_sg_id, default_sg_id):
+        for sg_id in (*pinned, vpc_custom_sg_id, default_sg_id):
             secgroups.assert_effective_group(
                 block, sg_id, source="vpc", source_id=vpc_id, sg=sgs_by_id[sg_id]
             )
         have = secgroups.effective_rule_fingerprints(block)
-        want = ig_fps | vpc_custom_fps | default_fps
+        want = ig_fps | baseline_fps | vpc_custom_fps | default_fps
         assert have == want, (
             f"merged effective rules: missing {want - have!r}, "
             f"unexpected {have - want!r}"
@@ -539,7 +550,7 @@ def test_instance_group_vpc_security_groups(
 
         log.step("effective read: a vpc read does not merge the owner's groups in")
         vpc_block = secgroups.effective_block(_effective("vpc", vpc_id), vpc_id)
-        assert secgroups.effective_group_ids(vpc_block) == [
+        assert secgroups.effective_group_ids(vpc_block) == pinned + [
             vpc_custom_sg_id,
             default_sg_id,
         ], (
@@ -582,9 +593,10 @@ def test_instance_group_vpc_security_groups(
             if not fresh:
                 return None
             have = secgroups.nsg_rule_fingerprints(fresh)
+            # IG rules gone; VPC baseline + custom + default still present.
             if have & ig_fps:
                 return None
-            want = vpc_custom_fps | default_fps
+            want = baseline_fps | vpc_custom_fps | default_fps
             return fresh if want <= have else None
 
         wait.await_predicate(
@@ -604,7 +616,7 @@ def test_instance_group_vpc_security_groups(
                 block = secgroups.effective_block(
                     _effective("instance_group", ig_id), vpc_id
                 )
-                if secgroups.effective_group_ids(block) != [
+                if secgroups.effective_group_ids(block) != pinned + [
                     vpc_custom_sg_id,
                     default_sg_id,
                 ]:
@@ -625,7 +637,10 @@ def test_instance_group_vpc_security_groups(
             )
             log.ok()
 
-        log.step("detach VPC custom SG ([] → default only) and assert custom rules leave NICo")
+        log.step(
+            "detach VPC custom SG ([] → platform groups only) and assert custom "
+            "rules leave NICo"
+        )
         wait.await_api_state(
             lambda: api.get_json(session, vpc_url),
             "active",
@@ -656,43 +671,46 @@ def test_instance_group_vpc_security_groups(
         )
         vpc_after = api.get_json(session, vpc_url)
         remaining = list(vpc_after.get("securityGroups") or [])
-        assert remaining == [default_sg_id] or (
-            len(remaining) == 1 and remaining[0].endswith("-default")
-        ), f"expected only default after [], got {remaining!r}"
+        rest = remaining[len(pinned):]
+        assert remaining[: len(pinned)] == pinned and (
+            rest == [default_sg_id] or (len(rest) == 1 and rest[0].endswith("-default"))
+        ), f"expected only the platform groups after [], got {remaining!r}"
 
         def _nsg_default_only_from_tenant_custom():
             fresh = _nsg_fresh()
             if not fresh:
                 return None
             have = secgroups.nsg_rule_fingerprints(fresh)
+            # Custom VPC + IG rules must be gone; baseline + default remain.
             if have & ig_fps:
                 return None
             if have & vpc_custom_fps:
                 return None
-            return fresh if default_fps <= have else None
+            return fresh if baseline_fps | default_fps <= have else None
 
         wait.await_predicate(
             _nsg_default_only_from_tenant_custom,
             timeout=900,
             interval=10,
-            desc="NICo NSG dropped custom VPC SG rules (default remains)",
+            desc="NICo NSG dropped custom VPC SG rules (baseline + default remain)",
             steps=log,
             log_every=2,
         )
-        log.ok("demo-sg rules gone from NICo NSG; default rules remain")
+        log.ok("demo-sg rules gone from NICo NSG; baseline + default rules remain")
 
         if effective_ready:
-            log.step("effective read: only the VPC default remains")
+            log.step("effective read: only the VPC's platform groups remain")
 
             def _effective_default_only():
                 block = secgroups.effective_block(
                     _effective("instance_group", ig_id), vpc_id
                 )
-                if secgroups.effective_group_ids(block) != [default_sg_id]:
+                if secgroups.effective_group_ids(block) != pinned + [default_sg_id]:
                     return None
                 return (
                     block
-                    if secgroups.effective_rule_fingerprints(block) == default_fps
+                    if secgroups.effective_rule_fingerprints(block)
+                    == baseline_fps | default_fps
                     else None
                 )
 
@@ -700,7 +718,8 @@ def test_instance_group_vpc_security_groups(
                 _effective_default_only,
                 timeout=900,
                 interval=10,
-                desc=f"effective instance_group block for {vpc_id} == [{default_sg_id}]",
+                desc=f"effective instance_group block for {vpc_id} == "
+                f"{pinned + [default_sg_id]!r}",
                 steps=log,
                 log_every=2,
             )
@@ -731,9 +750,10 @@ def test_instance_group_vpc_security_groups(
                 f"{gone.status_code}: {gone.text[:300]}"
             )
             log.ok()
-        if default_sg_id:
+        if platform_sgs:
             log.step(
-                f"assert vpc {vpc_id} and its default SG {default_sg_id!r} are gone"
+                f"assert vpc {vpc_id} and its platform SGs "
+                f"{[sg['id'] for sg in platform_sgs]!r} are gone"
             )
             wait.await_api_absent(
                 lambda: None if api.get(session, vpc_url).status_code == 404 else True,
@@ -743,43 +763,11 @@ def test_instance_group_vpc_security_groups(
                 steps=log,
                 log_every=2,
             )
-            wait.await_api_absent(
-                lambda: None
-                if api.get(session, f"{sg_collection}/{default_sg_id}").status_code
-                == 404
-                else True,
-                timeout=900,
-                interval=10,
-                desc=f"vpc default security group {default_sg_id} deleted with vpc",
-                steps=log,
-                log_every=2,
-            )
-            if default_sg_uid:
-                cr_name = k8s.ufo_security_group_name(default_sg_uid)
-
-                def _ufo_default_sg_gone():
-                    return (
-                        True
-                        if not k8s.get_custom(
-                            kube,
-                            group="ufo.mirantis.com",
-                            version="v1alpha1",
-                            plural="securitygroups",
-                            namespace=ns,
-                            name=cr_name,
-                        )
-                        else None
-                    )
-
-                wait.await_predicate(
-                    _ufo_default_sg_gone,
-                    timeout=300,
-                    interval=5,
-                    desc=f"UFO SecurityGroup {cr_name} for vpc default SG gone",
-                    steps=log,
-                    log_every=2,
+            for sg in platform_sgs:
+                secgroups.await_vpc_platform_group_gone(
+                    session, sg_collection, kube, ns, sg, log=log
                 )
-            log.ok("vpc default SG removed with vpc")
+            log.ok("vpc platform SGs removed with vpc")
         log.step(f"DELETE security groups {ig_sg_id!r} and {vpc_custom_sg_id!r}")
         secgroups.delete_security_group(session, sg_collection, ig_sg_id, log=log)
         secgroups.delete_security_group(
