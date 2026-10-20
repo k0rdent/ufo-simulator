@@ -53,6 +53,16 @@
       host-cluster Secret in {{ e2e_hcp_host_cluster_secret_namespace }}.
   when: not e2e_kubeconfig_stat.stat.exists
 
+- name: Ensure e2e project namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ e2e_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ e2e_project_namespace }}"
+
 - name: Read management-cluster kubeconfig for HCP host Secret
   ansible.builtin.slurp:
     src: "{{ e2e_kubeconfig }}"
