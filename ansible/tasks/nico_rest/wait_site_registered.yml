@@ -1,0 +1,74 @@
+---
+# NICo refuses SSH key group / network security group creates on a site that
+# is not Registered, so later plays (nico-operator prepovision) fail until it
+# is. The site pairs once the site-agent reaches the mock core (deployed after
+# the agent, which may by then be deep in its retry back-off) and has loaded
+# its Temporal certs; a site-status job running every 3 minutes then marks it
+# Registered. If that does not happen, restart the site-agent once and wait
+# again.
+
+- name: Wait for the NICo site to be Registered
+  vars:
+    # A fresh token per attempt: the whole wait outlives one access token.
+    nico_rest_site_status_cmd: |
+      set -euo pipefail
+      token=$(curl -sf -X POST "$TOKEN_URL" \
+        -d grant_type=client_credentials -d "client_id=$CLIENT_ID" \
+        --data-urlencode "client_secret=$CLIENT_SECRET" | jq -r .access_token)
+      curl -sf -H "Authorization: Bearer $token" "$API_URL/v2/org/$ORG/nico/site" \
+        | jq -r --arg name "$SITE_NAME" '.[] | select(.name == $name) | .status'
+    nico_rest_site_status_env:
+      TOKEN_URL: "{{ nico_token_url }}"
+      CLIENT_ID: "{{ nico_client_id }}"
+      CLIENT_SECRET: "{{ nico_client_secret }}"
+      API_URL: "{{ nico_api_base_url }}"
+      ORG: "{{ nico_api_org }}"
+      SITE_NAME: "{{ nico_site_name }}"
+  block:
+    # Two site-status job runs, plus the agent's back-off.
+    - name: Wait for site {{ nico_site_name }} to be Registered
+      ansible.builtin.shell:
+        cmd: "{{ nico_rest_site_status_cmd }}"
+        executable: /bin/bash
+      environment: "{{ nico_rest_site_status_env }}"
+      register: nico_rest_site_status
+      until: nico_rest_site_status.stdout == 'Registered'
+      retries: 42
+      delay: 10
+      changed_when: false
+
+  rescue:
+    - name: Restart the NICo site-agent
+      ansible.builtin.command:
+        cmd: kubectl -n {{ nico_core_mock_helm_namespace }} rollout restart statefulset/nico-rest-site-agent
+
+    - name: Wait for the NICo site-agent rollout
+      ansible.builtin.command:
+        cmd: >-
+          kubectl -n {{ nico_core_mock_helm_namespace }}
+          rollout status statefulset/nico-rest-site-agent --timeout=240s
+      changed_when: false
+
+    - name: Wait again for site {{ nico_site_name }} to be Registered
+      ansible.builtin.shell:
+        cmd: "{{ nico_rest_site_status_cmd }}"
+        executable: /bin/bash
+      environment: "{{ nico_rest_site_status_env }}"
+      register: nico_rest_site_status
+      until: nico_rest_site_status.stdout == 'Registered'
+      retries: 42
+      delay: 10
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if site {{ nico_site_name }} is still not Registered
+      ansible.builtin.assert:
+        that:
+          - nico_rest_site_status.stdout == 'Registered'
+        fail_msg: >-
+          NICo site {{ nico_site_name }} is '{{ nico_rest_site_status.stdout | default('') }}'
+          (want Registered) even after restarting the site-agent.
+          {{ nico_rest_site_status.stderr | default('') }}
+          Check `kubectl -n {{ nico_core_mock_helm_namespace }} logs sts/nico-rest-site-agent`
+          for Core gRPC or Temporal certificate errors.
+        quiet: true
