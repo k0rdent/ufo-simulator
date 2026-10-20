@@ -18,6 +18,8 @@ a second copy that drifts would silently compare nothing.
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Any
 
 from helpers import api, k8s, wait
@@ -31,6 +33,11 @@ NICO_BACKEND = "nico"
 
 #: Collection path of the effective read, relative to the project scope.
 EFFECTIVE_RESOURCE = "networking/security-groups-effective"
+
+#: The baseline rules the lab configures (compute ``securityGroupBaseline``) as
+#: JSON. ansible/templates/e2e-env.sh.j2 exports it from the same variable the
+#: helm values use, so the suite checks what the lab actually configured.
+BASELINE_ENV = "E2E_SECURITY_GROUP_BASELINE"
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +211,138 @@ def fresh_resource(
 
     created = session.post(collection_url, json=body, timeout=60)
     assert created.status_code in (200, 201), created.text
+
+
+# ---------------------------------------------------------------------------
+# A VPC's platform groups: baseline + default (KNF-551)
+# ---------------------------------------------------------------------------
+
+
+def configured_baseline() -> dict[str, Any] | None:
+    """The baseline this lab configures, or None when ``BASELINE_ENV`` is unset."""
+    raw = (os.environ.get(BASELINE_ENV) or "").strip()
+    if not raw:
+        return None
+    baseline = json.loads(raw)
+    assert isinstance(baseline, dict), f"{BASELINE_ENV} must be a JSON object, got {raw!r}"
+    return baseline
+
+
+def _assert_vpc_owned(sg: dict[str, Any], vpc: dict[str, Any], *, role: str) -> None:
+    for key, want in (
+        ("ownerKind", "vpc"),
+        ("ownerRole", role),
+        ("ownerId", vpc["uid"]),
+        ("state", "active"),
+    ):
+        assert sg.get(key) == want, (
+            f"{role} SG {sg.get('id')!r} {key}={sg.get(key)!r}, want {want!r}"
+        )
+
+
+def assert_vpc_platform_groups(
+    session, sg_collection: str, vpc: dict[str, Any], *, log: Steps
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """A new VPC is bound to its platform groups only — ``[baseline, default]``,
+    or ``[default]`` without a baseline. Returns ``(baseline, default)``.
+
+    The baseline must carry exactly the configured rules, in order. A k0rdent-apis
+    build that predates KNF-551 sets no ``ownerRole`` and creates no baseline, so
+    that shape passes with the baseline checks skipped. With ``BASELINE_ENV``
+    unset, whether a baseline exists depends on config the suite cannot see, so
+    either shape passes and the rules go unchecked.
+    """
+    bound = list(vpc.get("securityGroups") or [])
+    assert bound, f"new VPC {vpc['id']!r} has no security groups"
+    default_id = bound[-1]
+    assert default_id.endswith("-default"), (
+        f"default SG id shape: want *-default, got {default_id!r} in {bound!r}"
+    )
+    default = api.get_json(session, f"{sg_collection}/{default_id}")
+    if default.get("ownerRole") is None:
+        assert bound == [default_id], f"expected only default SG on new VPC, got {bound!r}"
+        assert default.get("ownerKind") == "vpc", (
+            f"default SG ownerKind={default.get('ownerKind')!r}, want vpc"
+        )
+        assert default.get("state") == "active"
+        log.info("default SG has no ownerRole: k0rdent-apis predates KNF-551, no baseline")
+        return None, default
+    _assert_vpc_owned(default, vpc, role="default")
+
+    configured = configured_baseline()
+    want_baseline = None
+    if configured is not None:
+        want_baseline = bool(configured.get("ingress") or configured.get("egress"))
+    if len(bound) == 1:
+        assert want_baseline is not True, (
+            f"VPC {vpc['id']!r} has no baseline SG, but {BASELINE_ENV} configures "
+            f"one: {bound!r}"
+        )
+        log.info("no baseline SG on this VPC")
+        return None, default
+    assert len(bound) == 2 and want_baseline is not False, (
+        f"want [baseline, default] on a new VPC (baseline configured: "
+        f"{want_baseline}), got {bound!r}"
+    )
+    baseline = api.get_json(session, f"{sg_collection}/{bound[0]}")
+    _assert_vpc_owned(baseline, vpc, role="baseline")
+    if configured is None:
+        log.info(f"{BASELINE_ENV} unset: baseline {bound[0]!r} rules not checked")
+        return baseline, default
+    have_rules = sg_api_rules(baseline)
+    for direction in ("ingress", "egress"):
+        have = [rule_fingerprint(r, direction=direction) for r in have_rules[direction]]
+        want = [
+            rule_fingerprint(r, direction=direction)
+            for r in configured.get(direction) or []
+        ]
+        assert have == want, (
+            f"baseline SG {bound[0]!r} {direction} rules {have!r}, want the "
+            f"configured {want!r}"
+        )
+    return baseline, default
+
+
+def await_vpc_platform_group_gone(
+    session, sg_collection: str, kube, ns: str, sg: dict[str, Any], *, log: Steps
+) -> None:
+    """A VPC's platform group goes with its VPC: API 404, then no UFO CR."""
+    sg_id = sg["id"]
+    role = sg.get("ownerRole") or "default"
+    wait.await_api_absent(
+        lambda: None
+        if api.get(session, f"{sg_collection}/{sg_id}").status_code == 404
+        else True,
+        timeout=900,
+        interval=10,
+        desc=f"vpc {role} security group {sg_id} deleted with vpc",
+        steps=log,
+        log_every=2,
+    )
+    cr_name = k8s.ufo_security_group_name(sg["uid"])
+
+    def _ufo_sg_gone():
+        return (
+            True
+            if not k8s.get_custom(
+                kube,
+                group="ufo.mirantis.com",
+                version="v1alpha1",
+                plural="securitygroups",
+                namespace=ns,
+                name=cr_name,
+            )
+            else None
+        )
+
+    wait.await_predicate(
+        _ufo_sg_gone,
+        timeout=300,
+        interval=5,
+        desc=f"UFO SecurityGroup {cr_name} for vpc {role} SG gone",
+        steps=log,
+        log_every=2,
+    )
 
 
 def owner_vpcs(
