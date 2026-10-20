@@ -122,3 +122,6 @@
 
     - name: Deploy mock core Helm release
       ansible.builtin.include_tasks: tasks/nico_rest/deploy_mock_core.yml
+
+    - name: Wait for the NICo site to be Registered
+      ansible.builtin.include_tasks: tasks/nico_rest/wait_site_registered.yml
