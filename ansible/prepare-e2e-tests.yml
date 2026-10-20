@@ -37,6 +37,8 @@
     e2e_api_base: "http://10.200.0.254:30080"
     e2e_region: local
     e2e_project: kind-main
+    # The project's namespace, as helpers/k8s.project_namespace names it.
+    e2e_project_namespace: "prj-{{ e2e_project }}"
     e2e_kubeconfig: "{{ kubeconfig_path | default('/root/.kube/config') }}"
     e2e_token_file: /tmp/k0r-token
     e2e_token_slack_sec: 60
