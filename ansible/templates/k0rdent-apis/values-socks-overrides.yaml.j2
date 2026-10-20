@@ -4,6 +4,12 @@ global:
   # Keep k0rdent_apis_base_url as http for browser callback/CORS below.
   authIssuerUrl: "{{ k0rdent_apis_auth_issuer_url }}"
   imagePullSecret: "{{ k0rdent_apis_pull_secret_name }}"
+  secrets:
+    # The reconciler's NICo client credentials (Secret k0rdent-apis-nico),
+    # replacing the kind placeholders. The same client the worker uses.
+    nico:
+      serviceAccountId: "{{ nico_client_id }}"
+      serviceAccountPassword: "{{ k0rdent_apis_nico_sa_password }}"
 {% if k0rdent_apis_gateway_tls_enabled | bool %}
   # The worker reads the issuer CA Secret from global.namespace.
   namespace: "{{ k0rdent_apis_namespace }}"
@@ -54,6 +60,13 @@ reconciler:
   image:
     repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-reconciler"
     pullPolicy: Always
+  # Without these the NICo health worker idles and every server reports
+  # healthStatus unknown. Credentials: global.secrets.nico.
+  env:
+    NICO_REST_API_BASE_URL: "{{ nico_api_base_url }}"
+    NICO_ORG: "{{ nico_api_org }}"
+    NICO_KEYCLOAK_BASE_URL: "{{ nico_keycloak_base_url }}"
+    NICO_KEYCLOAK_REALM: "{{ nico_keycloak_realm }}"
 
 # Kind overlay sets IfNotPresent for a locally loaded image; we pull from MSR.
 credentials:
@@ -103,6 +116,9 @@ workflow:
       DEFAULT_NICO_TENANT_ID: "{{ nico_ids.tenant_id }}"
       DEFAULT_NICO_VPC_ID: "NOT-USED"
       DEFAULT_NICO_NETWORK_SECURITY_GROUP_ID: "{{ nico_ids.network_security_group_id }}"
+      # The kind overlay sets a placeholder here; rendered after envSecretRef
+      # below, it would win and NICo would refuse the client credentials.
+      NICO_SERVICE_ACCOUNT_PASSWORD: null
 
     envSecretRef:
       NICO_SERVICE_ACCOUNT_PASSWORD:
