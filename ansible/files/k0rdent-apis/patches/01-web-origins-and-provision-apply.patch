@@ -21,10 +21,12 @@ diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/pr
            # The image bundles multiple tool binaries (no ENTRYPOINT); select
            # the provision tool explicitly.
            command: ["/usr/local/bin/provision"]
-@@ -80,13 +82,11 @@ spec:
-                   key: KEYCLOAK_BOOTSTRAP_ADMIN_CLIENT_SECRET
-             - name: BOOTSTRAP_INTERNAL_URL
-               value: "http://kong-internal:8100"
+@@ -85,15 +87,13 @@ spec:
+             # global.regions that holds projects: a non-global one, or "global"
+             # on an install whose own region is "global" and that runs compute
+             # (KCS-2105).
+-            # - name: BOOTSTRAP_DEFAULT_PROJECT_REGION
+-            #   value: "us-east-1"
 -            # --- manifest secret refs: add one entry per {env: NAME} in the
 -            # manifest, sourced from your env's Secret. Example:
 -            # - name: VENDOR_IDP_CLIENT_SECRET
@@ -32,6 +34,8 @@ diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/pr
 -            #     secretKeyRef:
 -            #       name: provision-manifest-secrets
 -            #       key: VENDOR_IDP_CLIENT_SECRET
++            - name: BOOTSTRAP_DEFAULT_PROJECT_REGION
++              value: "local"
 +            - name: KIND_IDP_SECRET
 +              valueFrom:
 +                secretKeyRef:
@@ -43,7 +47,7 @@ diff --git a/deploy/k8s/k0r-tools/provision-apply.yaml b/deploy/k8s/k0r-tools/pr
 diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/envs/kind/manifest.yaml
 --- a/scripts/post-deploy/envs/kind/manifest.yaml
 +++ b/scripts/post-deploy/envs/kind/manifest.yaml
-@@ -225,10 +225,12 @@ portalClients:
+@@ -243,10 +243,12 @@ portalClients:
        - http://localhost:8083/*
        - http://localhost:3000/*
        - http://localhost:3010/*
@@ -56,7 +60,7 @@ diff --git a/scripts/post-deploy/envs/kind/manifest.yaml b/scripts/post-deploy/e
    # customer-portal: the login client for customer users (alice, bob).
    - clientId: customer-portal
      displayName: Customer Portal (kind)
-@@ -239,10 +241,12 @@ portalClients:
+@@ -257,10 +259,12 @@ portalClients:
        - http://localhost:8083/*
        - http://localhost:3000/*
        - http://localhost:3010/*
