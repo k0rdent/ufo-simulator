@@ -10,6 +10,10 @@ global:
     nico:
       serviceAccountId: "{{ nico_client_id }}"
       serviceAccountPassword: "{{ k0rdent_apis_nico_sa_password }}"
+  # Where compute and k8s-monitor find the UFO objects behind AddressPools.
+  # This lab keeps them in platform-admin, compute's default; the kind values
+  # set ufo-system, which nothing here uses, so pin it.
+  networkSystemNamespace: platform-admin
 {% if k0rdent_apis_gateway_tls_enabled | bool %}
   # The worker reads the issuer CA Secret from global.namespace.
   namespace: "{{ k0rdent_apis_namespace }}"
@@ -67,6 +71,18 @@ reconciler:
     NICO_ORG: "{{ nico_api_org }}"
     NICO_KEYCLOAK_BASE_URL: "{{ nico_keycloak_base_url }}"
     NICO_KEYCLOAK_REALM: "{{ nico_keycloak_realm }}"
+
+# Off in the chart. In-cluster: KCM, CAPI and UFO run on this k0s cluster, so
+# no kubeconfig Secret; rbac.create makes the ServiceAccount and its read-only
+# ClusterRole (ClusterDeployment tree, events, UFO SubnetPools).
+k8s-monitor:
+  enabled: true
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-k8s-monitor"
+    pullPolicy: Always
+  rbac:
+    create: true
+  serviceAccountName: k8s-monitor
 
 # Kind overlay sets IfNotPresent for a locally loaded image; we pull from MSR.
 credentials:
