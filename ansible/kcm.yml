@@ -33,9 +33,17 @@
               enabled: false
           controller:
             defaultHelmTimeout: 90m
+        # Once up, KCM takes this release over through its own Flux HelmRelease
+        # and sets values of its own (e.g. regional.cluster-api-operator.enabled).
+        # Resetting them on a re-run removes the CAPI operator, and any provider
+        # dropped from the Management then hangs forever on its finalizer.
+        reset_values: false
+        reuse_values: true
         state: present
         wait: true
-        wait_timeout: 300s
+        # A cold install pulls cert-manager, flux, CAPI operator etc. images;
+        # 300s was not always enough, and a timeout skips the templates below.
+        wait_timeout: 900s
 
     - name: Ensure target directory
       file:
