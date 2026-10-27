@@ -18,6 +18,7 @@ a second copy that drifts would silently compare nothing.
 
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 from helpers import api, k8s, wait
@@ -318,6 +319,139 @@ def assert_ufo_security_group_cr(
         api_rule_fingerprints(sg),
         label=f"UFO CR {cr_name} rules vs API {api_id}",
     )
+
+
+# ---------------------------------------------------------------------------
+# VPC default group (KNF-558, KNF-564)
+# ---------------------------------------------------------------------------
+
+#: Source prefix of the default group's egress rules (model.AnyIPv4Prefix).
+ANY_IPV4_PREFIX = "0.0.0.0/0"
+
+
+def vpc_subnet_prefixes(kube, ns: str, vpc: dict[str, Any]) -> list[str]:
+    """CIDRs of the UFO Subnets inside ``vpc``, sorted and deduplicated the way
+    compute does before it seeds the VPC's default group from them.
+
+    Read off the CRs rather than the subnets API so a cluster and an instance
+    group are checked the same way: an instance group materializes no subnet
+    rows, and its workflow reads these same CRs back (KNF-564). ``spec.vpc`` is
+    the UFO Vpc CR name, which the VPC row reports as ``ufoCrName``.
+    """
+    vpc_cr = vpc.get("ufoCrName")
+    assert vpc_cr, f"vpc {vpc.get('id')!r} reports no ufoCrName: {vpc!r}"
+    prefixes: set[str] = set()
+    for item in k8s.list_custom(
+        kube,
+        group="ufo.mirantis.com",
+        version="v1alpha1",
+        plural="subnets",
+        namespace=ns,
+    ).get("items", []):
+        spec = item.get("spec") or {}
+        if spec.get("vpc") != vpc_cr:
+            continue
+        # spec.cidr first, then status.cidr — the order GetUFOSubnet reads them.
+        cidr = spec.get("cidr") or (item.get("status") or {}).get("cidr")
+        assert cidr, (
+            f"UFO Subnet {item['metadata']['name']} in vpc {vpc_cr} has no CIDR "
+            "although its owner is active"
+        )
+        prefixes.add(cidr)
+    return sorted(prefixes)
+
+
+def expected_default_vpc_rules(prefixes: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """The rules compute's DefaultVPCSecurityGroupRules derives from ``prefixes``.
+
+    Ingress is the full mesh, every prefix to every prefix, as ``intra-vpc-<i>``;
+    egress is one ``intra-vpc-egress-<i>`` per prefix, ``0.0.0.0/0 -> prefix``.
+    There is no ``allow-all-egress`` (KNF-558). List position is evaluation
+    order, so this is also the order compute stores them in.
+    """
+    uniq = sorted(set(prefixes))
+    ingress = [
+        {
+            "name": f"intra-vpc-{i}",
+            "protocol": "any",
+            "action": "permit",
+            "sourcePrefix": src,
+            "destinationPrefix": dst,
+        }
+        for i, (src, dst) in enumerate(itertools.product(uniq, uniq))
+    ]
+    egress = [
+        {
+            "name": f"intra-vpc-egress-{i}",
+            "protocol": "any",
+            "action": "permit",
+            "sourcePrefix": ANY_IPV4_PREFIX,
+            "destinationPrefix": dst,
+        }
+        for i, dst in enumerate(uniq)
+    ]
+    return {"ingress": ingress, "egress": egress}
+
+
+def assert_vpc_default_security_group(
+    session, sg_collection: str, kube, ns: str, vpc: dict[str, Any], *, log: Steps
+) -> dict[str, Any] | None:
+    """A fresh NICo VPC is bound to its default group alone, seeded from the
+    VPC's own subnet prefixes, with a UFO CR behind it. Returns that group.
+
+    A VPC with no subnets has no default group at all and starts with an empty
+    binding (KNF-564), so this returns None for one: a group with no rules is
+    refused by the UFO SecurityGroup CRD, and a NetworkBundle naming one waited
+    for its CR forever.
+    """
+    vpc_id = vpc["id"]
+    prefixes = vpc_subnet_prefixes(kube, ns, vpc)
+    bound = list(vpc.get("securityGroups") or [])
+    if not prefixes:
+        assert bound == [], (
+            f"vpc {vpc_id!r} has no subnets, so it gets no default group; its "
+            f"binding must start empty, got {bound!r}"
+        )
+        log.info(f"vpc {vpc_id}: no subnets, no default SG")
+        return None
+
+    assert len(bound) == 1, (
+        f"expected only the default SG on new vpc {vpc_id!r}, got {bound!r}"
+    )
+    sg_id = bound[0]
+    assert sg_id.endswith("-default"), (
+        f"default SG id shape: want *-default, got {sg_id!r}"
+    )
+    sg = await_sg_active(session, sg_collection, sg_id)
+    # The id is presentational; these are what identify the group.
+    assert sg.get("ownerKind") == "vpc" and sg.get("ownerId") == vpc["uid"], (
+        f"default SG {sg_id!r} owned by {sg.get('ownerKind')!r}/"
+        f"{sg.get('ownerId')!r}, want vpc/{vpc['uid']}"
+    )
+    assert sg.get("displayName") == f"Default ({vpc_id})", (
+        f"default SG {sg_id!r} displayName={sg.get('displayName')!r}"
+    )
+
+    want = expected_default_vpc_rules(prefixes)
+    have = sg_api_rules(sg)
+    for direction in ("ingress", "egress"):
+        want_fps = [rule_fingerprint(r, direction=direction) for r in want[direction]]
+        have_fps = [rule_fingerprint(r, direction=direction) for r in have[direction]]
+        assert have_fps == want_fps, (
+            f"default SG {sg_id!r} {direction} rules for prefixes {prefixes!r}: "
+            f"want {want_fps!r}, got {have_fps!r}"
+        )
+    want_count = len(want["ingress"]) + len(want["egress"])
+    assert sg.get("ruleCount") == want_count, (
+        f"default SG {sg_id!r} ruleCount={sg.get('ruleCount')!r}, want {want_count}"
+    )
+
+    assert_ufo_security_group_cr(kube, ns, sg, api_id=sg_id)
+    log.info(
+        f"vpc {vpc_id}: default SG {sg_id} uid={sg['uid']} covers {prefixes} "
+        f"({len(want['ingress'])} ingress + {len(want['egress'])} egress), UFO CR present"
+    )
+    return sg
 
 
 def nsg_named_ingress_order(nsg: dict[str, Any]) -> list[str]:

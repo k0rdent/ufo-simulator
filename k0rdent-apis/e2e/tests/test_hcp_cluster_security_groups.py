@@ -130,19 +130,20 @@ def test_hcp_cluster_vpc_security_groups(
     )
     vpc_uid = vpc["uid"]
 
-    log.step("assert VPC has only the platform default security group")
-    bound = list(vpc.get("securityGroups") or [])
-    assert len(bound) == 1, f"expected only default SG on new VPC, got {bound!r}"
-    default_sg_id = bound[0]
-    assert default_sg_id.endswith("-default"), (
-        f"default SG id shape: want *-default, got {default_sg_id!r}"
-    )
-    default_sg = api.get_json(session, f"{sg_collection}/{default_sg_id}")
+    kube = k8s.api_client(os.environ.get("KUBECONFIG"))
+    ns = k8s.project_namespace(project)
+
+    log.step("assert each NICo VPC's default SG is seeded from its subnet prefixes")
+    defaults = {
+        v["id"]: secgroups.assert_vpc_default_security_group(
+            session, sg_collection, kube, ns, v, log=log
+        )
+        for v in [vpc, *vpcs[1:]]
+    }
+    default_sg = defaults[vpc_id]
+    assert default_sg, f"vpc {vpc_id} has no subnets, so no default SG to drive"
+    default_sg_id = default_sg["id"]
     default_sg_uid = default_sg["uid"]
-    assert default_sg.get("ownerKind") == "vpc", (
-        f"default SG ownerKind={default_sg.get('ownerKind')!r}, want vpc"
-    )
-    assert default_sg.get("state") == "active"
     log.ok(f"default SG {default_sg_id!r} (ownerKind=vpc uid={default_sg_uid})")
 
     if effective_ready:
@@ -157,6 +158,11 @@ def test_hcp_cluster_vpc_security_groups(
         assert secgroups.effective_group_ids(block) == [default_sg_id]
         secgroups.assert_effective_group(
             block, default_sg_id, source="vpc", source_id=vpc_id, sg=default_sg
+        )
+        assert secgroups.effective_rule_fingerprints(
+            block
+        ) == secgroups.api_rule_fingerprints(default_sg), (
+            "a fresh VPC's effective rules are exactly its default SG's"
         )
 
         eff = _effective("cluster", cluster_id)
@@ -218,9 +224,6 @@ def test_hcp_cluster_vpc_security_groups(
         log_every=2,
     )
     log.ok("VPC binding settled")
-
-    kube = k8s.api_client(os.environ.get("KUBECONFIG"))
-    ns = k8s.project_namespace(project)
 
     log.step(f"assert UFO SecurityGroup CRs in {ns}")
     sgs_by_id = {
