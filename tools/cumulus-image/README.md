@@ -48,8 +48,8 @@ with `-vx` (software forwarding); NVUE, FRR and the rest work as on VX.
   network's host address, port 8080 by default; the host firewall must let the
   VM reach it.
 - About 40 GB free next to the output file and 8 GB of free RAM for the build VM.
-- A Cumulus VX qcow2 that contains ONIE, for example the one the lab uses
-  (`ansible/group_vars/all.yml`):
+- A Cumulus VX qcow2 that contains ONIE, for example NVIDIA's VX 5.15.0
+  image, which the tests used:
 
   ```bash
   curl -fLO https://networkingdownloads.nvidia.com/custhelp/Non_Monetized_Products/Software/CumulusSoftware/CumulusVX/cumulus-linux-5.15.0-vx-amd64-qemu.qcow2
@@ -191,6 +191,25 @@ ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub    # different on every clone
 systemctl is-enabled systemd-networkd               # disabled
 ls /etc/systemd/system-preset                       # gone after the first boot
 ```
+
+## Publishing an image for the lab
+
+`ansible/group_vars/all.yml` points the Verity backend at
+`cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2` in Artifactory
+(`binary-dev-k0rdent-ai-local/ufo/verity/`); Netris stays on Cumulus VX from
+NVIDIA. To publish a new generalized build under that name:
+
+```bash
+sha=$(cut -d' ' -f1 cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2.sha256)
+curl -u <user> -H "X-Checksum-Sha256: $sha" \
+    -T cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2 \
+    https://artifactory.mcp.mirantis.net/artifactory/binary-dev-k0rdent-ai-local/ufo/verity/cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2
+```
+
+`create-switches.yml` downloads the image only when
+`/var/lib/libvirt/images/<name>` does not exist, so a host keeps an older file
+of the same name. Run `destroy-switches.yml`, delete that file, then run
+`create-switches.yml` again.
 
 ## Troubleshooting
 
