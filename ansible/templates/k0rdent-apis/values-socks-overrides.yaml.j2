@@ -68,6 +68,13 @@ reconciler:
     NICO_KEYCLOAK_BASE_URL: "{{ nico_keycloak_base_url }}"
     NICO_KEYCLOAK_REALM: "{{ nico_keycloak_realm }}"
 
+# Enabled by the kind overlay. Chart default is ghcr.io/k0rdent/k0r-k8s-monitor;
+# socks can't pull anonymous ghcr.
+k8s-monitor:
+  image:
+    repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-k8s-monitor"
+    pullPolicy: Always
+
 # Kind overlay sets IfNotPresent for a locally loaded image; we pull from MSR.
 credentials:
   image:
