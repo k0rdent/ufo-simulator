@@ -45,6 +45,9 @@ compute:
   image:
     repository: "registry.ci.mirantis.com/k0rdent-apis/images/k0r-compute"
     pullPolicy: Always
+  # Baseline security group rules for new NICo VPCs (KNF-551). A build that
+  # predates KNF-551 ignores the key.
+  securityGroupBaseline: {{ k0rdent_apis_security_group_baseline | to_json }}
 
 infrastructure:
   image:

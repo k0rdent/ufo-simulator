@@ -33,6 +33,11 @@ export E2E_FABRIC_BACKEND="{{ ufo_fabric_backend | default(sdn_provider) }}"
 # path; the bare "verity" instance runs Clos and creates no HGXTenantAssignment.
 export E2E_VERITY_BACKEND="{{ e2e_verity_backend | default('verity-ewf') }}"
 
+# The baseline security group rules k0rdent-apis is configured with (the same
+# variable the helm values use), as JSON. The SG scenarios check a new VPC's
+# baseline group carries exactly these.
+export E2E_SECURITY_GROUP_BASELINE='{{ k0rdent_apis_security_group_baseline | to_json }}'
+
 export K0R_TOKEN_FILE="{{ e2e_token_file }}"
 export TOKEN_SLACK_SEC="{{ e2e_token_slack_sec }}"
 export K0R_NAMESPACE="${K0R_NAMESPACE:-k0rdent-apis}"

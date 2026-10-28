@@ -464,6 +464,18 @@ nico_prepovision_instance_type_name: gpu-a100
 nico_prepovision_operating_system_name: ubuntu-22.04
 nico_prepovision_ssh_key_group_name: platform-admin-keys
 nico_prepovision_network_security_group_name: allow-all
+# Rules of the baseline security group k0rdent-apis gives every new NICo VPC
+# (compute.securityGroupBaseline, KNF-551). Replaces the built-in allow-all
+# egress. NICo makes a tcp/udp egress rule with a destination port and no source
+# port stateful, so DNS replies come back in. Ports are strings; `{}` creates
+# no baseline group. The lab e2e checks a new VPC carries exactly these
+# (E2E_SECURITY_GROUP_BASELINE).
+k0rdent_apis_security_group_baseline:
+  egress:
+    - { name: dns-udp, protocol: udp, action: permit, sourcePrefix: 0.0.0.0/0, destinationPrefix: 0.0.0.0/0, destinationPortRange: "53" }
+    - { name: http, protocol: tcp, action: permit, sourcePrefix: 0.0.0.0/0, destinationPrefix: 0.0.0.0/0, destinationPortRange: "80" }
+    - { name: https, protocol: tcp, action: permit, sourcePrefix: 0.0.0.0/0, destinationPrefix: 0.0.0.0/0, destinationPortRange: "443" }
+  ingress: []
 external_secrets_namespace: external-secrets
 external_secrets_chart_repo: https://charts.external-secrets.io
 external_secrets_chart_version: 2.7.0
