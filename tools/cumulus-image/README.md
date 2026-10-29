@@ -194,22 +194,24 @@ ls /etc/systemd/system-preset                       # gone after the first boot
 
 ## Publishing an image for the lab
 
-`ansible/group_vars/all.yml` points the Verity backend at
-`cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2` in Artifactory
-(`binary-dev-k0rdent-ai-local/ufo/verity/`); Netris stays on Cumulus VX from
-NVIDIA. To publish a new generalized build under that name:
+The lab picks the switch image per fabric backend: `ansible/vars/verity.yml`
+sets `cumulus_image_name` and `cumulus_image_url` to a generalized build in
+Artifactory (`binary-dev-k0rdent-ai-local/ufo/verity/`), and
+`ansible/vars/netris.yml` keeps Netris on Cumulus VX from NVIDIA. To publish a
+new build, upload it under a new file name and set `cumulus_image_name` in
+`ansible/vars/verity.yml` to it:
 
 ```bash
-sha=$(cut -d' ' -f1 cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2.sha256)
-curl -u <user> -H "X-Checksum-Sha256: $sha" \
-    -T cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2 \
-    https://artifactory.mcp.mirantis.net/artifactory/binary-dev-k0rdent-ai-local/ufo/verity/cumulus-linux-5.18.0-mlx-amd64-qemu-generic.qcow2
+img=cumulus-linux-5.18.1-mlx-amd64-generic.qcow2
+curl -u <user> -H "X-Checksum-Sha256: $(cut -d' ' -f1 "$img.sha256")" -T "$img" \
+    "https://artifactory.mcp.mirantis.net/artifactory/binary-dev-k0rdent-ai-local/ufo/verity/$img"
 ```
 
 `create-switches.yml` downloads the image only when
-`/var/lib/libvirt/images/<name>` does not exist, so a host keeps an older file
-of the same name. Run `destroy-switches.yml`, delete that file, then run
-`create-switches.yml` again.
+`/var/lib/libvirt/images/<name>` does not exist, and existing switches keep the
+backing file they were created with. Run `destroy-switches.yml` and then
+`create-switches.yml` to move the switches to a new image; reusing a file name
+also needs that file deleted from the host in between.
 
 ## Troubleshooting
 

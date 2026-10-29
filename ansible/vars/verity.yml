@@ -2,3 +2,9 @@ sdn_provider: verity
 ufo_fabric_backend: 'verity'
 br_mgmt_phys_interface: ens5
 br_ext_phys_interface: ens6
+
+# Cumulus for the switches. Verity emits the 5.15+ NVUE spelling. The image is
+# the mlx-amd64 ONIE installer turned into a qcow2 and generalized for cloning
+# with tools/cumulus-image; its README covers publishing a new build.
+cumulus_image_name: "cumulus-linux-5.18.1-mlx-amd64-generic.qcow2"
+cumulus_image_url: "https://artifactory.mcp.mirantis.net/artifactory/binary-dev-k0rdent-ai-local/ufo/verity/{{ cumulus_image_name }}"
