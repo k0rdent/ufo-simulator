@@ -4,6 +4,14 @@ ufo_fabric_backend: 'netris'
 # Netris controller version. Switch/softgate agent packages must match.
 netris_ctl_version: "4.16.0"
 
+# Cumulus VX for the switches, kept on 5.11: get-netris.sh --lo writes the
+# loopback through the old `interface lo ip address` path, which silently does
+# nothing on 5.15, and the agent then exits with "Cannot determine loopback ip
+# address" because nothing ever configured lo. Stays on 5.11 until the agent
+# moves.
+cumulus_image_name: "cumulus-linux-5.11.1-vx-amd64-qemu.qcow2"
+cumulus_image_url: "https://networkingdownloads.nvidia.com/custhelp/Non_Monetized_Products/Software/CumulusSoftware/CumulusVX/{{ cumulus_image_name }}"
+
 # Controller HA chart (OCI). Release name must stay netris-controller-ha so
 # netris-controller.fullname agrees with the bundled subchart service names.
 netris_controller_chart_repo: oci://registry.ci.mirantis.com/pvt-vsaienko/charts/netris/netris-controller-ha
