@@ -45,7 +45,7 @@ from typing import Any
 import pytest
 
 from conftest import ensure_global_prereqs, load_scenario_template, load_template
-from helpers import api, k8s, wait
+from helpers import api, k8s, materialized_networking, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -655,6 +655,8 @@ def run_owner_teardown(
     local_owner_what: str,
     remote_owner_url: str,
     remote_owner_what: str,
+    local_net: materialized_networking.MaterializedNetworking | None = None,
+    remote_net: materialized_networking.MaterializedNetworking | None = None,
 ) -> None:
     """Round 2: delete BOTH owners in turn, peerings never deleted by hand.
 
@@ -673,6 +675,10 @@ def run_owner_teardown(
 
     Nothing else tests either: upstream's equivalent runs under MOCK_MODE and
     disclaims proving that any CR was applied or removed.
+
+    ``local_net`` / ``remote_net``, when given, are each owner's materialized networking as
+    recorded while it was active; after each owner's delete its VPC rows and
+    UFO objects must be gone too (see ``helpers/materialized_networking.py``).
     """
     hs = _Handshake()
     try:
@@ -726,6 +732,10 @@ def run_owner_teardown(
         _await_no_backend_peering(kube, hs.crs, log=log)
         log.ok()
 
+        if remote_net is not None:
+            log.step(f"assert the materialized networking of {remote_owner_what} went with it")
+            materialized_networking.await_gone(session, api_base, region, kube, remote_net, steps=log)
+
         # Second half: the surviving peering is still live and still declared.
         # Deleting its owner — never the peering itself — is what proves the
         # cleanup belongs to the owner's terminate workflow. This also exercises
@@ -745,6 +755,10 @@ def run_owner_teardown(
         _await_peering_cr_gone(kube, hs.fwd_cr, log=log)
         hs.fwd_url = ""
         log.ok("row and CR both removed by the owner's teardown")
+
+        if local_net is not None:
+            log.step(f"assert the materialized networking of {local_owner_what} went with it")
+            materialized_networking.await_gone(session, api_base, region, kube, local_net, steps=log)
     finally:
         # Safety net only: on the happy path both sides are already gone, each
         # removed by its own owner's teardown. These run when an assertion
@@ -871,6 +885,17 @@ def peer_cluster_with_instance_group(
             f"{ig_project}/{ig_vpc['id']} ({ig_vpc['ufoCrName']})"
         )
 
+        log.step("record each owner's materialized networking (VPC rows + UFO objects)")
+        cluster_net = materialized_networking.snapshot(
+            session, api_base, region, cluster_project, kube,
+            owner_kind="cluster", owner_uid=cluster_uid,
+        )
+        ig_net = materialized_networking.snapshot(
+            session, api_base, region, ig_project, kube,
+            owner_kind="instance_group", owner_uid=ig_uid,
+        )
+        log.ok(f"{cluster_net.describe()}; {ig_net.describe()}")
+
         # Round 1: withdraw the peerings themselves.
         run_handshake(
             session,
@@ -905,6 +930,8 @@ def peer_cluster_with_instance_group(
             local_owner_what=f"cluster {cluster_id}",
             remote_owner_url=ig_url,
             remote_owner_what=f"instance group {ig_id}",
+            local_net=cluster_net,
+            remote_net=ig_net,
         )
     finally:
         # Both at once, the mirror of the creates above. On the happy path round

@@ -49,6 +49,7 @@ and login settings. The operator JWT is minted in Python on first API call
 pytest -m smoke -s
 
 # Single files
+pytest tests/test_network_templates.py -s           # seconds; creates no clusters
 pytest tests/test_security_groups_effective.py -s   # seconds; creates nothing
 pytest tests/test_hcp_cluster.py -s
 pytest tests/test_hcp_cluster_ew.py -s              # netris labs
@@ -63,6 +64,7 @@ pytest tests/test_vpc_peering_inter_project.py -s
 # By marker
 pytest -m hcp -s
 pytest -m bmaas -s
+pytest -m templates -s                    # network schema / attachment templates
 
 # VPC peering — needs MOCK_MODE off and two free nico-lab servers.
 # Both tests carry `peering`; only the same-project one carries `smoke`.
@@ -96,15 +98,18 @@ rm -f /tmp/k0r-token
 ## Prerequisites
 
 - k0rdent-apis playbook has been applied (`ansible-playbook k0rdent-apis.yml`)
+  from a checkout carrying **KNF-460** (9b19d635f, network schema / attachment
+  templates). Without it the first template create is a 404 from Kong
 - Project namespace exists (default `prj-kind-main`)
 - CMP can reach Kong (`http://10.200.0.254:30080`) and in-cluster
   `auth` / `mock-oauth2-server` Services (for token minting)
 - `prepare-e2e-tests.yml` has registered the HCP host-cluster Secret + ConfigMap
   (required by `ResolveHCPHostCluster` for `nico-hcp` / `netris-hcp-ew`)
 
-Tests **create** missing region-scoped prerequisites (address pools, HCP
-cluster type) and leave them in place. They delete the clusters / instance
-groups they create.
+Tests **create** missing region-scoped prerequisites (address pools, network
+templates, cluster types) and leave them in place. They delete the clusters /
+instance groups they create. A lab set up before the move to network templates
+needs a one-time manual step first — see [Network templates](#network-templates).
 
 The `security-groups-effective` assertions need a k0rdent-apis build carrying
 **KNF-469**. The lab builds from the `/opt/ufo_lab/k0rdent-apis` checkout on the
@@ -157,12 +162,22 @@ Resource ids for clusters, instance groups, and security groups are
 | `test_hcp_cluster_security_groups.py` | `smoke`, `hcp` | Create cluster; VPC default SG (rules = intra-VPC mesh of the VPC's UFO Subnet CIDRs, no allow-all egress; UFO CR present) + custom SG; cluster SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=cluster`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
 | `test_instance_group.py` | `smoke`, `bmaas` | Ensure address pools + cluster types; create BMaaS instance group; wait API `active`; delete |
 | `test_instance_group_security_groups.py` | `smoke`, `bmaas` | Create IG; VPC default SG (same check as the cluster: seeded from the VPC's subnet CIDRs, KNF-564) + custom SG; IG SG; UFO CRs; NICo NSG merge + precedence; effective read at every binding stage (`objectKind=instance_group`: merge order, attribution, agreement with the NICo NSG); detach and assert rules leave both the NSG and the effective block; teardown |
+| `test_network_templates.py` | `smoke`, `templates` | Creates no clusters. Each global ClusterType references its network schema / attachment templates and GET resolves them through Kong (available, content equals the YAML, pool `machineType` in the template's `machineTypes`); the lifecycle on per-run templates built from the lab's `global-default` pool and `nico-lab` MachineType (draft refused as a reference, 409 `CONFLICT_IN_USE` while referenced, deprecation keeps the existing type resolving, hides from lists, is forward only and refuses new references); create-time refusals that read lab objects (pool prefix window, unknown MachineType). CRUD and the rest are upstream's `test_network_templates_crud.py` |
 | `test_security_groups_effective.py` | `smoke` | `security-groups-effective` negatives (422 on missing/unknown `objectKind`/`objectId`, 404 on an unknown or cross-kind id) and the `vpc` arm against a materialized VPC. Creates nothing, needs no cluster — run it first to confirm Kong routes the path |
 | `test_vpc_peering_intra_project.py` | `smoke`, `peering` | Cluster + IG in one project (provisioned concurrently); peer their nico VPCs both ways; assert the UFO `VpcPeering` CRs, that one side alone programs nothing, and that the mutual pair collapses onto exactly one NICo `VPCPeering`. Then both teardown rounds (below) |
 | `test_vpc_peering_inter_project.py` | `peering`, `crossorg` | The same scenario across two orgs — cluster in `kind-main` (org `kind`) ↔ IG in `acme-main` (org `acme`); additionally asserts `spec.remote.namespace` and that neither side is listed under the other's VPC |
 
+**Every test that deletes a cluster or instance group also asserts its
+materialized networking went with it** (`helpers/materialized_networking.py`):
+the VPC rows it owns and, in the project namespace, the UFO `Vpc`, `Network`,
+`Subnet` and `NetworkBundle` objects behind them, recorded while it was active.
+Terminate derives what to delete from the ClusterType's resolved networking, so
+a templated type that resolved as `{}` would leave all of it behind while the
+owner's own 404 still came back. Only CRs that existed at the snapshot are
+asserted, so it holds under `MOCK_MODE` too.
+
 Do not run these against the same project in parallel — they share address
-pools / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
+pools / network templates / cluster types. Per-run resource ids (test name + `E2E_RUN_ID`) avoid
 collisions across sequential runs; use a distinct `PROJECT` for true parallel
 suites.
 
@@ -218,8 +233,47 @@ The verity test additionally needs:
 - A `nico-verity-hcp-ew` entry in `kcm-system/hcp-host-clusters`, which
   `prepare-e2e-tests.yml` creates from `e2e_hcp_cluster_type_ids`.
 
-Note `ensure_*_prereqs` only *creates*. After editing a cluster-type template,
-delete the object from the API by hand or the run silently uses the old one.
+Note `ensure_*_prereqs` only *creates*. After editing a cluster-type or
+network-template YAML, delete the object from the API by hand or the run
+silently uses the old one — see below.
+
+### Network templates
+
+The global ClusterTypes reference network schema / attachment templates
+(k0rdent-apis KNF-460) instead of declaring networking inline; the files and
+their dependency order are in
+[`../scenarios/templates/global/README.md`](../scenarios/templates/global/README.md).
+
+**One-time step on a lab set up before this change.** It still holds
+`nico-hcp`, `netris-hcp-ew` (and on verity labs `nico-verity-hcp-ew`) with
+inline networking under the same ids, and `ensure_exists` never replaces them.
+`test_network_templates.py` fails on exactly this, naming the type. Delete them
+once (no cluster or instance group may still use them) and the next run
+recreates them on templates:
+
+```bash
+cd /opt/ufo_lab/ufo-simulator/ansible
+source ./k0r.sh                       # k0r_token (README-k0rdent-apis.md §1)
+export API_BASE=$BASE TOKEN=$(k0r_token)
+K0R=../k0rdent-apis/scripts/k0r.sh
+PROJECT= $K0R delete compute/cluster-types nico-hcp
+PROJECT= $K0R delete compute/cluster-types netris-hcp-ew
+PROJECT= $K0R delete compute/cluster-types nico-verity-hcp-ew   # verity labs
+```
+
+**Changing a template.** Templates cannot change after create — only their
+`status` moves, forward — and cannot be deleted while referenced. Delete in
+reverse order (same shell setup as above), then rerun:
+
+```bash
+PROJECT= $K0R delete compute/cluster-types netris-hcp-ew
+PROJECT= $K0R delete networking/network-schema-templates/nico-netris-ew/network-attachment-templates nico-lab-netris-ew
+PROJECT= $K0R delete networking/network-schema-templates nico-netris-ew
+```
+
+A `409 CONFLICT_IN_USE` means something still references it: a live cluster or
+instance group on the type, or another ClusterType or attachment template on
+the template.
 
 ---
 
@@ -235,6 +289,7 @@ e2e/
     auth.py            # Python k0r_login/k0r_token (mint + cache)
     names.py           # per-run resource ids ({test}-{kind}-{run_id})
     k8s.py             # list/get CRs; find UFO/NICo peering objects by label + owner
+    materialized_networking.py  # snapshot an owner's VPCs + UFO objects; assert gone after delete
     secgroups.py       # SG lifecycle, one rule vocabulary, effective-read asserts
     vpc_peering.py     # shared peering handshake (provision, CR/backend asserts)
     steps.py           # numbered runtime STEP progress (pytest -s)
@@ -244,6 +299,7 @@ e2e/
     test_hcp_cluster_security_groups.py
     test_instance_group.py
     test_instance_group_security_groups.py
+    test_network_templates.py
     test_security_groups_effective.py
     test_vpc_peering_intra_project.py
     test_vpc_peering_inter_project.py
@@ -269,7 +325,9 @@ Templates live under [`../scenarios/templates`](../scenarios/templates):
 scenarios/templates/
   global/                              # shared; ensure, never tear down
     address-pool-global-*.yaml
-    cluster-type-nico-hcp.yaml
+    network-schema-template-*.yaml     # networking the cluster types reference
+    network-attachment-template-*.yaml #   (nested under a schema template)
+    cluster-type-*.yaml
   hcp_cluster/                         # test_hcp_cluster.py + vpc peering tests
     cluster.yaml
   hcp_cluster_security_groups/         # test_hcp_cluster_security_groups.py
@@ -300,6 +358,9 @@ single-consumer — edit them with that in mind.
 | `401` mid-run | Should auto-remint once; if it persists, check kube access for `k0r_login` |
 | Cluster stuck `creating` / timeout | Lab capacity, NICo inventory, UFO/NetworkBundle events in `prj-$PROJECT` |
 | `no host cluster registered for ClusterType "nico-hcp"` | Re-run `ansible-playbook prepare-e2e-tests.yml`; check `kubectl -n kcm-system get cm hcp-host-clusters -o yaml` |
+| `ClusterType … has networkSchemaRef=None` | The lab still holds the pre-template ClusterType — [Network templates](#network-templates), one-time step |
+| Template create `404` (Kong "no Route matched") | The lab's k0rdent-apis predates KNF-460; rebuild from main |
+| `materialized networking of … not torn down` | Terminate left the listed objects behind; check the owner's terminate workflow (`scripts/temporal-workflow-logs.py`) and UFO controller logs |
 | SG attach `409 CONFLICT_IN_USE` | Wait for VPC/cluster `active` before the next binding write (tests already poll) |
 | Peering DELETE `409 CONFLICT_IN_USE` | DELETE is a CAS over `state IN ('active','failed')`; against a row still `creating` it refuses and the row keeps its direction. Settle first (the tests already do) |
 | Peering create `409` "already peered" | The previous run's row is not tombstoned yet — `uq_vpc_peering_direction` is partial on `deleted_at IS NULL`, so a direction frees only at tombstone, not at the 204 |

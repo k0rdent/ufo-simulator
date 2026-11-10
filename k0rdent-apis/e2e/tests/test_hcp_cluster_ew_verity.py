@@ -23,7 +23,7 @@ from conftest import (
     load_scenario_template,
     verity_backend_name,
 )
-from helpers import api, ew_verity, k8s, secgroups, wait
+from helpers import api, ew_verity, k8s, materialized_networking, secgroups, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -104,6 +104,9 @@ def test_hcp_cluster_ew_verity_create_ready_terminate(
         api.raise_for_status(resp)
         return resp.json()
 
+    # Recorded once the cluster is fully up; teardown asserts it only then, since
+    # a cluster that failed before that has no complete network to check.
+    net = None
     try:
         log.step("wait for cluster API state=active")
         cluster_obj = wait.await_api_state(
@@ -183,6 +186,13 @@ def test_hcp_cluster_ew_verity_create_ready_terminate(
             log=log,
             expected_machines=_EXPECTED_MACHINES,
         )
+
+        log.step("record the cluster's materialized networking (VPC rows + UFO objects)")
+        net = materialized_networking.snapshot(
+            session, api_base, region, project, kube,
+            owner_kind="cluster", owner_uid=cluster_uid,
+        )
+        log.ok(net.describe())
     finally:
         # Always give the machines back. This test holds two of them, and a
         # leaked cluster leaves HGXTenantAssignments that block the next run
@@ -201,4 +211,8 @@ def test_hcp_cluster_ew_verity_create_ready_terminate(
             steps=log,
             log_every=2,
         )
+
+        if net is not None:
+            log.step("assert the cluster's materialized networking went with it")
+            materialized_networking.await_gone(session, api_base, region, kube, net, steps=log)
     log.done()

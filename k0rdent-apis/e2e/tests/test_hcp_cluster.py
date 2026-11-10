@@ -11,7 +11,7 @@ from conftest import (
     ensure_global_prereqs,
     load_scenario_template,
 )
-from helpers import api, k8s, wait
+from helpers import api, k8s, materialized_networking, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -107,6 +107,13 @@ def test_hcp_cluster_create_ready_terminate(
     )
     log.info(f"ClusterDeployment {cd['metadata']['name']} Ready")
 
+    log.step("record the cluster's materialized networking (VPC rows + UFO objects)")
+    net = materialized_networking.snapshot(
+        session, api_base, region, project, kube,
+        owner_kind="cluster", owner_uid=cluster_uid,
+    )
+    log.ok(net.describe())
+
     log.step(f"DELETE cluster {cluster_id}")
     deleted = api.delete(session, cluster_url)
     assert deleted.status_code in (202, 204), deleted.text
@@ -121,4 +128,7 @@ def test_hcp_cluster_create_ready_terminate(
         steps=log,
         log_every=2,
     )
+
+    log.step("assert the cluster's materialized networking went with it")
+    materialized_networking.await_gone(session, api_base, region, kube, net, steps=log)
     log.done()

@@ -1,36 +1,10 @@
 id: netris-hcp-ew
 displayName: NICo HCP + Netris east-west
-networkSchema:
-  vpcs:
-    - id: vpc-nico
-      backend: nico
-    - id: vpc-ew
-      backend: netris
-  networks:
-    - id: ns-network
-      vpc: vpc-nico
-      type: evpn
-      evpn:
-        type: l3vpn
-    - id: ew-network
-      vpc: vpc-ew
-      type: evpn
-      evpn:
-        type: l3vpn
-    - id: nvlink-partition
-      vpc: vpc-nico
-      type: nvlink
-  subnets:
-    - id: ns-subnet
-      network: ns-network
-      addressPool: /v1/regions/local/compute/address-pools/global-default
-      prefixLength: 27
-    - id: ew-subnet
-      network: ew-network
-      cidr: 172.16.0.0/12
-      addressAllocator:
-        backend: rail-optimised
-        gpuPlatform: B200
+# Networking comes from templates (k0rdent-apis KNF-460): the schema from
+# network-schema-template-nico-netris-ew.yaml, the pool's NIC layout from
+# network-attachment-template-nico-lab-netris-ew.yaml.
+networkSchemaRef:
+  template: /v1/regions/local/networking/network-schema-templates/nico-netris-ew
 k8s:
   k0sNetworkProvider: calico
   k0sVersion: v1.36.1
@@ -55,56 +29,5 @@ nodePools:
     nodeCountMin: 1
     nodeCountMax: 6
     nodeCountDefault: 1
-    networkAttachment:
-      # Rendered into the pool's UFO NetworkBundle as spec.host_config: each host's HostConfig
-      # is seeded from the default-vm-v1 HostConfigTemplate, which the UFO Helm chart installs.
-      host_agent:
-        template: default-vm-v1
-      ethernets:
-        enp1s0:
-          dhcp4: true
-          connectToNetwork:
-            name: ns-network
-        eth-ew0:
-          match:
-            fabricLocation:
-              railId: 0
-          addresses:
-            - ipFromSubnet: ew-subnet
-          routes: &ew-routes
-            - to:
-                cidrFromRailsubnet:
-                  name: ew-subnet
-              via:
-                gatewayFromSubnet:
-                  name: ew-subnet
-            - to:
-                cidrFromSubnet:
-                  name: ew-subnet
-              via:
-                gatewayFromSubnet:
-                  name: ew-subnet
-        eth-ew1:
-          match:
-            fabricLocation:
-              railId: 1
-          addresses:
-            - ipFromSubnet: ew-subnet
-          routes: *ew-routes
-        eth-ew2:
-          match:
-            fabricLocation:
-              railId: 2
-          addresses:
-            - ipFromSubnet: ew-subnet
-          routes: *ew-routes
-        eth-ew3:
-          match:
-            fabricLocation:
-              railId: 3
-          addresses:
-            - ipFromSubnet: ew-subnet
-          routes: *ew-routes
-      nvlinks:
-        nvlink1:
-          connectToNetwork: nvlink-partition
+    networkAttachmentRef:
+      template: /v1/regions/local/networking/network-schema-templates/nico-netris-ew/network-attachment-templates/nico-lab-netris-ew

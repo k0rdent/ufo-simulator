@@ -1,0 +1,16 @@
+# POST /v1/regions/local/networking/network-schema-templates/nico/network-attachment-templates
+#
+# Parent: network-schema-template-nico.yaml. One DHCP management NIC on
+# net-nico, for nico-lab servers.
+id: nico-lab
+displayName: nico-lab management only
+machineTypes:
+  - /v1/regions/local/infrastructure/machine-types/nico-lab
+networkAttachment:
+  ethernets:
+    # No `match`: the NIC behind enp1s0 has no LLDP peer and so no Link CR,
+    # which is what `match` resolves against. The OS-predictable name is the key.
+    enp1s0:
+      dhcp4: true
+      connectToNetwork:
+        name: net-nico

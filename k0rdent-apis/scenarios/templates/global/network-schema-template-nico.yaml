@@ -1,0 +1,23 @@
+# POST /v1/regions/local/networking/network-schema-templates
+#
+# The single-VPC NICo schema: one l3vpn network and a /27 subnet carved from the
+# global-default address pool. Referenced by cluster-type-nico-hcp.yaml.
+id: nico
+displayName: NICo single VPC
+networkSchema:
+  vpcs:
+    - id: vpc-nico
+      backend: nico
+  networks:
+    - id: net-nico
+      vpc: vpc-nico
+      type: evpn
+      evpn:
+        type: l3vpn
+  subnets:
+    - id: sub-nico
+      network: net-nico
+      # global-default allows prefix lengths 19-28; the template create refuses
+      # a prefixLength outside that window with 422.
+      addressPool: /v1/regions/local/compute/address-pools/global-default
+      prefixLength: 27
