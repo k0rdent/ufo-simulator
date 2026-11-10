@@ -107,6 +107,8 @@ def list_items(
         "clusters",
         "instanceGroups",
         "peerings",
+        "networkSchemaTemplates",
+        "networkAttachmentTemplates",
     ):
         if key in body and isinstance(body[key], list):
             return body[key]

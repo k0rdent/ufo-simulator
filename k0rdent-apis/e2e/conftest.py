@@ -15,17 +15,42 @@ from helpers.names import new_run_id
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "scenarios" / "templates"
 
+SCHEMA_TEMPLATES = "networking/network-schema-templates"
+
+
+def attachment_templates(schema_template_id: str) -> str:
+    """Collection of the attachment templates nested under one schema template."""
+    return f"{SCHEMA_TEMPLATES}/{schema_template_id}/network-attachment-templates"
+
+
 # Shared region-scoped resources: ensure before each test, never tear down.
+# Dependency order matters: a schema template's subnets name the address pools,
+# an attachment template nests under its schema template, and a ClusterType
+# references both templates (k0rdent-apis KNF-460).
 GLOBAL_PREREQS: tuple[tuple[str, str], ...] = (
     ("global/address-pool-global-default.yaml", "compute/address-pools"),
     ("global/address-pool-global-public.yaml", "compute/address-pools"),
+    ("global/network-schema-template-nico.yaml", SCHEMA_TEMPLATES),
+    ("global/network-schema-template-nico-netris-ew.yaml", SCHEMA_TEMPLATES),
+    ("global/network-attachment-template-nico-lab.yaml", attachment_templates("nico")),
+    (
+        "global/network-attachment-template-nico-lab-netris-ew.yaml",
+        attachment_templates("nico-netris-ew"),
+    ),
     ("global/cluster-type-nico-hcp.yaml", "compute/cluster-types"),
     ("global/cluster-type-netris-hcp-ew.yaml", "compute/cluster-types"),
 )
 
-# Verity-only cluster types, created by ensure_verity_prereqs rather than being
-# global: nothing on a netris lab can deploy from them.
+# Verity-only templates and cluster types, created by ensure_verity_prereqs
+# rather than being global: nothing on a netris lab can deploy from them.
+# cluster-type-nico-verity-ew.yaml (BMaaS) shares these templates but stays out:
+# no test deploys it.
 VERITY_PREREQS: tuple[tuple[str, str], ...] = (
+    ("global/network-schema-template-nico-verity-ew.yaml", SCHEMA_TEMPLATES),
+    (
+        "global/network-attachment-template-nico-lab-verity-ew.yaml",
+        attachment_templates("nico-verity-ew"),
+    ),
     ("global/cluster-type-nico-verity-hcp-ew.yaml", "compute/cluster-types"),
 )
 
@@ -112,8 +137,11 @@ def _ensure_prereqs(session, api_base: str, region: str, prereqs) -> None:
     it — creating one while an address pool is still ``creating`` is a 409 — so
     wait here and callers can POST immediately after this returns.
 
-    Note ``api.ensure_exists`` only creates. Once a cluster type exists in the
-    lab, editing its template changes nothing until it is deleted by hand.
+    Note ``api.ensure_exists`` only creates. Once a cluster type or network
+    template exists in the lab, editing its YAML changes nothing until it is
+    deleted by hand -- and network templates cannot be changed at all after
+    create, nor deleted while referenced, so delete in reverse order: cluster
+    type, then attachment template, then schema template.
     """
     from helpers import api, wait
 
@@ -122,8 +150,9 @@ def _ensure_prereqs(session, api_base: str, region: str, prereqs) -> None:
         collection = api.region_url(api_base, region, resource)
         obj = api.ensure_exists(session, collection, body)
         item_url = f"{collection}/{body['id']}"
-        # Cluster types have no async lifecycle today; only wait when the
-        # resource actually reports a state machine.
+        # Cluster types and network templates have no async lifecycle (a
+        # template reports `status`, not `state`); only wait when the resource
+        # actually reports a state machine.
         if obj.get("state") is None:
             continue
         wait.await_api_state(
@@ -136,12 +165,12 @@ def _ensure_prereqs(session, api_base: str, region: str, prereqs) -> None:
 
 
 def ensure_global_prereqs(session, api_base: str, region: str) -> None:
-    """Create the shared address pools + cluster types every lab needs."""
+    """Create the shared address pools, network templates and cluster types."""
     _ensure_prereqs(session, api_base, region, GLOBAL_PREREQS)
 
 
 def ensure_verity_prereqs(session, api_base: str, region: str) -> None:
-    """Create the Verity cluster types. Only the verity-gated tests call this.
+    """Create the Verity templates + cluster types. Only verity-gated tests call this.
 
     Kept out of GLOBAL_PREREQS so a netris lab's runs are untouched: a verity
     cluster type there would be an object nothing can ever deploy from.

@@ -197,18 +197,40 @@ k0r /v1/regions/global/organizations | jq
 
 ### 2. Create the address pools
 
-Both cluster types below reference these pools by ID, so create them once per
-region:
+The network schema templates below reference these pools by link, so create
+them once per region:
 
 ```bash
 PROJECT= $K0R create compute/address-pools --file "$TPL/global/address-pool-global-default.yaml"
 PROJECT= $K0R create compute/address-pools --file "$TPL/global/address-pool-global-public.yaml"
 ```
 
+### 2b. Create the network templates
+
+ClusterTypes don't declare networking inline: they reference a **network schema
+template** (`networkSchemaRef.template`) and, per node pool, a **network
+attachment template** nested under it (`networkAttachmentRef.template`)
+(k0rdent-apis KNF-460). Create the schema template, then its attachment
+template, before any ClusterType that references them:
+
+```bash
+NST=networking/network-schema-templates
+PROJECT= $K0R create $NST --file "$TPL/global/network-schema-template-nico.yaml"
+PROJECT= $K0R create $NST/nico/network-attachment-templates \
+  --file "$TPL/global/network-attachment-template-nico-lab.yaml"
+```
+
+The east-west types use `nico-netris-ew` / `nico-lab-netris-ew` (netris) or
+`nico-verity-ew` / `nico-lab-verity-ew` (verity), created the same way from the
+matching `network-*-template-*.yaml` files. Templates cannot change after
+create — only their `status` moves (draft → available → deprecated) — and cannot
+be deleted while a ClusterType references them; delete the ClusterType first.
+
 ### 3a. Single-VPC (nico) HCP cluster
 
 The smallest end-to-end deploy: one VPC, one worker pool, one DHCP interface.
-`cluster-type-nico-hcp.yaml` declares:
+`cluster-type-nico-hcp.yaml` references the `nico` schema template and, for its
+pool, the `nico-lab` attachment template. Together they declare:
 
 - `vpc-nico` (backend `nico`) with the l3vpn network `net-nico` and the subnet
   `sub-nico` from `global-default`.
@@ -230,12 +252,18 @@ a pool on the bound ClusterType version, or the create is rejected with
 
 For the multi-VPC east-west variants — a second, fabric-backed VPC and
 rail-pinned interfaces — see `cluster-type-netris-hcp-ew.yaml` (netris) and
-`cluster-type-nico-verity-hcp-ew.yaml` (verity), with the matching
-`hcp_cluster_ew/` and `hcp_cluster_ew_verity/` deployment bodies.
+`cluster-type-nico-verity-hcp-ew.yaml` (verity) and the templates they
+reference, with the matching `hcp_cluster_ew/` and `hcp_cluster_ew_verity/`
+deployment bodies.
 
 Field notes:
 
-- `networkSchema.vpcs[].backend` is required (no default). It names a
+- A ClusterType's networking is all inline (`networkSchema` + every pool's
+  `networkAttachment`) or all templated (`networkSchemaRef` + every pool's
+  `networkAttachmentRef`); any mix is a 422. The pool's `machineType` must be
+  one of the attachment template's `machineTypes`. GET on the type returns the
+  references *and* the resolved `networkSchema` / `networkAttachment`.
+- `networkSchema.vpcs[].backend` (in the schema template) is required (no default). It names a
   fabric operator that must exist in the region — see the OpenAPI
   `NetworkSchemaVpc.backend` description. Multi-VPC contract test:
   [cluster_deployment_create_v3_test.go::TestDerivePlans_MultiVpc](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/cluster_deployment_create_v3_test.go).
@@ -275,7 +303,9 @@ PROJECT=$PROJECT $K0R create compute/instance-groups --file "$TPL/instance_group
 The instance-group flow uses the sibling translator in
 [`child-workflows/providers/ufo/create_network_bundle.go`](../../k0rdent-apis/services/workflow/cmd/workflow-worker/workflows/child-workflows/providers/ufo/create_network_bundle.go)
 rather than the v3 inline one used by 3a. East-west variant:
-`cluster-type-nico-verity-ew.yaml` with `instance_group_ew_verity/`.
+`cluster-type-nico-verity-ew.yaml` with `instance_group_ew_verity/`; it
+references the same `nico-verity-ew` / `nico-lab-verity-ew` templates as
+`cluster-type-nico-verity-hcp-ew.yaml`.
 
 ### 3c. Field notes: interface matching
 
@@ -300,8 +330,9 @@ eth5…eth12            → ew-leaf-0…7 breakout ports (swpXsY)
 **What the current templates use.** The east-west types match by
 `match.fabricLocation.railId` — the Link CR carries `rail_id`, so a block picks
 whichever NIC LLDP found on that rail whatever the guest calls it. That is the
-portable form, and it is what `cluster-type-netris-hcp-ew.yaml` and
-`cluster-type-nico-verity-hcp-ew.yaml` declare.
+portable form, and it is what the attachment templates behind the east-west
+types (`network-attachment-template-nico-lab-netris-ew.yaml`,
+`network-attachment-template-nico-lab-verity-ew.yaml`) declare.
 
 **`match.pciSlot`** pins an interface to one physical NIC by slot instead. No
 template in this repo currently uses it; these notes are kept because the

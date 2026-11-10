@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from conftest import (
@@ -9,7 +11,7 @@ from conftest import (
     ensure_global_prereqs,
     load_scenario_template,
 )
-from helpers import api, wait
+from helpers import api, k8s, materialized_networking, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -82,6 +84,14 @@ def test_instance_group_create_active_terminate(
     )
     log.info(f"instance group uid={ig_obj['uid']}")
 
+    kube = k8s.api_client(os.environ.get("KUBECONFIG"))
+    log.step("record the instance group's materialized networking (VPC rows + UFO objects)")
+    net = materialized_networking.snapshot(
+        session, api_base, region, project, kube,
+        owner_kind="instance_group", owner_uid=ig_obj["uid"],
+    )
+    log.ok(net.describe())
+
     log.step(f"DELETE instance group {ig_id}")
     deleted = api.delete(session, ig_url)
     assert deleted.status_code in (202, 204), deleted.text
@@ -96,4 +106,7 @@ def test_instance_group_create_active_terminate(
         steps=log,
         log_every=2,
     )
+
+    log.step("assert the instance group's materialized networking went with it")
+    materialized_networking.await_gone(session, api_base, region, kube, net, steps=log)
     log.done()

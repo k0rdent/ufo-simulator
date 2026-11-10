@@ -20,7 +20,7 @@ from conftest import (
     ensure_global_prereqs,
     load_scenario_template,
 )
-from helpers import api, k8s, secgroups, wait
+from helpers import api, k8s, materialized_networking, secgroups, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -552,8 +552,16 @@ def test_hcp_cluster_vpc_security_groups(
         _await_effective_matches_nsg("cluster + VPC bindings")
         log.ok()
 
-    log.step("detach cluster SG and assert its rules leave the NICo NSG")
+    net = None
     try:
+        log.step("record the cluster's materialized networking (VPC rows + UFO objects)")
+        net = materialized_networking.snapshot(
+            session, api_base, region, project, kube,
+            owner_kind="cluster", owner_uid=cluster_uid,
+        )
+        log.ok(net.describe())
+
+        log.step("detach cluster SG and assert its rules leave the NICo NSG")
         wait.await_api_state(
             _get_cluster,
             "active",
@@ -785,6 +793,9 @@ def test_hcp_cluster_vpc_security_groups(
                     log_every=2,
                 )
             log.ok("vpc default SG removed with vpc")
+        if net is not None:
+            log.step("assert the cluster's materialized networking went with it")
+            materialized_networking.await_gone(session, api_base, region, kube, net, steps=log)
         log.step(f"DELETE security groups {cluster_sg_id!r} and {vpc_custom_sg_id!r}")
         secgroups.delete_security_group(session, sg_collection, cluster_sg_id, log=log)
         secgroups.delete_security_group(

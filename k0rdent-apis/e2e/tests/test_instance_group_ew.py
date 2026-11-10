@@ -16,7 +16,7 @@ from conftest import (
     fabric_backend,
     load_scenario_template,
 )
-from helpers import api, ew_netris, k8s, secgroups, wait
+from helpers import api, ew_netris, k8s, materialized_networking, secgroups, wait
 from helpers.names import resource_id, stamp_id
 from helpers.steps import Steps
 
@@ -123,6 +123,13 @@ def test_instance_group_ew_create_active_terminate(
         log=log,
     )
 
+    log.step("record the instance group's materialized networking (VPC rows + UFO objects)")
+    net = materialized_networking.snapshot(
+        session, api_base, region, project, kube,
+        owner_kind="instance_group", owner_uid=ig_uid,
+    )
+    log.ok(net.describe())
+
     log.step(f"DELETE instance group {ig_id}")
     deleted = api.delete(session, ig_url)
     assert deleted.status_code in (202, 204), deleted.text
@@ -137,4 +144,7 @@ def test_instance_group_ew_create_active_terminate(
         steps=log,
         log_every=2,
     )
+
+    log.step("assert the instance group's materialized networking went with it")
+    materialized_networking.await_gone(session, api_base, region, kube, net, steps=log)
     log.done()

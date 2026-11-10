@@ -1,20 +1,11 @@
 id: nico-hcp
 displayName: NICo HCP k0s
-networkSchema:
-  vpcs:
-    - id: vpc-nico
-      backend: nico
-  networks:
-    - id: net-nico
-      vpc: vpc-nico
-      type: evpn
-      evpn:
-        type: l3vpn
-  subnets:
-    - id: sub-nico
-      network: net-nico
-      addressPool: /v1/regions/local/compute/address-pools/global-default
-      prefixLength: 27
+# Networking comes from templates (k0rdent-apis KNF-460): the schema from
+# network-schema-template-nico.yaml, the pool's NIC layout from
+# network-attachment-template-nico-lab.yaml. A ClusterType is all-inline or
+# all-templated; mixing the two is a 422.
+networkSchemaRef:
+  template: /v1/regions/local/networking/network-schema-templates/nico
 k8s:
   k0sNetworkProvider: calico
   k0sVersion: v1.36.1
@@ -35,13 +26,10 @@ k8s:
 nodePools:
   - id: default
     role: worker
+    # Must be one of the attachment template's machineTypes.
     machineType: /v1/regions/local/infrastructure/machine-types/nico-lab
     nodeCountMin: 1
     nodeCountMax: 6
     nodeCountDefault: 1
-    networkAttachment:
-      ethernets:
-        enp1s0:
-          dhcp4: true
-          connectToNetwork:
-            name: net-nico
+    networkAttachmentRef:
+      template: /v1/regions/local/networking/network-schema-templates/nico/network-attachment-templates/nico-lab

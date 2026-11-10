@@ -1,0 +1,55 @@
+# POST /v1/regions/local/networking/network-schema-templates
+#
+# NICo north-south VPC plus a Verity (Spectrum-X) east-west VPC. Shared by
+# cluster-type-nico-verity-hcp-ew.yaml (HCP, /compute/clusters) and
+# cluster-type-nico-verity-ew.yaml (BMaaS, /compute/instance-groups): both
+# reference this one template instead of each carrying a copy.
+id: nico-verity-ew
+displayName: NICo + Verity east-west (Spectrum-X)
+networkSchema:
+  vpcs:
+    - id: vpc-nico
+      backend: nico
+    # The named backend instance, not the driver. ufo_conf.yaml declares two
+    # verity instances and only this one sets site + fabric_type, so only this
+    # one answers IsSpectrumX() and takes the Spectrum-X attach path. Pointing
+    # at the bare "verity" instance instead runs the Clos path, which creates
+    # EthPortProfiles and Switchports and never an HGXTenantAssignment -- the
+    # east-west attachment would silently never happen.
+    - id: vpc-ew
+      backend: verity-ewf
+  networks:
+    - id: net-nico
+      vpc: vpc-nico
+      type: evpn
+      evpn:
+        type: l3vpn
+    - id: ew-network
+      vpc: vpc-ew
+      type: evpn
+      evpn:
+        type: l3vpn
+  subnets:
+    - id: sub-nico
+      network: net-nico
+      addressPool: /v1/regions/local/compute/address-pools/global-default
+      prefixLength: 27
+    - id: ew-subnet
+      network: ew-network
+      # Base for the rail-optimised /31s, and it must match Verity's underlay
+      # pool exactly: each side derives the /31 from its own view of the
+      # topology, so a different base means different addresses at the two ends
+      # of the same wire and the link never comes up. Verity allocates from
+      # 172.16.0.0 with (rail << 17) | (su << 8) | (host << 1), host even and
+      # switch odd -- the same layout UFO's rail-optimised allocator computes.
+      # So rail 0 host 0 is 172.16.0.0/31 with the leaf on .1, host 1 is
+      # .2/.3, and each rail occupies 172.(16 + 2*rail).0.0/25.
+      #
+      # The cidr + addressAllocator pair needs k0rdent-apis e290b5691 ("KNF-490:
+      # Fixed-CIDR subnets, ethernet static routes, and rail-optimised P2P
+      # addressing"). Against an older API the create fails with
+      #   422 networkSchema.subnets[].addressPool is required
+      cidr: 172.16.0.0/12
+      addressAllocator:
+        backend: rail-optimised
+        gpuPlatform: B200
